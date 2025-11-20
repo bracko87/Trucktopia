@@ -1,9 +1,9 @@
 /**
- * Modern Login Page with Football Manager 2024 inspired design
+ * src/pages/Login.tsx
  *
- * Behavior:
- * - On successful login, always navigate to Dashboard (never auto-redirect to Create Company)
- * - Uses GameContext.login (localStorage-backed)
+ * Login page that authenticates via Supabase Authentication when available.
+ * The previous local-only flow is replaced to call useSupabaseAuth().signIn so
+ * successful logins are performed against Supabase Auth and visible in the Supabase console.
  */
 
 import { useState } from 'react';
@@ -13,10 +13,17 @@ import { Input } from '../components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Truck, Mail, Lock, Eye, EyeOff, Trash2 } from 'lucide-react';
 import { useGame } from '../contexts/GameContext';
+import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 
+/**
+ * Login
+ * @description Login page component. Uses useSupabaseAuth.signIn to authenticate users.
+ * On success navigates to /dashboard. clearOldData remains available as a developer helper.
+ */
 export default function Login() {
   const navigate = useNavigate();
-  const { login, clearOldData } = useGame();
+  const { clearOldData } = useGame(); // developer helper retained
+  const { signIn } = useSupabaseAuth();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -25,24 +32,32 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
 
   /**
-   * Handle login submission; navigate to Dashboard on success.
+   * handleSubmit
+   * @description Authenticate via Supabase and navigate on success.
    */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    const result = await login(formData.email, formData.password);
-    setIsLoading(false);
 
-    if (result.success) {
-      // Always go to Dashboard after sign-in
-      navigate('/dashboard');
-    } else {
-      alert(result.message);
+    try {
+      const result = await signIn(formData.email, formData.password);
+      setIsLoading(false);
+
+      if (result.user) {
+        navigate('/dashboard');
+      } else {
+        const message = (result as any).error?.message ?? 'Invalid credentials';
+        alert(message);
+      }
+    } catch (err: any) {
+      setIsLoading(false);
+      alert(err?.message ?? 'Login error');
     }
   };
 
   /**
-   * Controlled input updater.
+   * handleChange
+   * @description Controlled input updater.
    */
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData((prev) => ({
@@ -52,7 +67,8 @@ export default function Login() {
   };
 
   /**
-   * Developer reset: clear all local storage data.
+   * handleClearStorage
+   * @description Developer reset: clear local storage data (kept for migrations/debug).
    */
   const handleClearStorage = () => {
     if (confirm('This will clear all local data. Continue?')) {
@@ -64,11 +80,11 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4 relative overflow-hidden">
       {/* Background Pattern */}
-      <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_25%,rgba(68,68,68,0.2)_50%,transparent_75%,transparent_100%)] bg-[length:20px_20px]"></div>
+      <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_25%,rgba(68,68,68,0.2)_50%,transparent_75%,transparent_100%)] bg-[length:20px_20px]" />
 
       {/* Animated Background Elements */}
-      <div className="absolute top-1/4 left-1/4 w-32 h-32 bg-yellow-500/10 rounded-full blur-xl animate-pulse"></div>
-      <div className="absolute bottom-1/3 right-1/4 w-24 h-24 bg-yellow-500/10 rounded-full blur-xl animate-pulse delay-1000"></div>
+      <div className="absolute top-1/4 left-1/4 w-32 h-32 bg-yellow-500/10 rounded-full blur-xl animate-pulse" />
+      <div className="absolute bottom-1/3 right-1/4 w-24 h-24 bg-yellow-500/10 rounded-full blur-xl animate-pulse delay-1000" />
 
       <Card className="w-full max-w-md bg-slate-800/90 backdrop-blur-sm border-slate-700 shadow-2xl relative z-10">
         <CardHeader className="space-y-1 text-center pb-8">
@@ -84,9 +100,7 @@ export default function Login() {
           </div>
 
           <CardTitle className="text-2xl font-bold text-white">Welcome Back, Manager</CardTitle>
-          <CardDescription className="text-slate-400">
-            Sign in to continue building your empire
-          </CardDescription>
+          <CardDescription className="text-slate-400">Sign in to continue building your empire</CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-6">
@@ -146,7 +160,7 @@ export default function Login() {
             >
               {isLoading ? (
                 <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   Signing In...
                 </div>
               ) : (
@@ -158,7 +172,7 @@ export default function Login() {
           {/* Divider */}
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-slate-600"></div>
+              <div className="w-full border-t border-slate-600" />
             </div>
             <div className="relative flex justify-center text-sm">
               <span className="px-2 bg-slate-800 text-slate-400">New to Truck Manager?</span>
@@ -167,17 +181,9 @@ export default function Login() {
 
           {/* Registration Link */}
           <div className="text-center">
-            <Link
-              to="/register"
-              className="inline-flex items-center gap-2 text-yellow-500 hover:text-yellow-400 font-semibold transition-colors group"
-            >
+            <Link to="/register" className="inline-flex items-center gap-2 text-yellow-500 hover:text-yellow-400 font-semibold transition-colors group">
               Create new account
-              <svg
-                className="w-4 h-4 transform group-hover:translate-x-1 transition-transform"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
+              <svg className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </Link>
@@ -188,24 +194,9 @@ export default function Login() {
       {/* Footer Note */}
       <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-slate-400 text-sm text-center">
         <p>Secure authentication • Your data is protected</p>
-        <button
-          onClick={handleClearStorage}
-          className="mt-2 flex items-center gap-1 text-xs text-slate-500 hover:text-yellow-500 transition-colors"
-        >
+        <button onClick={handleClearStorage} className="mt-2 flex items-center gap-1 text-xs text-slate-500 hover:text-yellow-500 transition-colors">
           <Trash2 className="w-3 h-3" />
           Clear Old Data
-        </button>
-        <button
-          onClick={() => {
-            const { checkUserData } = useGame();
-            checkUserData();
-          }}
-          className="mt-1 flex items-center gap-1 text-xs text-slate-500 hover:text-blue-500 transition-colors"
-        >
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-          Debug User Data
         </button>
       </div>
     </div>

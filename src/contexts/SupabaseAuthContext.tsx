@@ -13,6 +13,7 @@
 
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { AuthAdapter, AuthUser, LocalStorageAdapter, SupabaseAdapter } from '../utils/authAdapters';
+import { isSupabaseConfigured } from '../lib/supabaseClient';
 
 interface SupabaseAuthContextValue {
   user: AuthUser | null;
@@ -38,8 +39,12 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Determine whether Supabase env is configured
-  const hasSupabaseEnv = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
+  /**
+   * Determine whether Supabase env is configured.
+   * Use the helper from src/lib/supabaseClient which performs safe runtime checks
+   * (handles environments where import.meta.env is undefined).
+   */
+  const hasSupabaseEnv = isSupabaseConfigured();
 
   const adapter: AuthAdapter = useMemo(() => {
     return hasSupabaseEnv ? SupabaseAdapter() : LocalStorageAdapter();
