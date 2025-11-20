@@ -61,6 +61,9 @@ import FleetControl from './pages/FleetControl';
 import ContractJobs from './pages/ContractJobs';
 import CargoTrailerCompatibility from './pages/CargoTrailerCompatibility';
 
+// New: Test page for Supabase connectivity
+import TestSupabaseConnection from './components/TestSupabaseConnection';
+
 /**
  * App
  * @description Root application component: mounts providers, layout and routing.
@@ -109,6 +112,8 @@ function App() {
               <Route path="/user-settings" element={<UserSettings />} />
               <Route path="/contract-jobs" element={<ContractJobs />} />
               <Route path="/cargo-trailer-compatibility" element={<CargoTrailerCompatibility />} />
+              {/* Test route for verifying Supabase connectivity */}
+              <Route path="/test-supabase" element={<TestSupabaseConnection />} />
               {/* Redirect unknown routes to home */}
               <Route path="*" element={<Home />} />
             </Routes>
