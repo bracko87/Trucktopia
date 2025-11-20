@@ -12,6 +12,7 @@
  */
 
 import React, { useState } from 'react';
+import EnvDebug from './EnvDebug';
 
 /**
  * UserItem
@@ -28,12 +29,14 @@ interface UserItem {
  * @description Safely resolve an environment variable string from possible places:
  *  - runtime global on globalThis (some deployments inject runtime vars there)
  *  - guarded access to process.env (only when typeof process !== 'undefined')
+ *  - window.__ENV__ or window.__RUNTIME__ when available
  *
  * @param key Environment variable name (e.g. REACT_APP_SUPABASE_URL)
  * @returns string | undefined
  */
 function getEnvVar(key: string): string | undefined {
   try {
+    // globalThis check
     if (typeof globalThis !== 'undefined') {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const gw = globalThis as any;
@@ -42,11 +45,11 @@ function getEnvVar(key: string): string | undefined {
       }
     }
   } catch {
-    // ignore runtime access errors
+    // ignore
   }
 
-  // Safe access to process.env
   try {
+    // process.env check (build/runtime environments)
     if (typeof process !== 'undefined' && (process as any).env) {
       const val = (process as any).env[key];
       if (typeof val === 'string' && val.length > 0) {
@@ -57,8 +60,8 @@ function getEnvVar(key: string): string | undefined {
     // ignore
   }
 
-  // Window-level injection fallback (some hosts use window.__RUNTIME__ or similar).
   try {
+    // window-level injection fallbacks (runtime injection)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const win = (typeof window !== 'undefined' ? (window as any) : undefined);
     if (win) {
@@ -230,6 +233,9 @@ const TestSupabaseConnection: React.FC = () => {
             </pre>
           </div>
         )}
+
+        {/* Env debug helper (non-sensitive: shows masked diag info) */}
+        <EnvDebug />
       </div>
     </div>
   );
