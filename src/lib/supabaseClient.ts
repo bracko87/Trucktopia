@@ -1,11 +1,19 @@
 /**
  * src/lib/supabaseClient.ts
  *
- * Initialize and export a single Supabase client instance for the app.
+ * File-level: Initialize and export a single Supabase client instance for the app.
  *
- * Note:
- * - Expects VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to be provided in the environment.
- * - Do not commit service_role keys to the client or repository.
+ * Notes:
+ * - This file normally reads VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY from runtime
+ *   environment variables using getEnvVar(...) so imports are safe in multiple runtimes.
+ * - For troubleshooting we temporarily hard-code the public anon key and project URL
+ *   so the Supabase client is initialized at import time and the application picks the
+ *   Supabase adapter instead of the local storage fallback.
+ *
+ * SECURITY:
+ * - The anon key is the public client key (safe for client use). Do NOT add any service_role
+ *   or other secret keys to client files or share them publicly.
+ * - After troubleshooting we will revert this file to use environment variables again.
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -49,19 +57,14 @@ function getEnvVar(key: string): string | undefined {
 }
 
 /**
- * Resolved supabase env values (fallback aliases supported)
+ * Temporary hard-coded public Supabase values for troubleshooting.
+ * Replace these with environment-driven values when resolved.
  */
 export const SUPABASE_URL =
-  getEnvVar('VITE_SUPABASE_URL') ??
-  getEnvVar('REACT_APP_SUPABASE_URL') ??
-  getEnvVar('SUPABASE_URL') ??
-  '';
-
+  getEnvVar('VITE_SUPABASE_URL') ?? 'https://yzzcipizchqntbijktaj.supabase.co';
 export const SUPABASE_ANON_KEY =
   getEnvVar('VITE_SUPABASE_ANON_KEY') ??
-  getEnvVar('REACT_APP_SUPABASE_ANON_KEY') ??
-  getEnvVar('SUPABASE_ANON_KEY') ??
-  '';
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6emNpcGl6Y2hxbnRiaWprdGFqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1OTUzNzksImV4cCI6MjA3OTE3MTM3OX0.NokGmxnBMTsdHyfOa1WHASWLt-aTx-c7FgBF-h8Flqo';
 
 /**
  * isSupabaseConfigured
@@ -79,8 +82,6 @@ export function isSupabaseConfigured(): boolean {
  */
 export const supabase = ((): ReturnType<typeof createClient> | null => {
   if (!isSupabaseConfigured()) {
-    // Avoid creating the client with empty strings which causes a hard throw inside supabase-js.
-    // Log a friendly warning for debugging in preview environments.
     if (typeof console !== 'undefined') {
       console.warn(
         '[supabaseClient] Supabase environment variables are missing. Supabase client not initialized.'
@@ -89,6 +90,5 @@ export const supabase = ((): ReturnType<typeof createClient> | null => {
     return null;
   }
 
-  // Safe: values exist
   return createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 })();
