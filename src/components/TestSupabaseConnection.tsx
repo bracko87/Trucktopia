@@ -5,7 +5,10 @@
  * can reach Supabase using the anon key. It performs a GET against the
  * Supabase REST endpoint for the `app_users` table and displays the result.
  *
- * This uses the standard REST API and fetch so no additional npm packages are required.
+ * This implementation is careful to avoid referencing build-only globals such as
+ * import.meta or unguarded process usage. All runtime environment access is
+ * guarded by typeof checks to avoid ReferenceError in environments where those
+ * identifiers are not defined.
  */
 
 import React, { useState } from 'react';
@@ -16,8 +19,76 @@ import React, { useState } from 'react';
  */
 interface UserItem {
   id: string;
-  name: string;
+  name?: string;
   created_at?: string;
+}
+
+/**
+ * getEnvVar
+ * @description Safely resolve an environment variable string from possible places:
+ *  - runtime global on globalThis (some deployments inject runtime vars there)
+ *  - guarded access to process.env (only when typeof process !== 'undefined')
+ *
+ * @param key Environment variable name (e.g. REACT_APP_SUPABASE_URL)
+ * @returns string | undefined
+ */
+function getEnvVar(key: string): string | undefined {
+  try {
+    if (typeof globalThis !== 'undefined') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const gw = globalThis as any;
+      if (gw && typeof gw[key] === 'string' && gw[key].length > 0) {
+        return String(gw[key]);
+      }
+    }
+  } catch {
+    // ignore runtime access errors
+  }
+
+  // Safe access to process.env
+  try {
+    if (typeof process !== 'undefined' && (process as any).env) {
+      const val = (process as any).env[key];
+      if (typeof val === 'string' && val.length > 0) {
+        return String(val);
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  // Window-level injection fallback (some hosts use window.__RUNTIME__ or similar).
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const win = (typeof window !== 'undefined' ? (window as any) : undefined);
+    if (win) {
+      const candidates = [
+        win[key],
+        win.__ENV__ && win.__ENV__[key],
+        win.__RUNTIME__ && win.__RUNTIME__[key]
+      ];
+      for (const c of candidates) {
+        if (typeof c === 'string' && c.length > 0) return String(c);
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  return undefined;
+}
+
+/**
+ * buildEndpoint
+ * @description Build the REST endpoint from a base Supabase URL and table name.
+ *
+ * @param baseUrl Supabase project base URL
+ * @param table Table name to query
+ * @returns fully formed REST endpoint string
+ */
+function buildEndpoint(baseUrl: string, table: string): string {
+  const cleaned = baseUrl.replace(/\/+$/, '');
+  return `${cleaned}/rest/v1/${table}?select=*`;
 }
 
 /**
@@ -25,11 +96,10 @@ interface UserItem {
  * @component A small UI to test Supabase connectivity from the deployed frontend.
  *
  * How it works:
- * - Reads REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY from process.env
- *   (these must be set in Netlify environment variables and the site redeployed).
+ * - Reads REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY safely at runtime.
  * - Makes a GET request to `${SUPABASE_URL}/rest/v1/app_users?select=*`
  *   with the anon key in headers (apikey + Authorization).
- * - Displays the JSON results or a friendly error message.
+ * - Displays the JSON results or a friendly error message and diagnostics.
  */
 const TestSupabaseConnection: React.FC = () => {
   const [loading, setLoading] = useState(false);
@@ -39,24 +109,27 @@ const TestSupabaseConnection: React.FC = () => {
   /**
    * runTest
    * @description Fetch rows from the app_users table via Supabase REST and populate UI.
+   * Ensures any early errors are caught and loading state is cleared.
    */
   const runTest = async () => {
     setLoading(true);
     setError(null);
     setData(null);
 
-    const SUPABASE_URL = (process.env.REACT_APP_SUPABASE_URL || '').replace(/\/$/, '');
-    const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
-
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-      setError('Supabase env vars not found. Ensure REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY are configured in Netlify and redeploy.');
-      setLoading(false);
-      return;
-    }
-
-    const endpoint = `${SUPABASE_URL}/rest/v1/app_users?select=*`;
-
     try {
+      const rawUrl = getEnvVar('REACT_APP_SUPABASE_URL') || '';
+      const SUPABASE_URL = String(rawUrl).replace(/\/+$/, '');
+      const SUPABASE_ANON_KEY = getEnvVar('REACT_APP_SUPABASE_ANON_KEY') || '';
+
+      if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+        setError(
+          'Supabase env vars not found. Ensure REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY are configured in your deployment or injected into global runtime variables.'
+        );
+        return;
+      }
+
+      const endpoint = buildEndpoint(SUPABASE_URL, 'app_users');
+
       const res = await fetch(endpoint, {
         method: 'GET',
         headers: {
@@ -66,9 +139,7 @@ const TestSupabaseConnection: React.FC = () => {
         }
       });
 
-      // Response code analysis and friendly messages
       if (!res.ok) {
-        // Try reading body for detailed error message
         let bodyText = '';
         try {
           bodyText = await res.text();
@@ -76,7 +147,6 @@ const TestSupabaseConnection: React.FC = () => {
           bodyText = String(e);
         }
         setError(`HTTP ${res.status} ${res.statusText} — ${bodyText}`);
-        setLoading(false);
         return;
       }
 
@@ -88,6 +158,18 @@ const TestSupabaseConnection: React.FC = () => {
       setLoading(false);
     }
   };
+
+  /**
+   * clear
+   * @description Clear results and errors
+   */
+  const clear = () => {
+    setData(null);
+    setError(null);
+  };
+
+  const resolvedUrl = getEnvVar('REACT_APP_SUPABASE_URL') || '(not set)';
+  const anonPresent = Boolean(getEnvVar('REACT_APP_SUPABASE_ANON_KEY'));
 
   return (
     <div className="p-6 space-y-4">
@@ -109,10 +191,7 @@ const TestSupabaseConnection: React.FC = () => {
         </button>
 
         <button
-          onClick={() => {
-            setData(null);
-            setError(null);
-          }}
+          onClick={clear}
           className="px-3 py-2 rounded-md bg-slate-700 text-slate-200 hover:bg-slate-600"
         >
           Clear
@@ -121,13 +200,19 @@ const TestSupabaseConnection: React.FC = () => {
 
       <div className="bg-slate-800 rounded-md p-4 border border-slate-700">
         <h3 className="text-sm font-semibold text-white mb-2">Result</h3>
+
+        <div className="mb-3 text-xs text-slate-400">
+          <div><strong>Resolved SUPABASE_URL:</strong> <span className="text-slate-200">{resolvedUrl}</span></div>
+          <div><strong>Anon key present:</strong> <span className="text-slate-200">{anonPresent ? 'yes' : 'no'}</span></div>
+        </div>
+
         {error && (
           <div className="text-red-400">
             <strong>Error:</strong> {error}
             <div className="mt-2 text-xs text-slate-400">
               Common causes:
               <ul className="list-disc ml-5">
-                <li>Wrong or missing env variables (check Netlify site settings and redeploy)</li>
+                <li>Wrong or missing env variables (check your deployment settings and redeploy or inject runtime vars)</li>
                 <li>Table <code>app_users</code> does not exist in the DB (run supabase/initial_schema.sql)</li>
                 <li>Unauthorized (401) — anon key invalid or RLS/policies block access</li>
               </ul>
