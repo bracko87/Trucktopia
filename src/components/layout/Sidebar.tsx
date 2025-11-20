@@ -1,16 +1,20 @@
 /**
  * Professional retractable sidebar with Football Manager 2024 style navigation
+ *
+ * Responsibilities:
+ * - Provide main navigation and sidebar toggling.
+ * - Show compact and expanded views, company status and admin shortcut.
  */
 
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import { useGame } from '../../contexts/GameContext';
-import { 
-  LayoutDashboard, 
-  Warehouse, 
-  Users, 
-  Briefcase, 
-  FileText, 
+import {
+  LayoutDashboard,
+  Warehouse,
+  Users,
+  Briefcase,
+  FileText,
   DollarSign,
   Map,
   Settings,
@@ -20,6 +24,7 @@ import {
   Shield
 } from 'lucide-react';
 import { GamePage } from '../../types/game';
+import TestSupabaseButton from '../TestSupabaseButton';
 
 interface NavItem {
   id: GamePage;
@@ -29,6 +34,10 @@ interface NavItem {
   path: string;
 }
 
+/**
+ * Sidebar
+ * @component Main application sidebar. Contains navigation and small action shortcuts.
+ */
 const Sidebar: React.FC = () => {
   const { gameState, setCurrentPage, toggleSidebar } = useGame();
   const navigate = useNavigate();
@@ -100,6 +109,10 @@ const Sidebar: React.FC = () => {
     },
   ];
 
+  /**
+   * handleNavigation
+   * @description Navigate to the chosen route and update the game page state.
+   */
   const handleNavigation = (item: NavItem) => {
     navigate(item.path);
     setCurrentPage(item.id);
@@ -111,7 +124,7 @@ const Sidebar: React.FC = () => {
 
   return (
     <aside className={`${sidebarWidth} bg-slate-900 border-r border-slate-700 flex flex-col transition-all duration-300`}>
-      {/* Header with Toggle */}
+      {/* Header with Toggle and Supabase Test shortcut */}
       <div className="p-4 border-b border-slate-700 flex items-center justify-between">
         {!gameState.sidebarCollapsed && (
           <div className="flex items-center space-x-3">
@@ -124,16 +137,24 @@ const Sidebar: React.FC = () => {
             </div>
           </div>
         )}
-        <button
-          onClick={toggleSidebar}
-          className="p-1.5 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 transition-colors"
-        >
-          {gameState.sidebarCollapsed ? (
-            <ChevronRight className="w-4 h-4 text-slate-300" />
-          ) : (
-            <ChevronLeft className="w-4 h-4 text-slate-300" />
+
+        <div className="flex items-center gap-2">
+          {/* Show a visible Supabase Test button in expanded state (uses SPA navigation) */}
+          {!gameState.sidebarCollapsed && (
+            <TestSupabaseButton />
           )}
-        </button>
+
+          <button
+            onClick={toggleSidebar}
+            className="p-1.5 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 transition-colors"
+          >
+            {gameState.sidebarCollapsed ? (
+              <ChevronRight className="w-4 h-4 text-slate-300" />
+            ) : (
+              <ChevronLeft className="w-4 h-4 text-slate-300" />
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Navigation */}

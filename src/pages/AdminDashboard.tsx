@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { useGame } from '../contexts/GameContext';
 import { useNavigate } from 'react-router';
 import { Shield, Users, Building, BarChart3, Settings, UserCog, AlertTriangle, Cpu, Database, RefreshCw, Truck, MapPin, Edit, Trash2, ClockIcon, DollarSign, Search, Filter, X, TrendingUp, CheckCircle } from 'lucide-react';
+import TestSupabaseButton from '../components/TestSupabaseButton';
 
 interface UserStats {
   totalUsers: number;
@@ -428,9 +429,13 @@ const AdminDashboard: React.FC = () => {
           </h1>
           <p className="text-slate-400">System administration and user management</p>
         </div>
-        <div className="flex items-center space-x-2 bg-green-500/20 border border-green-500/30 rounded-xl px-4 py-2">
-          <Shield className="w-5 h-5 text-green-400" />
-          <span className="text-white font-medium">Administrator</span>
+        {/* Right side: Supabase Test shortcut + Admin badge */}
+        <div className="flex items-center space-x-3">
+          <TestSupabaseButton />
+          <div className="flex items-center space-x-2 bg-green-500/20 border border-green-500/30 rounded-xl px-4 py-2">
+            <Shield className="w-5 h-5 text-green-400" />
+            <span className="text-white font-medium">Administrator</span>
+          </div>
         </div>
       </div>
 
