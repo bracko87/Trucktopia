@@ -1,18 +1,13 @@
 /**
  * TestSupabaseConnection.tsx
  *
- * Small, self-contained React component (TypeScript) that verifies the frontend
- * can reach Supabase using the anon key. It performs a GET against the
- * Supabase REST endpoint for the `app_users` table and displays the result.
- *
- * This implementation is careful to avoid referencing build-only globals such as
- * import.meta or unguarded process usage. All runtime environment access is
- * guarded by typeof checks to avoid ReferenceError in environments where those
- * identifiers are not defined.
+ * Small UI to test Supabase REST access from the frontend.
+ * Enhanced to include a temporary runtime env setter helper for testing without rebuilds.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import EnvDebug from './EnvDebug';
+import RuntimeEnvSetter from './RuntimeEnvSetter';
 
 /**
  * UserItem
@@ -27,16 +22,12 @@ interface UserItem {
 /**
  * getEnvVar
  * @description Safely resolve an environment variable string from possible places:
- *  - runtime global on globalThis (some deployments inject runtime vars there)
- *  - guarded access to process.env (only when typeof process !== 'undefined')
+ *  - runtime global on globalThis
+ *  - process.env (guarded)
  *  - window.__ENV__ or window.__RUNTIME__ when available
- *
- * @param key Environment variable name (e.g. REACT_APP_SUPABASE_URL)
- * @returns string | undefined
  */
 function getEnvVar(key: string): string | undefined {
   try {
-    // globalThis check
     if (typeof globalThis !== 'undefined') {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const gw = globalThis as any;
@@ -44,24 +35,18 @@ function getEnvVar(key: string): string | undefined {
         return String(gw[key]);
       }
     }
-  } catch {
-    // ignore
-  }
+  } catch { /* ignore */ }
 
   try {
-    // process.env check (build/runtime environments)
     if (typeof process !== 'undefined' && (process as any).env) {
       const val = (process as any).env[key];
       if (typeof val === 'string' && val.length > 0) {
         return String(val);
       }
     }
-  } catch {
-    // ignore
-  }
+  } catch { /* ignore */ }
 
   try {
-    // window-level injection fallbacks (runtime injection)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const win = (typeof window !== 'undefined' ? (window as any) : undefined);
     if (win) {
@@ -74,9 +59,7 @@ function getEnvVar(key: string): string | undefined {
         if (typeof c === 'string' && c.length > 0) return String(c);
       }
     }
-  } catch {
-    // ignore
-  }
+  } catch { /* ignore */ }
 
   return undefined;
 }
@@ -84,10 +67,6 @@ function getEnvVar(key: string): string | undefined {
 /**
  * buildEndpoint
  * @description Build the REST endpoint from a base Supabase URL and table name.
- *
- * @param baseUrl Supabase project base URL
- * @param table Table name to query
- * @returns fully formed REST endpoint string
  */
 function buildEndpoint(baseUrl: string, table: string): string {
   const cleaned = baseUrl.replace(/\/+$/, '');
@@ -97,22 +76,44 @@ function buildEndpoint(baseUrl: string, table: string): string {
 /**
  * TestSupabaseConnection
  * @component A small UI to test Supabase connectivity from the deployed frontend.
- *
- * How it works:
- * - Reads REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY safely at runtime.
- * - Makes a GET request to `${SUPABASE_URL}/rest/v1/app_users?select=*`
- *   with the anon key in headers (apikey + Authorization).
- * - Displays the JSON results or a friendly error message and diagnostics.
  */
 const TestSupabaseConnection: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<UserItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [resolvedUrl, setResolvedUrl] = useState<string>('(not set)');
+  const [anonPresent, setAnonPresent] = useState<boolean>(false);
+
+  useEffect(() => {
+    // Recompute diagnostics when runtime env may change.
+    const updateDiagnostics = () => {
+      const url = getEnvVar('REACT_APP_SUPABASE_URL') || '(not set)';
+      const anon = Boolean(getEnvVar('REACT_APP_SUPABASE_ANON_KEY'));
+      setResolvedUrl(url);
+      setAnonPresent(anon);
+    };
+
+    updateDiagnostics();
+
+    // If user applied runtime values via the helper this event will fire
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      window.addEventListener('runtime-env-updated', updateDiagnostics as any);
+    } catch {
+      // ignore
+    }
+    return () => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        window.removeEventListener('runtime-env-updated', updateDiagnostics as any);
+      } catch { }
+    };
+  }, []);
+
   /**
    * runTest
    * @description Fetch rows from the app_users table via Supabase REST and populate UI.
-   * Ensures any early errors are caught and loading state is cleared.
    */
   const runTest = async () => {
     setLoading(true);
@@ -125,9 +126,9 @@ const TestSupabaseConnection: React.FC = () => {
       const SUPABASE_ANON_KEY = getEnvVar('REACT_APP_SUPABASE_ANON_KEY') || '';
 
       if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-        setError(
-          'Supabase env vars not found. Ensure REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY are configured in your deployment or injected into global runtime variables.'
-        );
+        setError('Supabase env vars not found. Ensure REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY are configured in your deployment or injected into global runtime variables.');
+        setResolvedUrl(SUPABASE_URL || '(not set)');
+        setAnonPresent(Boolean(SUPABASE_ANON_KEY));
         return;
       }
 
@@ -159,23 +160,23 @@ const TestSupabaseConnection: React.FC = () => {
       setError(String(err?.message || err));
     } finally {
       setLoading(false);
+      // update diagnostics after attempt
+      setResolvedUrl(getEnvVar('REACT_APP_SUPABASE_URL') || '(not set)');
+      setAnonPresent(Boolean(getEnvVar('REACT_APP_SUPABASE_ANON_KEY')));
     }
   };
 
-  /**
-   * clear
-   * @description Clear results and errors
-   */
   const clear = () => {
     setData(null);
     setError(null);
   };
 
-  const resolvedUrl = getEnvVar('REACT_APP_SUPABASE_URL') || '(not set)';
-  const anonPresent = Boolean(getEnvVar('REACT_APP_SUPABASE_ANON_KEY'));
+  const resolved = resolvedUrl;
 
   return (
     <div className="p-6 space-y-4">
+      <RuntimeEnvSetter />
+
       <div>
         <h2 className="text-xl font-bold text-white">Supabase Connection Test</h2>
         <p className="text-sm text-slate-400">
@@ -205,7 +206,7 @@ const TestSupabaseConnection: React.FC = () => {
         <h3 className="text-sm font-semibold text-white mb-2">Result</h3>
 
         <div className="mb-3 text-xs text-slate-400">
-          <div><strong>Resolved SUPABASE_URL:</strong> <span className="text-slate-200">{resolvedUrl}</span></div>
+          <div><strong>Resolved SUPABASE_URL:</strong> <span className="text-slate-200">{resolved}</span></div>
           <div><strong>Anon key present:</strong> <span className="text-slate-200">{anonPresent ? 'yes' : 'no'}</span></div>
         </div>
 
@@ -234,7 +235,6 @@ const TestSupabaseConnection: React.FC = () => {
           </div>
         )}
 
-        {/* Env debug helper (non-sensitive: shows masked diag info) */}
         <EnvDebug />
       </div>
     </div>
