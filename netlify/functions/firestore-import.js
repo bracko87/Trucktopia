@@ -11,24 +11,25 @@
  * - Sequentially write documents to Firestore via the REST API.
  * - Return per-item statuses and errors to the caller.
  *
- * Security notes:
+ * Security & CORS:
+ * - This version adds CORS handling and OPTIONS preflight support.
+ * - Allowed origins can be configured via ALLOWED_ORIGINS (comma separated).
+ * - If ALLOWED_ORIGINS is not set, the function will echo the request Origin (if present),
+ *   or fall back to process.env.URL (Netlify site URL), or '*' as last resort.
+ *
+ * Notes:
  * - Do NOT store service account JSON in the repository. Use Netlify environment
  *   variable FIRESTORE_SA (base64 encoded service account JSON).
  * - Provide a strong FIRESTORE_ADMIN_KEY in your Netlify env vars and include the
  *   same key in the X-ADMIN-KEY request header from the admin UI.
- *
- * Usage (example curl):
- * curl -X POST https://<your-site>/.netlify/functions/firestore-import \
- *  -H "Content-Type: application/json" \
- *  -H "X-ADMIN-KEY: <your-admin-key>" \
- *  -d '{"projectId":"your-project-id","items":[{"id":"tm_users:abc","collection":"tm_users","docId":"abc","payload":{...}}]}'
  */
 
 /* eslint-disable no-await-in-loop */
 const crypto = require('crypto');
 
 /**
- * Utility: base64url encode string / buffer
+ * base64UrlEncode
+ * @description Utility: base64url encode string / buffer
  * @param {Buffer | string} input
  * @returns {string}
  */
@@ -38,7 +39,8 @@ function base64UrlEncode(input) {
 }
 
 /**
- * Create a signed JWT (RS256) using the provided service account object.
+ * createSignedJwt
+ * @description Create a signed JWT (RS256) using the provided service account object.
  * @param {Object} serviceAccount
  * @param {string} scope
  * @param {number} expiresInSeconds
@@ -74,7 +76,8 @@ function createSignedJwt(serviceAccount, scope, expiresInSeconds = 3600) {
 }
 
 /**
- * Exchange signed JWT for OAuth2 access token
+ * fetchAccessTokenFromJwt
+ * @description Exchange signed JWT for OAuth2 access token
  * @param {string} signedJwt
  * @returns {Promise<string>} access_token
  */
@@ -102,7 +105,8 @@ async function fetchAccessTokenFromJwt(signedJwt) {
 }
 
 /**
- * Write a single document to Firestore via REST API.
+ * writeDocument
+ * @description Write a single document to Firestore via REST API.
  * Document contents are stored under a "data" stringValue to preserve arbitrary shapes.
  * @param {string} projectId
  * @param {string} collection
@@ -135,13 +139,62 @@ async function writeDocument(projectId, collection, docId, obj, token) {
 }
 
 /**
- * Netlify function handler
+ * buildCorsHeaders
+ * @description Build Access-Control headers based on request origin and environment.
+ * Supports ALLOWED_ORIGINS env var (comma separated). If not set, echoes request origin or falls back.
+ * @param {string|null} requestOrigin
+ * @returns {Object} headers
+ */
+function buildCorsHeaders(requestOrigin) {
+  // Allowed origins configured by env: comma-separated list
+  const configured = process.env.ALLOWED_ORIGINS; // e.g. "https://sider.ai,https://trucktopia.netlify.app"
+  let allowedOrigin = '*';
+
+  if (configured && configured.trim().length > 0) {
+    const list = configured.split(',').map(s => s.trim()).filter(Boolean);
+    if (requestOrigin && list.includes(requestOrigin)) {
+      allowedOrigin = requestOrigin;
+    } else {
+      // If request origin not present or not in list, default to first configured origin
+      allowedOrigin = list[0] || '*';
+    }
+  } else {
+    // If no configured list, try to echo request origin (better compatibility for preview) or use Netlify site URL
+    allowedOrigin = requestOrigin || process.env.URL || '*';
+  }
+
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, X-ADMIN-KEY',
+    'Access-Control-Max-Age': '600',
+    'Content-Type': 'application/json'
+  };
+}
+
+/**
+ * handler
+ * @description Netlify function handler with CORS and Firestore migration logic.
+ * Accepts POST with { projectId, items: [{id, collection, docId, payload}, ...] }.
  */
 exports.handler = async function handler(event) {
   try {
+    const requestOrigin = (event.headers && (event.headers.origin || event.headers.Origin)) || null;
+    const corsHeaders = buildCorsHeaders(requestOrigin);
+
+    // Handle preflight
+    if (event.httpMethod === 'OPTIONS') {
+      return {
+        statusCode: 204,
+        headers: corsHeaders,
+        body: ''
+      };
+    }
+
     if (event.httpMethod !== 'POST') {
       return {
         statusCode: 405,
+        headers: corsHeaders,
         body: JSON.stringify({ error: 'Method Not Allowed. Use POST.' })
       };
     }
@@ -154,6 +207,7 @@ exports.handler = async function handler(event) {
       if (!adminKeyHeader || adminKeyHeader !== expectedAdminKey) {
         return {
           statusCode: 401,
+          headers: corsHeaders,
           body: JSON.stringify({ error: 'Invalid or missing X-ADMIN-KEY header.' })
         };
       }
@@ -164,22 +218,38 @@ exports.handler = async function handler(event) {
     try {
       body = JSON.parse(event.body || '{}');
     } catch (err) {
-      return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
+      return {
+        statusCode: 400,
+        headers: corsHeaders,
+        body: JSON.stringify({ error: 'Invalid JSON body' })
+      };
     }
 
     const projectId = body.projectId || process.env.GCP_PROJECT || (process.env.FIRESTORE_PROJECT_ID || '');
     if (!projectId) {
-      return { statusCode: 400, body: JSON.stringify({ error: 'Missing projectId in body or FIRESTORE_PROJECT_ID env var.' }) };
+      return {
+        statusCode: 400,
+        headers: corsHeaders,
+        body: JSON.stringify({ error: 'Missing projectId in body or FIRESTORE_PROJECT_ID env var.' })
+      };
     }
 
     const items = Array.isArray(body.items) ? body.items : [];
     if (items.length === 0) {
-      return { statusCode: 400, body: JSON.stringify({ error: 'No items to migrate (items array is empty).' }) };
+      return {
+        statusCode: 400,
+        headers: corsHeaders,
+        body: JSON.stringify({ error: 'No items to migrate (items array is empty).' })
+      };
     }
 
     const saBase64 = process.env.FIRESTORE_SA;
     if (!saBase64) {
-      return { statusCode: 500, body: JSON.stringify({ error: 'Service account not configured (FIRESTORE_SA).' }) };
+      return {
+        statusCode: 500,
+        headers: corsHeaders,
+        body: JSON.stringify({ error: 'Service account not configured (FIRESTORE_SA).' })
+      };
     }
 
     let serviceAccount;
@@ -187,7 +257,11 @@ exports.handler = async function handler(event) {
       const saJson = Buffer.from(saBase64, 'base64').toString('utf8');
       serviceAccount = JSON.parse(saJson);
     } catch (err) {
-      return { statusCode: 500, body: JSON.stringify({ error: 'Failed to parse FIRESTORE_SA. Ensure it is base64(serviceAccountJson).' }) };
+      return {
+        statusCode: 500,
+        headers: corsHeaders,
+        body: JSON.stringify({ error: 'Failed to parse FIRESTORE_SA. Ensure it is base64(serviceAccountJson).' })
+      };
     }
 
     // Create access token
@@ -212,11 +286,16 @@ exports.handler = async function handler(event) {
 
     return {
       statusCode: 200,
+      headers: corsHeaders,
       body: JSON.stringify({ ok: true, projectId, results })
     };
   } catch (err) {
+    // Ensure errors are returned with CORS headers so browser sees them
+    const requestOrigin = (event && event.headers && (event.headers.origin || event.headers.Origin)) || null;
+    const corsHeaders = buildCorsHeaders(requestOrigin);
     return {
       statusCode: 500,
+      headers: corsHeaders,
       body: JSON.stringify({ error: String(err) })
     };
   }
