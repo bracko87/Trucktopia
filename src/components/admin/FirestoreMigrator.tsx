@@ -143,7 +143,12 @@ const FirestoreMigrator: React.FC = () => {
 
   // Server flow states
   const [useServer, setUseServer] = useState<boolean>(true);
-  const [serverUrl, setServerUrl] = useState<string>('/.netlify/functions/firestore-import');
+  /**
+   * Default server function URL.
+   * Use an absolute Netlify URL so the preview/iframe doesn't resolve to the wrong origin.
+   * If you deploy to a different host, update this to your exact function URL.
+   */
+  const [serverUrl, setServerUrl] = useState<string>('https://trucktopia.netlify.app/.netlify/functions/firestore-import');
   const [serverAdminKey, setServerAdminKey] = useState<string>('');
 
   useEffect(() => {
@@ -573,6 +578,9 @@ const FirestoreMigrator: React.FC = () => {
               <div className="text-sm text-slate-400">Server Admin Key (X-ADMIN-KEY header)</div>
               <input value={serverAdminKey} onChange={e => setServerAdminKey(e.target.value)} placeholder="Paste admin key (kept locally)" className="w-full bg-slate-700/20 rounded-lg p-2 text-sm text-white placeholder:text-slate-400" />
               <div className="text-xs text-slate-500">Note: Best practice: set FIRESTORE_ADMIN_KEY on Netlify and leave this empty. Use this field for quick tests.</div>
+              <div className="text-xs text-amber-300 mt-2">
+                Tip: If you see 403 HTML from nginx, ensure this field is an absolute Netlify URL (https://your-site.netlify.app/.netlify/functions/firestore-import)
+              </div>
             </>
           ) : (
             <>

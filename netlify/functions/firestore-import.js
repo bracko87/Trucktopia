@@ -11,17 +11,17 @@
  * - Sequentially write documents to Firestore via the REST API.
  * - Return per-item statuses and errors to the caller.
  *
- * Security & CORS:
- * - This version adds CORS handling and OPTIONS preflight support.
- * - Allowed origins can be configured via ALLOWED_ORIGINS (comma separated).
- * - If ALLOWED_ORIGINS is not set, the function will echo the request Origin (if present),
- *   or fall back to process.env.URL (Netlify site URL), or '*' as last resort.
+ * CORS:
+ * - This function explicitly handles OPTIONS preflight and ALWAYS emits
+ *   Access-Control headers on every response to prevent browser CORS failures.
+ * - For best security, set ALLOWED_ORIGINS env var (comma separated) to the
+ *   exact origins you allow (e.g. "https://sider.ai,https://your-admin.example").
+ * - For quick testing, this implementation will echo the request Origin when possible,
+ *   or fall back to '*' if no Origin header is present (not ideal for production).
  *
  * Notes:
  * - Do NOT store service account JSON in the repository. Use Netlify environment
- *   variable FIRESTORE_SA (base64 encoded service account JSON).
- * - Provide a strong FIRESTORE_ADMIN_KEY in your Netlify env vars and include the
- *   same key in the X-ADMIN-KEY request header from the admin UI.
+ *   variables FIRESTORE_SA (base64 encoded service account JSON) and FIRESTORE_ADMIN_KEY.
  */
 
 /* eslint-disable no-await-in-loop */
@@ -141,7 +141,8 @@ async function writeDocument(projectId, collection, docId, obj, token) {
 /**
  * buildCorsHeaders
  * @description Build Access-Control headers based on request origin and environment.
- * Supports ALLOWED_ORIGINS env var (comma separated). If not set, echoes request origin or falls back.
+ * Supports ALLOWED_ORIGINS env var (comma separated). If not set, echoes request origin or falls back to '*'.
+ * Always returns headers including Vary: Origin.
  * @param {string|null} requestOrigin
  * @returns {Object} headers
  */
@@ -168,6 +169,7 @@ function buildCorsHeaders(requestOrigin) {
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, X-ADMIN-KEY',
     'Access-Control-Max-Age': '600',
+    'Vary': 'Origin',
     'Content-Type': 'application/json'
   };
 }
@@ -178,11 +180,12 @@ function buildCorsHeaders(requestOrigin) {
  * Accepts POST with { projectId, items: [{id, collection, docId, payload}, ...] }.
  */
 exports.handler = async function handler(event) {
-  try {
-    const requestOrigin = (event.headers && (event.headers.origin || event.headers.Origin)) || null;
-    const corsHeaders = buildCorsHeaders(requestOrigin);
+  // Grab origin header if present (may be undefined for non-browser calls)
+  const requestOrigin = (event && event.headers && (event.headers.origin || event.headers.Origin)) || null;
+  const corsHeaders = buildCorsHeaders(requestOrigin);
 
-    // Handle preflight
+  try {
+    // Handle preflight explicitly and return CORS headers immediately.
     if (event.httpMethod === 'OPTIONS') {
       return {
         statusCode: 204,
@@ -291,8 +294,6 @@ exports.handler = async function handler(event) {
     };
   } catch (err) {
     // Ensure errors are returned with CORS headers so browser sees them
-    const requestOrigin = (event && event.headers && (event.headers.origin || event.headers.Origin)) || null;
-    const corsHeaders = buildCorsHeaders(requestOrigin);
     return {
       statusCode: 500,
       headers: corsHeaders,
