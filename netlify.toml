@@ -1,14 +1,11 @@
-# netlify.toml
-# This file instructs Netlify how to build and publish the site.
-# Update `publish` if your project's build output directory differs (commonly 'dist' or 'build').
-
 [build]
+  # Build command used by your project. Adjust if your repo uses a different command.
   command = "npm run build"
+  # Directory where Netlify will look for serverless functions
+  functions = "netlify/functions"
+  # The folder that contains your built site (adjust if different; replace "dist" with "public" if needed)
   publish = "dist"
 
-[context.production.environment]
-  # Add any build-time env vars here if you want defaults.
-  # Note: For secrets (service_role keys), keep them in Netlify UI secrets or server-side only.
-  # Example (do NOT add real secrets here):
-  # REACT_APP_SUPABASE_URL = "https://xyz.supabase.co"
-  # REACT_APP_SUPABASE_ANON_KEY = "public-anon-key"
+[dev]
+  # Local Netlify Dev config (optional)
+  functions = "netlify/functions"
