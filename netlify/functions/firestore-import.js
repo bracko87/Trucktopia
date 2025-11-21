@@ -1,27 +1,15 @@
 /**
  * netlify/functions/firestore-import.js
  *
- * Serverless function to migrate prepared localStorage items to Firestore.
+ * Netlify function to migrate prepared localStorage items to Firestore.
  *
- * Responsibilities:
- * - Accept POST requests with a JSON payload describing migration items.
- * - Validate an admin key header against FIRESTORE_ADMIN_KEY (if set).
- * - Read service account JSON from FIRESTORE_SA environment variable (base64).
- * - Create a signed JWT (RS256), exchange it for an OAuth2 access token.
- * - Sequentially write documents to Firestore via the REST API.
- * - Return per-item statuses and errors to the caller.
+ * Quick-debug version:
+ * - Always emits permissive CORS headers (Access-Control-Allow-Origin: *) for testing.
+ * - Responds to OPTIONS (preflight) with 204 and the CORS headers.
+ * - Exposes a GET /health route for quick browser testing.
  *
- * CORS:
- * - This function explicitly handles OPTIONS preflight and ALWAYS emits
- *   Access-Control headers on every response to prevent browser CORS failures.
- * - For best security, set ALLOWED_ORIGINS env var (comma separated) to the
- *   exact origins you allow (e.g. "https://sider.ai,https://your-admin.example").
- * - For quick testing, this implementation will echo the request Origin when possible,
- *   or fall back to '*' if no Origin header is present (not ideal for production).
- *
- * Notes:
- * - Do NOT store service account JSON in the repository. Use Netlify environment
- *   variables FIRESTORE_SA (base64 encoded service account JSON) and FIRESTORE_ADMIN_KEY.
+ * NOTE: This permissive CORS is only for debugging. After verifying connectivity,
+ * revert to stricter origin handling and use ALLOWED_ORIGINS env var to whitelist origins.
  */
 
 /* eslint-disable no-await-in-loop */
@@ -139,34 +127,15 @@ async function writeDocument(projectId, collection, docId, obj, token) {
 }
 
 /**
- * buildCorsHeaders
- * @description Build Access-Control headers based on request origin and environment.
- * Supports ALLOWED_ORIGINS env var (comma separated). If not set, echoes request origin or falls back to '*'.
- * Always returns headers including Vary: Origin.
+ * buildCorsHeadersDebug
+ * @description Return permissive CORS headers for debugging. Set Access-Control-Allow-Origin: *.
  * @param {string|null} requestOrigin
- * @returns {Object} headers
  */
-function buildCorsHeaders(requestOrigin) {
-  // Allowed origins configured by env: comma-separated list
-  const configured = process.env.ALLOWED_ORIGINS; // e.g. "https://sider.ai,https://trucktopia.netlify.app"
-  let allowedOrigin = '*';
-
-  if (configured && configured.trim().length > 0) {
-    const list = configured.split(',').map(s => s.trim()).filter(Boolean);
-    if (requestOrigin && list.includes(requestOrigin)) {
-      allowedOrigin = requestOrigin;
-    } else {
-      // If request origin not present or not in list, default to first configured origin
-      allowedOrigin = list[0] || '*';
-    }
-  } else {
-    // If no configured list, try to echo request origin (better compatibility for preview) or use Netlify site URL
-    allowedOrigin = requestOrigin || process.env.URL || '*';
-  }
-
+function buildCorsHeadersDebug(requestOrigin) {
+  // DEBUG: permissive wildcard. Replace after tests.
   return {
-    'Access-Control-Allow-Origin': allowedOrigin,
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS, GET',
     'Access-Control-Allow-Headers': 'Content-Type, X-ADMIN-KEY',
     'Access-Control-Max-Age': '600',
     'Vary': 'Origin',
@@ -176,21 +145,40 @@ function buildCorsHeaders(requestOrigin) {
 
 /**
  * handler
- * @description Netlify function handler with CORS and Firestore migration logic.
- * Accepts POST with { projectId, items: [{id, collection, docId, payload}, ...] }.
+ * @description Netlify function handler. Supports:
+ * - OPTIONS preflight (returns 204 with CORS)
+ * - GET /health (returns {ok:true})
+ * - POST migration payloads (full migration flow)
  */
 exports.handler = async function handler(event) {
-  // Grab origin header if present (may be undefined for non-browser calls)
+  // Per-request debug CORS headers (permissive)
   const requestOrigin = (event && event.headers && (event.headers.origin || event.headers.Origin)) || null;
-  const corsHeaders = buildCorsHeaders(requestOrigin);
+  const corsHeaders = buildCorsHeadersDebug(requestOrigin);
 
   try {
-    // Handle preflight explicitly and return CORS headers immediately.
+    // Handle preflight explicitly
     if (event.httpMethod === 'OPTIONS') {
       return {
         statusCode: 204,
         headers: corsHeaders,
         body: ''
+      };
+    }
+
+    // Simple health endpoint for quick browser check
+    if (event.httpMethod === 'GET') {
+      if (event.path && event.path.endsWith('/health')) {
+        return {
+          statusCode: 200,
+          headers: corsHeaders,
+          body: JSON.stringify({ ok: true, time: Date.now() })
+        };
+      }
+      // default GET response
+      return {
+        statusCode: 200,
+        headers: corsHeaders,
+        body: JSON.stringify({ message: 'firestore-import function (debug) - use POST', time: Date.now() })
       };
     }
 
@@ -202,10 +190,9 @@ exports.handler = async function handler(event) {
       };
     }
 
+    // Validate admin key if configured
     const adminKeyHeader = event.headers['x-admin-key'] || event.headers['X-ADMIN-KEY'] || event.headers['X-Admin-Key'];
     const expectedAdminKey = process.env.FIRESTORE_ADMIN_KEY;
-
-    // If an admin key is configured, validate it
     if (expectedAdminKey && expectedAdminKey.length > 0) {
       if (!adminKeyHeader || adminKeyHeader !== expectedAdminKey) {
         return {
@@ -246,6 +233,7 @@ exports.handler = async function handler(event) {
       };
     }
 
+    // Service account must be configured on Netlify for server flow
     const saBase64 = process.env.FIRESTORE_SA;
     if (!saBase64) {
       return {
@@ -293,7 +281,6 @@ exports.handler = async function handler(event) {
       body: JSON.stringify({ ok: true, projectId, results })
     };
   } catch (err) {
-    // Ensure errors are returned with CORS headers so browser sees them
     return {
       statusCode: 500,
       headers: corsHeaders,
