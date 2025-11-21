@@ -1,23 +1,18 @@
 /**
  * netlify/functions/firestore-import.js
  *
- * Debug Netlify function to verify CORS and reachability from browser.
+ * Debug Netlify function for migration testing.
  *
- * Responsibilities:
- * - Return permissive CORS headers for OPTIONS and all responses to help debug preflight issues.
- * - Provide a lightweight GET /health endpoint that returns JSON with CORS headers.
- * - For POST requests this debug version echoes received payload (DOES NOT PERFORM FIRESTORE MIGRATION).
+ * - Returns permissive CORS headers so we can confirm the function is deployed and reachable.
+ * - GET /health returns a small JSON payload for quick checks.
+ * - POST echoes payload (debug only).
  *
- * WARNING (debug-only):
- * - This file intentionally uses Access-Control-Allow-Origin: * to prove CORS is the issue.
- * - Do NOT keep this debug variant in production. After debugging, restore the secure migration implementation
- *   that validates X-ADMIN-KEY and uses server-side credentials to write to Firestore.
+ * WARNING: This debug variant uses Access-Control-Allow-Origin: * — do NOT keep this in production.
  */
 
 /**
  * buildCorsHeadersDebug
- * @description Return permissive CORS headers for debugging. Uses wildcard Origin '*'.
- * @returns {Record<string,string>} headers
+ * @returns {Record<string,string>} Headers used for debug responses
  */
 function buildCorsHeadersDebug() {
   return {
@@ -32,13 +27,12 @@ function buildCorsHeadersDebug() {
 
 /**
  * handler
- * @description Netlify function handler (debug). Ensures CORS headers are present on every response.
+ * Netlify function handler (debug). Ensures CORS headers are present on every response.
  */
 exports.handler = async function handler(event) {
   const cors = buildCorsHeadersDebug();
 
   try {
-    // Always respond to OPTIONS (preflight) with permissive CORS headers.
     if (event.httpMethod === 'OPTIONS') {
       return {
         statusCode: 204,
@@ -47,7 +41,6 @@ exports.handler = async function handler(event) {
       };
     }
 
-    // Simple health endpoint for quick browser check
     if (event.httpMethod === 'GET') {
       if (event.path && event.path.endsWith('/health')) {
         return {
@@ -57,7 +50,6 @@ exports.handler = async function handler(event) {
         };
       }
 
-      // Default GET response
       return {
         statusCode: 200,
         headers: cors,
@@ -65,17 +57,14 @@ exports.handler = async function handler(event) {
       };
     }
 
-    // For debugging, echo back any POST body so you can confirm the request reaches the function.
     if (event.httpMethod === 'POST') {
       let body;
       try {
         body = event.body ? JSON.parse(event.body) : null;
       } catch (err) {
-        // If body isn't JSON, echo raw string
         body = event.body;
       }
 
-      // Log minimal info for Netlify logs
       console.log('DEBUG POST received. body keys:', body && typeof body === 'object' ? Object.keys(body) : typeof body);
 
       return {
@@ -85,7 +74,6 @@ exports.handler = async function handler(event) {
       };
     }
 
-    // If method not allowed
     return {
       statusCode: 405,
       headers: cors,

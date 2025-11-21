@@ -1,11 +1,7 @@
 [build]
-  # Build command used by your project. Adjust if your repo uses a different command.
-  command = "npm run build"
-  # Directory where Netlify will look for serverless functions
+  # Explicit functions folder so Netlify will bundle functions from netlify/functions
   functions = "netlify/functions"
-  # The folder that contains your built site (adjust if different; replace "dist" with "public" if needed)
-  publish = "dist"
 
-[dev]
-  # Local Netlify Dev config (optional)
-  functions = "netlify/functions"
+# Optional: if you need to override publish/build commands, add them here.
+# publish = "public"
+# command = "npm run build"
