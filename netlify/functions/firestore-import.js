@@ -1,137 +1,106 @@
 /**
  * netlify/functions/firestore-import.js
  *
- * Debug helper Netlify Function for diagnosing runtime failures.
+ * Debug wrapper for firestore-import Netlify Function.
  *
- * Responsibilities:
- * - Log module load to help detect errors that occur during require/import time.
- * - Provide permissive CORS headers for testing.
- * - Handle OPTIONS/GET/POST and return clear JSON so invocations create logs.
+ * Purpose:
+ * - Minimal, robust handler that logs on module load and on each invocation.
+ * - Returns permissive CORS headers and clear JSON responses.
+ * - Use this to force production invocation logs so we can inspect runtime errors.
  *
- * IMPORTANT: This is a debug-only function. Remove or replace with secure implementation
- * after you resolve the runtime issue.
+ * Note: This is a temporary debug function. Replace with the real implementation
+ * after troubleshooting is complete.
  */
 
 /**
- * buildCorsHeadersDebug
- * @description Returns permissive CORS headers used for debug responses.
- * @returns {Record<string,string>}
+ * buildCorsHeaders
+ * @description Build permissive CORS headers for easier testing.
+ * @returns {{[k:string]: string}}
  */
-function buildCorsHeadersDebug() {
+function buildCorsHeaders() {
   return {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS, GET',
-    'Access-Control-Allow-Headers': 'Content-Type, X-ADMIN-KEY, Accept',
-    'Access-Control-Max-Age': '600',
-    'Vary': 'Origin',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Accept',
     'Content-Type': 'application/json'
   };
 }
 
 /**
- * logSafeEnv
- * @description Log a small, safe subset of environment variables for debug purposes.
- *              Avoid dumping secrets in long-term logs. This is for transient debugging.
+ * module-load log
+ * @description Logged immediately when the function module is required by Netlify.
  */
-function logSafeEnv() {
-  try {
-    const safe = {
-      NODE_ENV: process.env.NODE_ENV,
-      NETLIFY_BUILD_VERSION: process.env.NETLIFY_BUILD_VERSION,
-      NETLIFY_SITE_ID: process.env.NETLIFY_SITE_ID ? 'present' : 'missing',
-      AWS_REGION: process.env.AWS_REGION ? 'present' : 'missing'
-    };
-    console.log('firestore-import: env snapshot', safe);
-  } catch (err) {
-    console.log('firestore-import: env log failed', String(err));
-  }
+try {
+  console.log('firestore-import: module loaded', { time: new Date().toISOString(), pid: process.pid });
+} catch (err) {
+  // Ensure module-load logging never throws
 }
 
 /**
- * module-load log
- * @description This executes on module require. If the function fails before handler runs,
- *              logs here will show up in Netlify invocation / initialization logs.
- */
-console.log('firestore-import: module loaded', { time: new Date().toISOString(), pid: process.pid });
-logSafeEnv();
-
-/**
  * handler
- * @param {import('http').IncomingMessage & { method?: string }} event
- * @returns {Promise<{statusCode:number,headers:Object,body:string}>}
- * @description Main Netlify function handler. Succeeds on OPTIONS/GET/POST and logs details.
+ * @description Netlify function handler. Logs invocation details and returns safe responses.
+ * @param {Object} event - Netlify event payload
+ * @returns {Promise<{statusCode:number, headers:Object, body:string}>}
  */
 exports.handler = async function handler(event) {
-  const cors = buildCorsHeadersDebug();
+  const headers = buildCorsHeaders();
+
   try {
     console.log('firestore-import: invocation start', {
       time: new Date().toISOString(),
-      method: event.httpMethod,
-      path: event.path,
-      query: event.queryStringParameters || null
+      method: event && event.httpMethod,
+      path: event && event.path,
+      query: (event && event.queryStringParameters) || null
     });
 
     // OPTIONS preflight
     if (event.httpMethod === 'OPTIONS') {
-      console.log('firestore-import: handling OPTIONS');
+      console.log('firestore-import: OPTIONS preflight received');
       return {
         statusCode: 204,
-        headers: cors,
+        headers,
         body: ''
       };
     }
 
-    // GET /health quick-check
-    if (event.httpMethod === 'GET') {
-      const isHealth = (event.path && event.path.endsWith('/health')) || (event.queryStringParameters && ('health' in event.queryStringParameters || 'run' in event.queryStringParameters));
-      if (isHealth) {
-        console.log('firestore-import: returning health OK');
-        return {
-          statusCode: 200,
-          headers: cors,
-          body: JSON.stringify({ ok: true, time: Date.now(), note: 'debug-health' })
-        };
-      }
+    // Health shortcut if path ends with /health or query param health=true
+    const isHealthPath = event.path && event.path.endsWith('/health');
+    const isHealthQuery = event.queryStringParameters && ('health' in event.queryStringParameters || 'run' in event.queryStringParameters);
 
-      // Generic GET: echo query
+    if (isHealthPath || isHealthQuery) {
+      console.log('firestore-import: returning health OK');
       return {
         statusCode: 200,
-        headers: cors,
-        body: JSON.stringify({ ok: true, method: 'GET', query: event.queryStringParameters || null })
+        headers,
+        body: JSON.stringify({ ok: true, time: Date.now(), note: 'debug-health' })
       };
     }
 
-    // POST: echo body
+    // Echo GET/POST
+    let echo = null;
     if (event.httpMethod === 'POST') {
-      let body = event.body;
       try {
-        body = event.body ? JSON.parse(event.body) : null;
-      } catch (err) {
-        // Not JSON; leave raw
-        console.log('firestore-import: POST body parse failed, returning raw', String(err));
+        echo = event.body ? JSON.parse(event.body) : null;
+      } catch (e) {
+        echo = event.body || null;
       }
-
-      console.log('firestore-import: POST body', body && typeof body === 'object' ? Object.keys(body) : typeof body);
-
-      return {
-        statusCode: 200,
-        headers: cors,
-        body: JSON.stringify({ ok: true, method: 'POST', echo: body })
-      };
     }
 
-    // Method not allowed
-    console.log('firestore-import: method not allowed', event.httpMethod);
     return {
-      statusCode: 405,
-      headers: cors,
-      body: JSON.stringify({ error: 'Method Not Allowed. Use POST/GET/OPTIONS.' })
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({
+        ok: true,
+        method: event.httpMethod,
+        query: event.queryStringParameters || null,
+        echo
+      })
     };
   } catch (err) {
-    console.error('firestore-import: handler error', err && err.stack ? err.stack : String(err));
+    console.error('firestore-import: handler error', err && (err.stack || String(err)));
     return {
       statusCode: 500,
-      headers: cors,
+      headers,
       body: JSON.stringify({ error: String(err) })
     };
   }
