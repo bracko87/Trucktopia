@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import FirestoreMigrator from '../components/admin/FirestoreMigrator';
 import { useGame } from '../contexts/GameContext';
 import { useNavigate } from 'react-router';
 import { Shield, Users, Building, BarChart3, Settings, UserCog, AlertTriangle, Cpu, Database, RefreshCw, Truck, MapPin, Edit, Trash2, ClockIcon, DollarSign, Search, Filter, X, TrendingUp, CheckCircle } from 'lucide-react';

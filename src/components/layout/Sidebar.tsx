@@ -1,34 +1,47 @@
 /**
- * Professional retractable sidebar with Football Manager 2024 style navigation
+ * Sidebar.tsx
+ *
+ * Professional retractable sidebar with Football Manager 2024 style navigation.
+ *
+ * Responsibilities:
+ * - Provide navigation for the game pages
+ * - Show admin-only entries when the user is an administrator
+ * - Allow collapsing/expanding sidebar
  */
 
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import { useGame } from '../../contexts/GameContext';
-import { 
-  LayoutDashboard, 
-  Warehouse, 
-  Users, 
-  Briefcase, 
-  FileText, 
+import {
+  LayoutDashboard,
+  Warehouse,
+  Users,
+  Briefcase,
+  FileText,
   DollarSign,
   Map,
   Settings,
   ChevronLeft,
   ChevronRight,
   LogOut,
-  Shield
+  Shield,
+  Database
 } from 'lucide-react';
 import { GamePage } from '../../types/game';
 
 interface NavItem {
-  id: GamePage;
+  id: GamePage | string;
   label: string;
   icon: React.ReactNode;
   description: string;
   path: string;
 }
 
+/**
+ * Sidebar
+ *
+ * Main application sidebar component. Shows navigation and admin-only links.
+ */
 const Sidebar: React.FC = () => {
   const { gameState, setCurrentPage, toggleSidebar } = useGame();
   const navigate = useNavigate();
@@ -102,12 +115,16 @@ const Sidebar: React.FC = () => {
 
   const handleNavigation = (item: NavItem) => {
     navigate(item.path);
-    setCurrentPage(item.id);
+    // keep page tracking consistent with existing app expectations
+    setCurrentPage(item.id as GamePage);
   };
 
   const isActive = (path: string) => location.pathname === path;
 
   const sidebarWidth = gameState.sidebarCollapsed ? 'w-20' : 'w-64';
+
+  // Admin detection: match admin checks used in AdminDashboard
+  const isAdmin = gameState.currentUser === 'bracko87@live.com' || gameState.company?.id === 'admin-company';
 
   return (
     <aside className={`${sidebarWidth} bg-slate-900 border-r border-slate-700 flex flex-col transition-all duration-300`}>
@@ -162,32 +179,57 @@ const Sidebar: React.FC = () => {
             </button>
           );
         })}
-        
+
         {/* Admin Dashboard - Only show for admin users */}
-        {gameState.company?.id === 'admin-company' && (
-          <button
-            onClick={() => {
-              navigate('/admin');
-              setCurrentPage('admin-dashboard');
-            }}
-            className={`w-full flex items-center p-3 rounded-lg transition-all duration-200 ${
-              location.pathname === '/admin'
-                ? 'bg-purple-600 text-white shadow-lg'
-                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-            }`}
-          >
-            <div className="flex items-center space-x-3">
-              <Shield className="w-5 h-5" />
-              {!gameState.sidebarCollapsed && (
-                <div className="text-left">
-                  <div className="font-medium text-sm">Admin Dashboard</div>
-                  <div className="text-xs text-slate-400">System Administration</div>
-                </div>
-              )}
-            </div>
-          </button>
+        {isAdmin && (
+          <>
+            <button
+              onClick={() => {
+                navigate('/admin');
+                setCurrentPage('admin-dashboard' as GamePage);
+              }}
+              className={`w-full flex items-center p-3 rounded-lg transition-all duration-200 ${
+                location.pathname === '/admin'
+                  ? 'bg-purple-600 text-white shadow-lg'
+                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center space-x-3">
+                <Shield className="w-5 h-5" />
+                {!gameState.sidebarCollapsed && (
+                  <div className="text-left">
+                    <div className="font-medium text-sm">Admin Dashboard</div>
+                    <div className="text-xs text-slate-400">System Administration</div>
+                  </div>
+                )}
+              </div>
+            </button>
+
+            {/* Migration link */}
+            <button
+              onClick={() => {
+                navigate('/admin/migration');
+                setCurrentPage('admin-dashboard' as GamePage);
+              }}
+              className={`w-full flex items-center p-3 rounded-lg transition-all duration-200 ${
+                location.pathname === '/admin/migration'
+                  ? 'bg-emerald-600 text-white shadow-lg'
+                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center space-x-3">
+                <Database className="w-5 h-5" />
+                {!gameState.sidebarCollapsed && (
+                  <div className="text-left">
+                    <div className="font-medium text-sm">Migration</div>
+                    <div className="text-xs text-slate-400">Data import / Firestore</div>
+                  </div>
+                )}
+              </div>
+            </button>
+          </>
         )}
-        
+
         {/* Logout Button - Added to main sidebar */}
         <div className="pt-4 border-t border-slate-700 mt-4">
           <button
@@ -223,7 +265,7 @@ const Sidebar: React.FC = () => {
               {gameState.company.name}
             </div>
             <div className="w-full bg-slate-700 rounded-full h-1.5">
-              <div 
+              <div
                 className="bg-blue-500 h-1.5 rounded-full transition-all duration-500"
                 style={{ width: '35%' }}
               />
