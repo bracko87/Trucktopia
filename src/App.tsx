@@ -51,7 +51,6 @@ import JobCenter from './pages/JobCenter';
 import Logout from './pages/Logout';
 import StorageManagement from './pages/StorageManagement';
 import AdminDashboard from './pages/AdminDashboard';
-import AdminMigration from './pages/AdminMigration';
 import UserManagement from './pages/UserManagement';
 import TestDistance from './pages/TestDistance';
 import Settings from './pages/Settings';
@@ -101,7 +100,6 @@ function App() {
               <Route path="/logout" element={<Logout />} />
               <Route path="/storage-management" element={<StorageManagement />} />
               <Route path="/admin" element={<AdminDashboard />} />
-              <Route path="/admin/migration" element={<AdminMigration />} />
               <Route path="/admin/users" element={<UserManagement />} />
               <Route path="/admin/game-rules" element={<GameRulesEngines />} />
               <Route path="/admin/job-database" element={<FreightJobDatabase />} />

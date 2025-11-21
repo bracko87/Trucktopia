@@ -4,10 +4,10 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import FirestoreMigrator from '../components/admin/FirestoreMigrator';
 import { useGame } from '../contexts/GameContext';
 import { useNavigate } from 'react-router';
 import { Shield, Users, Building, BarChart3, Settings, UserCog, AlertTriangle, Cpu, Database, RefreshCw, Truck, MapPin, Edit, Trash2, ClockIcon, DollarSign, Search, Filter, X, TrendingUp, CheckCircle } from 'lucide-react';
+import MigrationPanel from '../components/admin/MigrationPanel';
 
 interface UserStats {
   totalUsers: number;
@@ -703,6 +703,11 @@ const AdminDashboard: React.FC = () => {
             </button>
           </div>
         </div>
+      </div>
+
+      {/* Migration Section */}
+      <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
+        <MigrationPanel />
       </div>
 
       {/* Recent Activity */}
