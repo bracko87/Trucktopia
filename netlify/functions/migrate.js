@@ -1,28 +1,23 @@
 /**
  * netlify/functions/migrate.js
  *
- * Serverless migration endpoint for Netlify Functions with robust CORS & OPTIONS support.
+ * Debug Netlify Function for migration endpoint.
  *
  * Responsibilities:
- * - Validate an admin token sent in the Authorization header ("Bearer <TOKEN>").
- * - Accept a migration payload { metadata, collections, options } via POST.
- * - Insert a single row per collection into the configured Supabase table
- *   (defaults to "migrated_collections") using Supabase REST API and the
- *   SUPABASE_SERVICE_ROLE_KEY environment variable.
+ * - Support OPTIONS preflight with proper CORS headers.
+ * - Accept POST requests with { metadata, collections }.
+ * - Validate an Authorization: Bearer <TOKEN> header against ADMIN_TOKEN env var.
+ * - Always return a safe SHA-256 hex of the received token (receivedTokenHash) when an Authorization header is present.
+ * - Insert collections into a Supabase REST endpoint when configured (uses SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY).
  *
- * CORS:
- * - Supports OPTIONS preflight and sets Access-Control-Allow-* headers on all responses.
- * - Uses MIGRATION_ALLOW_ORIGIN env var or defaults to '*' for Access-Control-Allow-Origin.
- *
- * Security:
- * - SUPABASE_SERVICE_ROLE_KEY must be set in Netlify environment variables.
- * - ADMIN_TOKEN must be set to protect this endpoint.
+ * Important: Do NOT include your real token in any public channels. Use the returned receivedTokenHash (one-way)
+ * to compare with your local SHA-256.
  */
 
 /**
  * buildCorsHeaders
- * @description Build consistent CORS headers for responses. Uses MIGRATION_ALLOW_ORIGIN env var or "*".
- * @returns {Record<string,string>} headers
+ * @description Build consistent CORS headers for responses.
+ * @returns {{[k:string]:string}}
  */
 const buildCorsHeaders = () => {
   const ALLOW_ORIGIN = process.env.MIGRATION_ALLOW_ORIGIN || '*';
@@ -40,7 +35,7 @@ const buildCorsHeaders = () => {
  * @description Helper that returns response shapes including CORS headers.
  * @param {number} statusCode
  * @param {object} bodyObj
- * @returns {object}
+ * @returns {{statusCode:number, headers:object, body:string}}
  */
 const makeResponse = (statusCode, bodyObj) => {
   return {
@@ -51,8 +46,40 @@ const makeResponse = (statusCode, bodyObj) => {
 };
 
 /**
+ * detectMethod
+ * @description Robust method detection for different serverless event shapes.
+ * @param {object} event
+ * @returns {string}
+ */
+const detectMethod = (event) => {
+  if (!event) return '';
+  if (typeof event.httpMethod === 'string') return event.httpMethod.toUpperCase();
+  if (event.requestContext && event.requestContext.http && event.requestContext.http.method) {
+    return String(event.requestContext.http.method).toUpperCase();
+  }
+  if (event.method) return String(event.method).toUpperCase();
+  return '';
+};
+
+/**
+ * hashToken
+ * @description Compute SHA-256 hex of a token string. Returns null on error.
+ * @param {string} token
+ * @returns {string|null}
+ */
+const hashToken = (token) => {
+  try {
+    const crypto = require('crypto');
+    return crypto.createHash('sha256').update(String(token)).digest('hex');
+  } catch (e) {
+    return null;
+  }
+};
+
+/**
  * insertCollection
- * @description Insert a single collection row into Supabase via REST API.
+ * @description Insert a single collection row into Supabase via REST API (if configured).
+ *              This is used when SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are present.
  * @param {string} collectionKey
  * @param {any} value
  * @param {object} metadata
@@ -67,7 +94,7 @@ const insertCollection = async (collectionKey, value, metadata) => {
     return { collection: collectionKey, success: false, message: 'Missing Supabase configuration' };
   }
 
-  const endpoint = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/${MIGRATION_TABLE}`;
+  const endpoint = `${SUPABASE_URL.replace(/\\/$/, '')}/rest/v1/${MIGRATION_TABLE}`;
   const row = {
     collection_key: collectionKey,
     data: value,
@@ -77,7 +104,9 @@ const insertCollection = async (collectionKey, value, metadata) => {
   };
 
   try {
-    const res = await fetch(endpoint, {
+    // Use global fetch if available (Netlify provides fetch), else try node-fetch
+    const fetchFn = typeof fetch !== 'undefined' ? fetch : require('node-fetch');
+    const res = await fetchFn(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -103,27 +132,9 @@ const insertCollection = async (collectionKey, value, metadata) => {
 };
 
 /**
- * detectMethod
- * @description Robust method detection for different serverless event shapes (Netlify / Vercel / legacy).
- * @param {object} event
- * @returns {string} Uppercase HTTP method or empty string.
- */
-const detectMethod = (event) => {
-  // Common: Netlify uses event.httpMethod
-  if (event && typeof event.httpMethod === 'string') return event.httpMethod.toUpperCase();
-  // Newer wrappers may use requestContext.http.method
-  if (event && event.requestContext && event.requestContext.http && event.requestContext.http.method) {
-    return String(event.requestContext.http.method).toUpperCase();
-  }
-  // Some runtimes use event.method
-  if (event && event.method) return String(event.method).toUpperCase();
-  // Fallback
-  return '';
-};
-
-/**
  * handler
  * @description Netlify function handler: supports OPTIONS preflight and POST migration logic.
+ *              Always returns receivedTokenHash (if Authorization header present) to aid debugging.
  * @param {object} event
  * @param {object} context
  */
@@ -131,7 +142,7 @@ exports.handler = async (event, context) => {
   try {
     const method = detectMethod(event);
 
-    // Handle CORS preflight (OPTIONS) early and return 204 No Content
+    // Handle CORS preflight (OPTIONS)
     if (method === 'OPTIONS') {
       return {
         statusCode: 204,
@@ -145,21 +156,22 @@ exports.handler = async (event, context) => {
       return makeResponse(405, { ok: false, message: 'Method Not Allowed' });
     }
 
-    // Validate Authorization header: expects "Bearer <TOKEN>"
     const headers = event.headers || {};
-    // Normalize header keys
-    const authHeader = (headers.authorization || headers.Authorization || headers.Authorization || '').toString();
+    const authHeader = (headers.authorization || headers.Authorization || '').toString();
     const token = authHeader && authHeader.toLowerCase().startsWith('bearer ') ? authHeader.slice(7).trim() : null;
+    const receivedTokenHash = token ? hashToken(token) : null;
     const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
 
+    // If token missing or invalid, return 401 with receivedTokenHash (if present)
     if (!token || token !== ADMIN_TOKEN) {
-      return makeResponse(401, { ok: false, message: 'Unauthorized' });
+      const body = { ok: false, message: 'Unauthorized' };
+      if (receivedTokenHash) body.receivedTokenHash = receivedTokenHash;
+      return makeResponse(401, body);
     }
 
     // Validate Supabase env
     const SUPABASE_URL = process.env.SUPABASE_URL;
     const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       return makeResponse(500, { ok: false, message: 'Server misconfigured: missing Supabase URL or service role key' });
     }
@@ -180,7 +192,7 @@ exports.handler = async (event, context) => {
       return makeResponse(400, { ok: false, message: 'No collections provided' });
     }
 
-    // Process collections sequentially for audit/safety.
+    // Process collections sequentially for audit/safety
     const results = [];
     for (const [key, value] of Object.entries(collections)) {
       // eslint-disable-next-line no-await-in-loop

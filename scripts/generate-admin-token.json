@@ -1,0 +1,25 @@
+# /**
+#  * generate-admin-token.json
+#  *
+#  * @description PowerShell snippet to POST a small dry-run payload to the migration Netlify function.
+#  * This file intentionally holds PowerShell code for convenience. Run it in PowerShell (not by pasting extra text).
+#  */
+
+$headers = @{
+  "Content-Type"  = "application/json"
+  "Authorization" = "Bearer 9946cd9441ae023615a1c662da33cb6ef5c11d45e0da0ce7e69b80b42c04b4aa"
+}
+
+$body = @{
+  metadata = @{
+    test = $true
+    requestedBy = "you@example.com"
+  }
+  collections = @{
+    tm_test_sample = @(@{ hello = "world" })
+  }
+}
+
+$json = $body | ConvertTo-Json -Depth 5
+
+Invoke-RestMethod -Uri "https://test25h.netlify.app/.netlify/functions/migrate" -Method Post -Headers $headers -Body $json -Verbose

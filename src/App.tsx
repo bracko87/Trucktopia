@@ -61,6 +61,9 @@ import FleetControl from './pages/FleetControl';
 import ContractJobs from './pages/ContractJobs';
 import CargoTrailerCompatibility from './pages/CargoTrailerCompatibility';
 
+// Migration page
+import Migration from './pages/Migration';
+
 /**
  * App
  * @description Root application component: mounts providers, layout and routing.
