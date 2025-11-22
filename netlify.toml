@@ -1,7 +1,0 @@
-[build]
-  # Explicit functions folder so Netlify will bundle functions from netlify/functions
-  functions = "netlify/functions"
-
-# Optional: if you need to override publish/build commands, add them here.
-# publish = "public"
-# command = "npm run build"
