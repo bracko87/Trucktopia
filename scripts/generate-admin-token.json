@@ -1,25 +1,28 @@
-# /**
-#  * generate-admin-token.json
-#  *
-#  * @description PowerShell snippet to POST a small dry-run payload to the migration Netlify function.
-#  * This file intentionally holds PowerShell code for convenience. Run it in PowerShell (not by pasting extra text).
-#  */
+/**
+ * generate-admin-token.json
+ *
+ * Purpose:
+ * - Convenience script to set environment variables required to run the migration
+ *   helper script (run-migrate-insert-test.js) from PowerShell.
+ *
+ * Security:
+ * - This file contains secret keys. Do NOT commit this file to a public repository.
+ * - Prefer using a secure secrets manager or CI environment variables.
+ *
+ * Usage (PowerShell):
+ * - Open a PowerShell session and run this file as a script (or copy the lines into your session),
+ *   then run: node scripts/run-migrate-insert-test.js
+ *
+ * Note:
+ * - Many Node scripts expect env flags as strings (e.g. 'true' / 'false').
+ */
 
-$headers = @{
-  "Content-Type"  = "application/json"
-  "Authorization" = "Bearer 9946cd9441ae023615a1c662da33cb6ef5c11d45e0da0ce7e69b80b42c04b4aa"
-}
+/* PowerShell environment variables (set as strings) */
+$env:ADMIN_TOKEN = '9946cd9441ae023615a1c662da33cb6ef5c11d45e0da0ce7e69b80b42c04b4aa'
+$env:SUPABASE_URL = 'https://yzzcipizchqntbijktaj.supabase.co'
+$env:SUPABASE_SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6emNpcGl6Y2hxbnRiaWprdGFqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MzU5NTM3OSwiZXhwIjoyMDc5MTcxMzc5fQ.01mm3qj17D1c2bKNcNiztiZ6GcPOKWwCJ7Hu9IOGcFU'
+$env:MIGRATION_DRY_RUN = 'false'  # set to 'true' for dry-run (no DB changes)
+$env:DEBUG = 'true'
 
-$body = @{
-  metadata = @{
-    test = $true
-    requestedBy = "you@example.com"
-  }
-  collections = @{
-    tm_test_sample = @(@{ hello = "world" })
-  }
-}
-
-$json = $body | ConvertTo-Json -Depth 5
-
-Invoke-RestMethod -Uri "https://test25h.netlify.app/.netlify/functions/migrate" -Method Post -Headers $headers -Body $json -Verbose
+# To run the migration test after setting variables (same PowerShell session):
+# node scripts/run-migrate-insert-test.js

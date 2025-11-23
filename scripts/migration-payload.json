@@ -1,0 +1,16 @@
+{
+  "metadata": {
+    "requestedBy": "you@example.com",
+    "note": "Sample single-collection migration — edit before running"
+  },
+  "collections": {
+    "example_collection": [
+      {
+        "id": "sample-1",
+        "name": "Sample item",
+        "createdAt": "2025-11-23T00:00:00Z",
+        "payload": { "some": "data" }
+      }
+    ]
+  }
+}

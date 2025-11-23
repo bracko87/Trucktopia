@@ -1,53 +1,19 @@
 /**
  * netlify/functions/migrate.js
  *
- * Debug Netlify Function for migration endpoint.
+ * Netlify function handler for migration endpoint.
  *
- * Responsibilities:
- * - Support OPTIONS preflight with proper CORS headers.
- * - Accept POST requests with { metadata, collections }.
- * - Validate an Authorization: Bearer <TOKEN> header against ADMIN_TOKEN env var.
- * - Always return a safe SHA-256 hex of the received token (receivedTokenHash) when an Authorization header is present.
- * - Insert collections into a Supabase REST endpoint when configured (uses SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY).
+ * Improvements made:
+ * - Robust CORS handling: echoes origin when MIGRATION_ALLOW_ORIGIN is configured,
+ *   includes Vary: Origin, and sets Access-Control-Allow-Credentials when appropriate.
+ * - Ensures CORS headers are always present (including on OPTIONS preflight and errors).
  *
- * Important: Do NOT include your real token in any public channels. Use the returned receivedTokenHash (one-way)
- * to compare with your local SHA-256.
+ * Keep DEBUG=true to see debug logs in Netlify function logs.
  */
-
-/**
- * buildCorsHeaders
- * @description Build consistent CORS headers for responses.
- * @returns {{[k:string]:string}}
- */
-const buildCorsHeaders = () => {
-  const ALLOW_ORIGIN = process.env.MIGRATION_ALLOW_ORIGIN || '*';
-  return {
-    'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': ALLOW_ORIGIN,
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, apikey, Prefer, Origin',
-    'Access-Control-Max-Age': '86400'
-  };
-};
-
-/**
- * makeResponse
- * @description Helper that returns response shapes including CORS headers.
- * @param {number} statusCode
- * @param {object} bodyObj
- * @returns {{statusCode:number, headers:object, body:string}}
- */
-const makeResponse = (statusCode, bodyObj) => {
-  return {
-    statusCode,
-    headers: buildCorsHeaders(),
-    body: JSON.stringify(bodyObj)
-  };
-};
 
 /**
  * detectMethod
- * @description Robust method detection for different serverless event shapes.
+ * @description Determine HTTP method across Netlify event shapes.
  * @param {object} event
  * @returns {string}
  */
@@ -63,7 +29,7 @@ const detectMethod = (event) => {
 
 /**
  * hashToken
- * @description Compute SHA-256 hex of a token string. Returns null on error.
+ * @description Return SHA-256 hex string or null on failure.
  * @param {string} token
  * @returns {string|null}
  */
@@ -77,9 +43,68 @@ const hashToken = (token) => {
 };
 
 /**
+ * buildCorsHeaders
+ * @description Build CORS headers. If MIGRATION_ALLOW_ORIGIN is a specific origin (or list of origins),
+ *              the function will echo the request origin when allowed (required for credentials).
+ * @param {string} requestOrigin - Origin header from the incoming request (may be undefined)
+ * @returns {{[k:string]:string}}
+ */
+const buildCorsHeaders = (requestOrigin) => {
+  const RAW_ALLOW = (process.env.MIGRATION_ALLOW_ORIGIN || '*').trim();
+  // Accept comma-separated list of allowed origins in env var
+  const allowedList = RAW_ALLOW === '*' ? ['*'] : RAW_ALLOW.split(',').map(s => s.trim()).filter(Boolean);
+
+  let originHeader = '*';
+  if (allowedList.length === 1 && allowedList[0] === '*') {
+    originHeader = '*';
+  } else if (requestOrigin && allowedList.includes(requestOrigin)) {
+    // Echo the incoming origin if explicitly allowed
+    originHeader = requestOrigin;
+  } else if (allowedList.length === 1) {
+    // Single configured origin (not '*'), use it
+    originHeader = allowedList[0];
+  } else {
+    // If requestOrigin not in allowed list, fall back to first configured origin
+    originHeader = allowedList[0] || '*';
+  }
+
+  const headers = {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': originHeader,
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, apikey, Prefer, Origin',
+    'Access-Control-Max-Age': '86400',
+    'Vary': 'Origin'
+  };
+
+  // If not wildcard, allow credentials (useful if you use cookies or Authorization in browser)
+  if (originHeader !== '*') {
+    headers['Access-Control-Allow-Credentials'] = 'true';
+  }
+
+  return headers;
+};
+
+/**
+ * makeResponse
+ * @description Return response shape that includes CORS headers.
+ * @param {number} statusCode
+ * @param {object} bodyObj
+ * @param {string} requestOrigin
+ * @returns {{statusCode:number, headers:object, body:string}}
+ */
+const makeResponse = (statusCode, bodyObj, requestOrigin) => {
+  return {
+    statusCode,
+    headers: buildCorsHeaders(requestOrigin),
+    body: JSON.stringify(bodyObj)
+  };
+};
+
+/**
  * insertCollection
  * @description Insert a single collection row into Supabase via REST API (if configured).
- *              This is used when SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are present.
+ *              Dry-run detection via metadata._dryRun or MIGRATION_DRY_RUN env var.
  * @param {string} collectionKey
  * @param {any} value
  * @param {object} metadata
@@ -90,11 +115,10 @@ const insertCollection = async (collectionKey, value, metadata) => {
   const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const MIGRATION_TABLE = process.env.MIGRATION_TABLE || 'migrated_collections';
 
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    return { collection: collectionKey, success: false, message: 'Missing Supabase configuration' };
-  }
+  const metadataDryRun = !!(metadata && metadata._dryRun === true);
+  const envDryRun = String(process.env.MIGRATION_DRY_RUN || '').toLowerCase() === 'true';
+  const dryRun = metadataDryRun || envDryRun;
 
-  const endpoint = `${SUPABASE_URL.replace(/\\/$/, '')}/rest/v1/${MIGRATION_TABLE}`;
   const row = {
     collection_key: collectionKey,
     data: value,
@@ -103,8 +127,22 @@ const insertCollection = async (collectionKey, value, metadata) => {
     status: 'migrated'
   };
 
+  if (dryRun) {
+    return {
+      collection: collectionKey,
+      success: true,
+      message: 'DRY_RUN: simulated insert',
+      details: row
+    };
+  }
+
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return { collection: collectionKey, success: false, message: 'Missing Supabase configuration' };
+  }
+
+  const endpoint = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/${MIGRATION_TABLE}`;
+
   try {
-    // Use global fetch if available (Netlify provides fetch), else try node-fetch
     const fetchFn = typeof fetch !== 'undefined' ? fetch : require('node-fetch');
     const res = await fetchFn(endpoint, {
       method: 'POST',
@@ -135,25 +173,23 @@ const insertCollection = async (collectionKey, value, metadata) => {
  * handler
  * @description Netlify function handler: supports OPTIONS preflight and POST migration logic.
  *              Always returns receivedTokenHash (if Authorization header present) to aid debugging.
- * @param {object} event
- * @param {object} context
  */
 exports.handler = async (event, context) => {
   try {
+    const requestOrigin = (event.headers && (event.headers.origin || event.headers.Origin)) || undefined;
     const method = detectMethod(event);
 
-    // Handle CORS preflight (OPTIONS)
+    // Ensure preflight responds with CORS headers
     if (method === 'OPTIONS') {
       return {
         statusCode: 204,
-        headers: buildCorsHeaders(),
+        headers: buildCorsHeaders(requestOrigin),
         body: ''
       };
     }
 
-    // Only POST allowed beyond this point
     if (method !== 'POST') {
-      return makeResponse(405, { ok: false, message: 'Method Not Allowed' });
+      return makeResponse(405, { ok: false, message: 'Method Not Allowed' }, requestOrigin);
     }
 
     const headers = event.headers || {};
@@ -162,46 +198,67 @@ exports.handler = async (event, context) => {
     const receivedTokenHash = token ? hashToken(token) : null;
     const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
 
-    // If token missing or invalid, return 401 with receivedTokenHash (if present)
     if (!token || token !== ADMIN_TOKEN) {
       const body = { ok: false, message: 'Unauthorized' };
       if (receivedTokenHash) body.receivedTokenHash = receivedTokenHash;
-      return makeResponse(401, body);
+      return makeResponse(401, body, requestOrigin);
     }
 
-    // Validate Supabase env
     const SUPABASE_URL = process.env.SUPABASE_URL;
     const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      return makeResponse(500, { ok: false, message: 'Server misconfigured: missing Supabase URL or service role key' });
+    const dryRun = String(process.env.MIGRATION_DRY_RUN || '').toLowerCase() === 'true';
+
+    if (!dryRun && (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY)) {
+      return makeResponse(500, { ok: false, message: 'Server misconfigured: missing Supabase URL or service role key' }, requestOrigin);
     }
 
     if (!event.body) {
-      return makeResponse(400, { ok: false, message: 'Missing request body' });
+      return makeResponse(400, { ok: false, message: 'Missing request body' }, requestOrigin);
     }
 
     let payload;
     try {
       payload = JSON.parse(event.body);
     } catch (err) {
-      return makeResponse(400, { ok: false, message: 'Invalid JSON body' });
+      return makeResponse(400, { ok: false, message: 'Invalid JSON body' }, requestOrigin);
     }
 
     const { metadata = {}, collections = {} } = payload;
     if (!collections || typeof collections !== 'object' || Object.keys(collections).length === 0) {
-      return makeResponse(400, { ok: false, message: 'No collections provided' });
+      return makeResponse(400, { ok: false, message: 'No collections provided' }, requestOrigin);
     }
 
-    // Process collections sequentially for audit/safety
+    if (dryRun) {
+      const results = [];
+      for (const [key, value] of Object.entries(collections)) {
+        const simulatedRow = {
+          collection_key: key,
+          data: value,
+          metadata: metadata || {},
+          migrated_by: metadata && metadata.requestedBy ? metadata.requestedBy : null,
+          status: 'migrated'
+        };
+        results.push({
+          collection: key,
+          success: true,
+          message: 'DRY_RUN: simulated insert',
+          details: simulatedRow
+        });
+      }
+      return makeResponse(200, { ok: true, results }, requestOrigin);
+    }
+
     const results = [];
     for (const [key, value] of Object.entries(collections)) {
       // eslint-disable-next-line no-await-in-loop
-      const r = await insertCollection(key, value, metadata);
+      const r = await insertCollection(key, value, { ...(metadata || {}), _dryRun: dryRun });
       results.push(r);
     }
 
-    return makeResponse(200, { ok: true, results });
+    return makeResponse(200, { ok: true, results }, requestOrigin);
   } catch (err) {
-    return makeResponse(500, { ok: false, message: 'Server error', error: String(err && err.message ? err.message : err) });
+    // Ensure all error responses include CORS headers
+    const requestOrigin = (err && err.requestOrigin) || ( (process.env.MIGRATION_ALLOW_ORIGIN && process.env.MIGRATION_ALLOW_ORIGIN !== '*') ? process.env.MIGRATION_ALLOW_ORIGIN : undefined );
+    return makeResponse(500, { ok: false, message: 'Server error', error: String(err && err.message ? err.message : err) }, requestOrigin);
   }
 };

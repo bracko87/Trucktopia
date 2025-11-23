@@ -1,0 +1,31 @@
+{
+  "description": "PowerShell helper instructions, example commands and a ready-to-run PowerShell script to set environment variables and perform a migration dry-run with log capture.",
+  "notes": "Replace placeholder tokens before running. You can either paste the setEnv lines into your current PowerShell session or save and run the provided PS1 script (scripts/run-migration-dryrun.ps1).",
+  "setEnv": [
+    "$env:ADMIN_TOKEN = '<your-token-here>'",
+    "$env:SUPABASE_SERVICE_ROLE_KEY = '<your service role key>'",
+    "$env:SUPABASE_URL = 'https://yzzcipizchqntbijktaj.supabase.co'",
+    "$env:DEBUG = 'true'",
+    "$env:MIGRATION_DRY_RUN = 'true'"
+  ],
+  "dryRunCommandInline": "$env:MIGRATION_DRY_RUN='true'; node .\\scripts\\run-migrate-real.js .\\scripts\\migration-payload.json 2>&1 | Tee-Object -FilePath ('.\\migration-dryrun-' + (Get-Date -Format \"yyyyMMdd-HHmmss\") + '.log')",
+  "ps1FileName": "scripts/run-migration-dryrun.ps1",
+  "ps1Content": "<#\r\n.SYNOPSIS\r\n  Run a migration dry-run with environment validation and timestamped log capture.\r\n.DESCRIPTION\r\n  This script validates required environment variables (ADMIN_TOKEN, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL), sets DEBUG and MIGRATION_DRY_RUN, then runs the migration dry-run and writes stdout/stderr to a timestamped log file.\r\n.NOTES\r\n  Replace placeholders before running, or set environment variables manually in the current PowerShell session.\r\n#>\r\nparam(\r\n  [string]$AdminToken = $env:ADMIN_TOKEN,\r\n  [string]$SupabaseKey = $env:SUPABASE_SERVICE_ROLE_KEY,\r\n  [string]$SupabaseUrl = $env:SUPABASE_URL,\r\n  [string]$PayloadPath = \".\\scripts\\migration-payload.json\"\r\n)\r\n\r\nfunction ThrowIfMissing([string]$value, [string]$name) {\r\n  if (-not $value) {\r\n    Write-Error \"$name is not set. Please set the environment variable $env:$name in this PowerShell session before running the script.\"\r\n    exit 1\r\n  }\r\n}\r\n\r\nThrowIfMissing $AdminToken \"ADMIN_TOKEN\"\r\nThrowIfMissing $SupabaseKey \"SUPABASE_SERVICE_ROLE_KEY\"\r\nThrowIfMissing $SupabaseUrl \"SUPABASE_URL\"\r\n\r\n# Ensure debug/dry-run flags are set for this session\r\n$env:DEBUG = 'true'\r\n$env:MIGRATION_DRY_RUN = 'true'\r\n\rn$timestamp = (Get-Date).ToString(\"yyyyMMdd-HHmmss\")\r\n$logFile = \".\\migration-dryrun-$timestamp.log\"\r\n\rnWrite-Host \"Starting migration dry-run...\"\r\nWrite-Host \"Payload: $PayloadPath\"\r\nWrite-Host \"Log file: $logFile\"\r\n\r\n# Run the migration script and capture output to a timestamped log\r\nnode .\\scripts\\run-migrate-real.js $PayloadPath 2>&1 | Tee-Object -FilePath $logFile\r\n\r\nif ($LASTEXITCODE -ne 0) {\r\n  Write-Host \"Dry-run exited with code:\" $LASTEXITCODE -ForegroundColor Yellow\r\n} else {\r\n  Write-Host \"Dry-run completed successfully.\" -ForegroundColor Green\r\n}\r\n\r\nWrite-Host \"Inspect the log file: $logFile\"\r\n",
+  "exampleUsage": [
+    "Option A - manual (in same PowerShell session):",
+    "  PS> $env:ADMIN_TOKEN = '<your-token-here>'",
+    "  PS> $env:SUPABASE_SERVICE_ROLE_KEY = '<your service role key>'",
+    "  PS> $env:SUPABASE_URL = 'https://yzzcipizchqntbijktaj.supabase.co'",
+    "  PS> $env:DEBUG = 'true'",
+    "  PS> $env:MIGRATION_DRY_RUN = 'true'",
+    "  PS> $env:MIGRATION_DRY_RUN='true'; node .\\scripts\\run-migrate-real.js .\\scripts\\migration-payload.json 2>&1 | Tee-Object -FilePath ('.\\migration-dryrun-' + (Get-Date -Format \"yyyyMMdd-HHmmss\") + '.log')",
+    "",
+    "Option B - run the helper PS1 script (safer / reusable):",
+    "  1) Save the file scripts/run-migration-dryrun.ps1 with the ps1Content provided above.",
+    "  2) In the same PowerShell session set the two required env vars (ADMIN_TOKEN and SUPABASE_SERVICE_ROLE_KEY) and SUPABASE_URL as shown.",
+    "  3) Run: PS> .\\scripts\\run-migration-dryrun.ps1",
+    ""
+  ],
+  "warning": "Do NOT run the real migration until you have validated the dry-run and created a DB backup. Replace placeholders before running. Keep the same PowerShell session when relying on $env variables.",
+  "createdAt": "2025-11-23T08:52:01Z"
+}
