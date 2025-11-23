@@ -1,16 +1,14 @@
 # netlify.toml
-# Ensure Netlify serves required CORS headers for function endpoints.
-# This sets headers at the edge for all serverless function routes:
-# /.netlify/functions/*
-#
-# Note: Keep this file at project root and redeploy. You can remove or
-# narrow the origin value to a single origin (https://sider.ai) after testing.
+# This file configures Netlify to add CORS headers at the edge for function requests.
+# Purpose: ensure OPTIONS preflight and all function responses include Access-Control-Allow-* headers.
+# Place this file in the repository root (next to package.json) and trigger a redeploy.
+
 [[headers]]
   for = "/.netlify/functions/*"
   [headers.values]
-    # If you want to restrict to only sider.ai set this value to "https://sider.ai"
-    Access-Control-Allow-Origin = "*"
-    Access-Control-Allow-Methods = "POST, OPTIONS, GET"
+    Access-Control-Allow-Origin = "https://sider.ai"
+    Access-Control-Allow-Methods = "GET, POST, OPTIONS"
     Access-Control-Allow-Headers = "Content-Type, Authorization, apikey, Prefer, Origin"
     Access-Control-Max-Age = "86400"
     Vary = "Origin"
+    Access-Control-Allow-Credentials = "true"
