@@ -1,12 +1,19 @@
 /**
- * Modern Login Page with Football Manager 2024 inspired design
+ * Login.tsx
  *
- * Behavior:
- * - On successful login, always navigate to Dashboard (never auto-redirect to Create Company)
- * - Uses GameContext.login (localStorage-backed)
+ * Login page with added lightweight runtime debug helpers.
+ *
+ * Purpose:
+ * - Provide the original login UI and behavior.
+ * - Add a temporary visible diagnostic banner + auto-fetch to /.netlify/functions/supabase-config
+ *   so we can confirm whether the client bundle is executing and whether the runtime config endpoint
+ *   is reachable from the browser.
+ *
+ * Notes:
+ * - This file is a debug patch only. After diagnosis we can remove the debug helpers.
  */
 
-import { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -14,6 +21,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Truck, Mail, Lock, Eye, EyeOff, Trash2 } from 'lucide-react';
 import { useGame } from '../contexts/GameContext';
 
+/**
+ * Login component
+ * @description Renders the login form. Also performs a diagnostic GET to the Netlify function
+ *              /.netlify/functions/supabase-config on mount and shows the result in the UI.
+ */
 export default function Login() {
   const navigate = useNavigate();
   const { login, clearOldData } = useGame();
@@ -23,6 +35,38 @@ export default function Login() {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Debug state for runtime-config fetch
+  const [cfgResult, setCfgResult] = useState<{ ok: boolean; status?: number; body?: any; error?: string } | null>(null);
+  const [cfgLoading, setCfgLoading] = useState(false);
+
+  /**
+   * runConfigCheck
+   * @description Fetch runtime Supabase config from Netlify function for diagnostic visibility.
+   */
+  const runConfigCheck = async () => {
+    setCfgLoading(true);
+    setCfgResult(null);
+    try {
+      const res = await fetch('/.netlify/functions/supabase-config', { method: 'GET' });
+      const status = res.status;
+      let body: any = null;
+      try { body = await res.json(); } catch { body = await res.text().catch(() => null); }
+      setCfgResult({ ok: res.ok, status, body: typeof body === 'string' ? body : body });
+    } catch (err: any) {
+      setCfgResult({ ok: false, error: String(err?.message ?? err) });
+    } finally {
+      setCfgLoading(false);
+    }
+  };
+
+  /**
+   * Auto-run the config check on mount so the network request is visible immediately if JS runs.
+   */
+  useEffect(() => {
+    runConfigCheck();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /**
    * Handle login submission; navigate to Dashboard on success.
@@ -87,6 +131,43 @@ export default function Login() {
           <CardDescription className="text-slate-400">
             Sign in to continue building your empire
           </CardDescription>
+
+          {/* Diagnostic banner: shows result of calling /netlify/functions/supabase-config */}
+          <div className="mt-4">
+            <div className={`rounded-md p-2 text-sm ${cfgResult ? (cfgResult.ok ? 'bg-green-900 text-green-200' : 'bg-red-900 text-red-200') : 'bg-slate-700 text-slate-200'}`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <strong>Runtime config check</strong>
+                  <div className="text-xs mt-1">
+                    {cfgLoading && 'Checking /.netlify/functions/supabase-config...'}
+                    {!cfgLoading && !cfgResult && 'No check performed yet.'}
+                    {!cfgLoading && cfgResult && (
+                      <>
+                        Status: {cfgResult.status ?? 'n/a'}{' '}
+                        {cfgResult.ok ? '(OK)' : '(ERROR)'}
+                        <div className="mt-1">
+                          {cfgResult.error ? (
+                            <span className="font-mono text-xs">{cfgResult.error}</span>
+                          ) : (
+                            <pre className="text-xs max-h-28 overflow-auto whitespace-pre-wrap">{JSON.stringify(cfgResult.body, null, 2)}</pre>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <Button
+                    type="button"
+                    onClick={runConfigCheck}
+                    className="bg-transparent border border-slate-600 text-slate-200 hover:bg-slate-700"
+                  >
+                    {cfgLoading ? 'Running...' : 'Re-check'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
         </CardHeader>
 
         <CardContent className="space-y-6">
@@ -188,25 +269,15 @@ export default function Login() {
       {/* Footer Note */}
       <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-slate-400 text-sm text-center">
         <p>Secure authentication • Your data is protected</p>
-        <button
-          onClick={handleClearStorage}
-          className="mt-2 flex items-center gap-1 text-xs text-slate-500 hover:text-yellow-500 transition-colors"
-        >
-          <Trash2 className="w-3 h-3" />
-          Clear Old Data
-        </button>
-        <button
-          onClick={() => {
-            const { checkUserData } = useGame();
-            checkUserData();
-          }}
-          className="mt-1 flex items-center gap-1 text-xs text-slate-500 hover:text-blue-500 transition-colors"
-        >
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-          Debug User Data
-        </button>
+        <div className="flex items-center justify-center gap-3 mt-2">
+          <button
+            onClick={handleClearStorage}
+            className="flex items-center gap-1 text-xs text-slate-500 hover:text-yellow-500 transition-colors"
+          >
+            <Trash2 className="w-3 h-3" />
+            Clear Old Data
+          </button>
+        </div>
       </div>
     </div>
   );
