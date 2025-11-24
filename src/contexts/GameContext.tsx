@@ -716,6 +716,10 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
   /**
    * register
+   * @description Register a new user. If a Supabase anon key and URL are available via
+   *              /.netlify/functions/supabase-config we'll attempt to create the user in Supabase
+   *              (auth/v1/signup). If that fails or no config is present we fall back to local-only
+   *              registration (existing behavior). Returns success + message.
    */
   const register = async (email: string, password: string, confirmPassword: string): Promise<{ success: boolean; message: string }> => {
     try {
@@ -725,6 +729,76 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       if (password.length < 6) return { success: false, message: 'Password too short' };
       if (userStorage.findUser(normalized)) return { success: false, message: 'Email already registered' };
 
+      // Try to obtain Supabase runtime config from Netlify function
+      let supabaseUrl: string | null = null;
+      let supabaseAnon: string | null = null;
+      try {
+        const cfgRes = await fetch('/.netlify/functions/supabase-config', { method: 'GET' });
+        if (cfgRes.ok) {
+          const cfg = await cfgRes.json().catch(() => null);
+          if (cfg) {
+            supabaseUrl = typeof cfg.SUPABASE_URL === 'string' ? cfg.SUPABASE_URL : null;
+            supabaseAnon = typeof cfg.SUPABASE_ANON_KEY === 'string' ? cfg.SUPABASE_ANON_KEY : null;
+          }
+        } else {
+          // non-ok but continue to fallback
+          console.warn('[GameContext.register] supabase-config returned non-ok', cfgRes.status);
+        }
+      } catch (err) {
+        console.warn('[GameContext.register] could not fetch supabase-config', err);
+      }
+
+      // If we have a Supabase URL + anon key, try to register there first.
+      if (supabaseUrl && supabaseAnon) {
+        try {
+          const signupRes = await fetch(`${supabaseUrl.replace(/\/$/, '')}/auth/v1/signup`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': supabaseAnon,
+              'Authorization': `Bearer ${supabaseAnon}`
+            },
+            body: JSON.stringify({ email: normalized, password })
+          });
+
+          let signupBody: any = null;
+          try {
+            signupBody = await signupRes.json();
+          } catch {
+            signupBody = await signupRes.text().catch(() => null);
+          }
+
+          if (!signupRes.ok) {
+            // If Supabase rejects (bad key, CORS, duplicate, etc.) surface message
+            const msg = signupBody && signupBody.error ? signupBody.error : (typeof signupBody === 'string' ? signupBody : `Supabase signup failed with status ${signupRes.status}`);
+            console.warn('[GameContext.register] Supabase signup failed', msg);
+            return { success: false, message: `Supabase signup error: ${msg}` };
+          }
+
+          // Supabase signup succeeded (or accepted) -> continue to persist local user and session
+          // Create local user record as well so app behavior remains unchanged
+          const newUser = { email: normalized, password, username: normalized.split('@')[0], createdAt: new Date().toISOString() };
+          const ok = userStorage.addUser(newUser);
+          if (!ok) {
+            // Local storage failed but Supabase has the account; notify user
+            sessionStorage.setItem('tm_current_user', normalized);
+            userStorage.saveUserGameState(normalized, { isAuthenticated: true, company: null, sidebarCollapsed: false });
+            setGameState({ isAuthenticated: true, currentPage: 'dashboard', company: null, sidebarCollapsed: false, currentUser: normalized });
+            return { success: true, message: 'Registered with Supabase but local save failed. You may sign in nonetheless.' };
+          }
+
+          // Normal success path
+          sessionStorage.setItem('tm_current_user', normalized);
+          userStorage.saveUserGameState(normalized, { isAuthenticated: true, company: null, sidebarCollapsed: false });
+          setGameState({ isAuthenticated: true, currentPage: 'dashboard', company: null, sidebarCollapsed: false, currentUser: normalized });
+          return { success: true, message: 'Registration successful (Supabase)' };
+        } catch (err: any) {
+          console.warn('[GameContext.register] Supabase registration attempt failed', err);
+          // Fall back to local registration below
+        }
+      }
+
+      // Fallback: local-only registration (keeps previous behavior)
       const newUser = { email: normalized, password, username: normalized.split('@')[0], createdAt: new Date().toISOString() };
       const ok = userStorage.addUser(newUser);
       if (!ok) return { success: false, message: 'Registration failed' };
@@ -732,7 +806,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       sessionStorage.setItem('tm_current_user', normalized);
       userStorage.saveUserGameState(normalized, { isAuthenticated: true, company: null, sidebarCollapsed: false });
       setGameState({ isAuthenticated: true, currentPage: 'dashboard', company: null, sidebarCollapsed: false, currentUser: normalized });
-      return { success: true, message: 'Registration successful' };
+      return { success: true, message: 'Registration successful (local fallback)' };
     } catch (err) {
       console.error('register error', err);
       return { success: false, message: 'Registration failed' };
