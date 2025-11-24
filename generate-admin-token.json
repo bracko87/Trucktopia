@@ -1,9 +1,15 @@
 {
-  "note": "REPLACED FOR SECURITY - DO NOT STORE SERVICE-ROLE KEYS IN REPO",
-  "file_comment": "/**\n * generate-admin-token.json\n *\n * Removed secrets. Use your local environment variables or CI secrets to run the\n * migration. Below are example PowerShell commands — DO NOT commit real keys.\n */",
-  "powershell_commands": [
-    "$env:SUPABASE_URL=\"https://YOUR_SUPABASE_URL.supabase.co\"; $env:SUPABASE_SERVICE_ROLE_KEY=\"<SERVICE_ROLE_KEY_FROM_SUPABASE>\"; node scripts/local-migrate.js",
-    "$env:SUPABASE_URL=\"https://YOUR_SUPABASE_URL.supabase.co\"; $env:SUPABASE_SERVICE_ROLE_KEY=\"<SERVICE_ROLE_KEY_FROM_SUPABASE>\"; node scripts/local-migrate.js path/to/my-export.json"
-  ],
-  "advice": "Rotate the exposed key immediately. Use this file only as a local checklist; keep the real key in environment variables or CI secrets."
+  "file_comment": "/**\n * generate-admin-token.json\n *\n * Purpose:\n * - Provide safe, exact PowerShell examples to query the Supabase REST table\n *   migrated_collections. This file intentionally DOES NOT contain any real\n *   secrets. Keep your SUPABASE service role key in an environment variable\n *   or a local secret store. Do NOT commit real keys.\n */",
+  "examples": {
+    "set_variable_powerShell": "$sr = '<YOUR_SERVICE_ROLE_KEY_HERE>'",
+    "explain_set_variable": "Set $sr in your local PowerShell session (replace placeholder only on your machine). Do NOT commit this value.",
+    "invoke_rest_powerShell_exact": "Invoke-RestMethod -Uri \"https://yzzcipizchqntbijktaj.supabase.co/rest/v1/migrated_collections?select=*&collection_key=eq.health_check_supabase\" -Headers @{ Authorization = \"Bearer $sr\"; apikey = $sr } | ConvertTo-Json -Depth 5",
+    "invoke_rest_alt_powerShell_exact": "Invoke-RestMethod -Uri \"https://yzzcipizchqntbijktaj.supabase.co/rest/v1/migrated_collections?select=*&collection_name=eq.health_check_supabase\" -Headers @{ Authorization = \"Bearer $sr\"; apikey = $sr } | ConvertTo-Json -Depth 5",
+    "notes": [
+      "Important: Paste the command exactly as a single line into PowerShell. Do NOT wrap the entire command in extra quotes.",
+      "If PowerShell splits the paste into multiple lines (or you see the ampersand & problem), use the helper script scripts/supabase-check.ps1 or run PowerShell with ExecutionPolicy Bypass: powershell -ExecutionPolicy Bypass -File .\\scripts\\supabase-check.ps1",
+      "If you must set the key as an environment variable instead of $sr, you can use: $env:SUPABASE_SERVICE_ROLE_KEY = '<YOUR_SERVICE_ROLE_KEY_HERE>'; then change the header strings accordingly."
+    ]
+  },
+  "security_advice": "DO NOT store service-role keys in repository files. Use local environment variables, a .env file ignored by git, or your CI/secret manager. Rotate any key that may have been exposed."
 }
