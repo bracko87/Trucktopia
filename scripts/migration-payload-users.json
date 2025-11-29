@@ -1,0 +1,16 @@
+{
+  "metadata": {
+    "requestedBy": "bracko87@live.com"
+  },
+  "collections": {
+    "users": [
+      {
+        "id": "user-1",
+        "email": "a@b.com",
+        "password": "",
+        "name": "Test User",
+        "createdAt": "2025-01-01T00:00:00Z"
+      }
+    ]
+  }
+}

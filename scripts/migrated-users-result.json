@@ -1,0 +1,26 @@
+[
+  {
+    "email": "glupostimejlza@gmail.com",
+    "tempPassword": null,
+    "status": "error_422",
+    "message": "{\"code\":422,\"error_code\":\"email_exists\",\"msg\":\"A user with this email address has already been registered\"}"
+  },
+  {
+    "email": "tvmejlza@gmail.com",
+    "tempPassword": null,
+    "status": "error_422",
+    "message": "{\"code\":422,\"error_code\":\"email_exists\",\"msg\":\"A user with this email address has already been registered\"}"
+  },
+  {
+    "email": "panonianvirtual@gmail.com",
+    "tempPassword": null,
+    "status": "error_422",
+    "message": "{\"code\":422,\"error_code\":\"email_exists\",\"msg\":\"A user with this email address has already been registered\"}"
+  },
+  {
+    "email": "virtualairserbia3@gmail.com",
+    "tempPassword": null,
+    "status": "error_422",
+    "message": "{\"code\":422,\"error_code\":\"email_exists\",\"msg\":\"A user with this email address has already been registered\"}"
+  }
+]

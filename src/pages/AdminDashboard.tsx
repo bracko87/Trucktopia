@@ -8,6 +8,7 @@ import { useGame } from '../contexts/GameContext';
 import { useNavigate } from 'react-router';
 import { Shield, Users, Building, BarChart3, Settings, UserCog, AlertTriangle, Cpu, Database, RefreshCw, Truck, MapPin, Edit, Trash2, ClockIcon, DollarSign, Search, Filter, X, TrendingUp, CheckCircle } from 'lucide-react';
 import MigrationPanel from '../components/admin/MigrationPanel';
+import RemoteStats from '../components/admin/RemoteStats';
 
 interface UserStats {
   totalUsers: number;
@@ -435,37 +436,7 @@ const AdminDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
-          <div className="flex items-center space-x-2 mb-2">
-            <Users className="w-5 h-5 text-blue-400" />
-            <div className="text-sm text-slate-400">Total Users</div>
-          </div>
-          <div className="text-2xl font-bold text-white">{userStats.totalUsers}</div>
-        </div>
-        <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
-          <div className="flex items-center space-x-2 mb-2">
-            <Building className="w-5 h-5 text-green-400" />
-            <div className="text-sm text-slate-400">With Companies</div>
-          </div>
-          <div className="text-2xl font-bold text-white">{userStats.usersWithCompanies}</div>
-        </div>
-        <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
-          <div className="flex items-center space-x-2 mb-2">
-            <BarChart3 className="w-5 h-5 text-yellow-400" />
-            <div className="text-sm text-slate-400">Active Today</div>
-          </div>
-          <div className="text-2xl font-bold text-white">{userStats.activeToday}</div>
-        </div>
-        <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
-          <div className="flex items-center space-x-2 mb-2">
-            <Settings className="w-5 h-5 text-purple-400" />
-            <div className="text-sm text-slate-400">Storage Used</div>
-          </div>
-          <div className="text-2xl font-bold text-white">{userStats.storageUsed} KB</div>
-        </div>
-      </div>
+      <RemoteStats />
 
       {/* Admin Actions Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

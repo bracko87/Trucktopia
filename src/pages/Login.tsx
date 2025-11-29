@@ -1,34 +1,41 @@
 /**
  * Login.tsx
  *
- * Login page with added lightweight runtime debug helpers.
+ * Login page for Truck Manager.
  *
- * Purpose:
- * - Provide the original login UI and behavior.
- * - Add a temporary visible diagnostic banner + auto-fetch to /.netlify/functions/supabase-config
- *   so we can confirm whether the client bundle is executing and whether the runtime config endpoint
- *   is reachable from the browser.
+ * Responsibilities:
+ * - Render the login form and handle sign-in flow.
+ * - Provide a safe "clear old data" developer action.
  *
- * Notes:
- * - This file is a debug patch only. After diagnosis we can remove the debug helpers.
+ * This file renders a visually rich, accessible login card and uses the GameContext
+ * login API to authenticate. It includes server-safe developer actions guarded by confirm().
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '../components/ui/card';
 import { Truck, Mail, Lock, Eye, EyeOff, Trash2 } from 'lucide-react';
 import { useGame } from '../contexts/GameContext';
 
 /**
- * Login component
- * @description Renders the login form. Also performs a diagnostic GET to the Netlify function
- *              /.netlify/functions/supabase-config on mount and shows the result in the UI.
+ * Login
+ *
+ * Renders the login form and handles authentication flow.
+ *
+ * @returns JSX.Element
  */
-export default function Login() {
+export default function Login(): JSX.Element {
   const navigate = useNavigate();
   const { login, clearOldData } = useGame();
+
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -36,83 +43,72 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Debug state for runtime-config fetch
-  const [cfgResult, setCfgResult] = useState<{ ok: boolean; status?: number; body?: any; error?: string } | null>(null);
-  const [cfgLoading, setCfgLoading] = useState(false);
-
   /**
-   * runConfigCheck
-   * @description Fetch runtime Supabase config from Netlify function for diagnostic visibility.
-   */
-  const runConfigCheck = async () => {
-    setCfgLoading(true);
-    setCfgResult(null);
-    try {
-      const res = await fetch('/.netlify/functions/supabase-config', { method: 'GET' });
-      const status = res.status;
-      let body: any = null;
-      try { body = await res.json(); } catch { body = await res.text().catch(() => null); }
-      setCfgResult({ ok: res.ok, status, body: typeof body === 'string' ? body : body });
-    } catch (err: any) {
-      setCfgResult({ ok: false, error: String(err?.message ?? err) });
-    } finally {
-      setCfgLoading(false);
-    }
-  };
-
-  /**
-   * Auto-run the config check on mount so the network request is visible immediately if JS runs.
-   */
-  useEffect(() => {
-    runConfigCheck();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  /**
-   * Handle login submission; navigate to Dashboard on success.
+   * handleSubmit
+   * @description Handle login form submission and navigate to dashboard on success.
+   * @param e - React.FormEvent
    */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    const result = await login(formData.email, formData.password);
-    setIsLoading(false);
 
-    if (result.success) {
-      // Always go to Dashboard after sign-in
-      navigate('/dashboard');
-    } else {
-      alert(result.message);
+    try {
+      const result = await login(formData.email, formData.password);
+      if (result?.success) {
+        navigate('/dashboard');
+      } else {
+        // Basic client-side error handling
+        alert(result?.message || 'Sign in failed. Check credentials and try again.');
+      }
+    } catch (err) {
+      // Unexpected error
+      // eslint-disable-next-line no-console
+      console.error('Login error', err);
+      alert('An unexpected error occurred while signing in.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   /**
-   * Controlled input updater.
+   * handleChange
+   * @description Controlled input updater for form fields.
+   * @param e - React.ChangeEvent<HTMLInputElement>
    */
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [e.target.name]: e.target.value,
+      [name]: value,
     }));
   };
 
   /**
-   * Developer reset: clear all local storage data.
+   * handleClearStorage
+   * @description Developer convenience: clear local storage and old data.
    */
   const handleClearStorage = () => {
+    // Double-confirm destructive action
     if (confirm('This will clear all local data. Continue?')) {
-      clearOldData();
-      alert('Storage cleared successfully!');
+      try {
+        clearOldData();
+        alert('Storage cleared successfully!');
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('Error clearing storage', err);
+        alert('Failed to clear storage. Check console for details.');
+      }
     }
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4 relative overflow-hidden">
       {/* Background Pattern */}
-      <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_25%,rgba(68,68,68,0.2)_50%,transparent_75%,transparent_100%)] bg-[length:20px_20px]"></div>
+      <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_25%,rgba(68,68,68,0.2)_50%,transparent_75%,transparent_100%)] bg-[length:20px_20px]" />
 
       {/* Animated Background Elements */}
-      <div className="absolute top-1/4 left-1/4 w-32 h-32 bg-yellow-500/10 rounded-full blur-xl animate-pulse"></div>
-      <div className="absolute bottom-1/3 right-1/4 w-24 h-24 bg-yellow-500/10 rounded-full blur-xl animate-pulse delay-1000"></div>
+      <div className="absolute top-1/4 left-1/4 w-32 h-32 bg-yellow-500/10 rounded-full blur-xl animate-pulse" />
+      <div className="absolute bottom-1/3 right-1/4 w-24 h-24 bg-yellow-500/10 rounded-full blur-xl animate-pulse delay-1000" />
 
       <Card className="w-full max-w-md bg-slate-800/90 backdrop-blur-sm border-slate-700 shadow-2xl relative z-10">
         <CardHeader className="space-y-1 text-center pb-8">
@@ -131,43 +127,6 @@ export default function Login() {
           <CardDescription className="text-slate-400">
             Sign in to continue building your empire
           </CardDescription>
-
-          {/* Diagnostic banner: shows result of calling /netlify/functions/supabase-config */}
-          <div className="mt-4">
-            <div className={`rounded-md p-2 text-sm ${cfgResult ? (cfgResult.ok ? 'bg-green-900 text-green-200' : 'bg-red-900 text-red-200') : 'bg-slate-700 text-slate-200'}`}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <strong>Runtime config check</strong>
-                  <div className="text-xs mt-1">
-                    {cfgLoading && 'Checking /.netlify/functions/supabase-config...'}
-                    {!cfgLoading && !cfgResult && 'No check performed yet.'}
-                    {!cfgLoading && cfgResult && (
-                      <>
-                        Status: {cfgResult.status ?? 'n/a'}{' '}
-                        {cfgResult.ok ? '(OK)' : '(ERROR)'}
-                        <div className="mt-1">
-                          {cfgResult.error ? (
-                            <span className="font-mono text-xs">{cfgResult.error}</span>
-                          ) : (
-                            <pre className="text-xs max-h-28 overflow-auto whitespace-pre-wrap">{JSON.stringify(cfgResult.body, null, 2)}</pre>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <Button
-                    type="button"
-                    onClick={runConfigCheck}
-                    className="bg-transparent border border-slate-600 text-slate-200 hover:bg-slate-700"
-                  >
-                    {cfgLoading ? 'Running...' : 'Re-check'}
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
         </CardHeader>
 
         <CardContent className="space-y-6">
@@ -212,6 +171,7 @@ export default function Login() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                   className="absolute right-3 top-3 text-slate-400 hover:text-yellow-500 transition-colors"
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -223,62 +183,22 @@ export default function Login() {
             <Button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-gradient-to-r from-yellow-600 to-yellow-700 hover:from-yellow-700 hover:to-yellow-800 text-white font-bold py-3 text-lg transition-all duration-200 shadow-lg hover:shadow-yellow-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-gradient-to-r from-yellow-600 to-yellow-700 hover:from-yellow-700 hover:to-yellow-800 text-white font-bold py-3 text-lg transition-all duration-200 shadow-lg hover:shadow-yellow-500/25 disabled:opacity-50"
             >
-              {isLoading ? (
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  Signing In...
-                </div>
-              ) : (
-                'Sign In & Continue'
-              )}
+              {isLoading ? 'Signing in…' : 'Sign In'}
             </Button>
           </form>
 
-          {/* Divider */}
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-slate-600"></div>
+          {/* Secondary Actions */}
+          <div className="flex items-center justify-between text-sm text-slate-400">
+            <div>
+              <Link to="/register" className="text-yellow-400 hover:underline">
+                Create account
+              </Link>
             </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-slate-800 text-slate-400">New to Truck Manager?</span>
-            </div>
-          </div>
-
-          {/* Registration Link */}
-          <div className="text-center">
-            <Link
-              to="/register"
-              className="inline-flex items-center gap-2 text-yellow-500 hover:text-yellow-400 font-semibold transition-colors group"
-            >
-              Create new account
-              <svg
-                className="w-4 h-4 transform group-hover:translate-x-1 transition-transform"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </Link>
           </div>
         </CardContent>
       </Card>
-
-      {/* Footer Note */}
-      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-slate-400 text-sm text-center">
-        <p>Secure authentication • Your data is protected</p>
-        <div className="flex items-center justify-center gap-3 mt-2">
-          <button
-            onClick={handleClearStorage}
-            className="flex items-center gap-1 text-xs text-slate-500 hover:text-yellow-500 transition-colors"
-          >
-            <Trash2 className="w-3 h-3" />
-            Clear Old Data
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

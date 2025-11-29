@@ -175,8 +175,17 @@ export function startDriverEngine(options: DriverEngineOptions = {}) {
           const now = Date.now();
 
           // Is driver assigned to an active job?
+          // Consider assignment either as assignedDriver OR assignedCoDriver
           const assignedJob = (company.activeJobs || []).find((j: any) => {
-            return j && j.assignedDriver && j.assignedDriver === s.id && j.status !== 'completed' && j.status !== 'cancelled';
+            if (!j || !j.status) return false;
+            if (['completed', 'cancelled'].includes(j.status)) return false;
+            try {
+              const driverMatch = j.assignedDriver && String(j.assignedDriver) === String(s.id);
+              const coDriverMatch = j.assignedCoDriver && String(j.assignedCoDriver) === String(s.id);
+              return driverMatch || coDriverMatch;
+            } catch {
+              return false;
+            }
           });
 
           // Vacation check: onVacationUntil (ISO string)
@@ -259,8 +268,17 @@ export function startDriverEngine(options: DriverEngineOptions = {}) {
         // same loop for admin company staff
         (company.staff || []).forEach((s: any) => {
           const now = Date.now();
+          // Admin company: consider both driver and co-driver assignments
           const assignedJob = (company.activeJobs || []).find((j: any) => {
-            return j && j.assignedDriver && j.assignedDriver === s.id && j.status !== 'completed' && j.status !== 'cancelled';
+            if (!j || !j.status) return false;
+            if (['completed', 'cancelled'].includes(j.status)) return false;
+            try {
+              const driverMatch = j.assignedDriver && String(j.assignedDriver) === String(s.id);
+              const coDriverMatch = j.assignedCoDriver && String(j.assignedCoDriver) === String(s.id);
+              return driverMatch || coDriverMatch;
+            } catch {
+              return false;
+            }
           });
           const onVacation = s.onVacationUntil ? (new Date(s.onVacationUntil).getTime() > now) : false;
 

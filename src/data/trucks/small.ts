@@ -58,6 +58,10 @@ export interface Truck {
    * 3 = expensive, 2-4 days
    */
   maintenanceGroup?: 1 | 2 | 3;
+  /**
+   * Fuel tank capacity in liters (important for fuel usage engine)
+   */
+  fuelTankCapacity?: number;
   [key: string]: any;
 }
 
@@ -78,7 +82,7 @@ export const SMALL_TRUCKS: Truck[] = [
     tonnage: 3.5,
     leaseRate: 550,
     truckCategory: 'Small',
-    image: 'https://i.ibb.co/LzNp01zm/image-1763212015777.png',
+    image: 'https://i.ibb.co/bMFg23Qk/faso-35-v3.png',
     specifications: {
       capacity: '2 t',
       enginePower: '3.0 L diesel • ~130 PS / 96 kW',
@@ -88,7 +92,8 @@ export const SMALL_TRUCKS: Truck[] = [
     },
     durability: 7,
     speed: 120,
-    maintenanceGroup: 1
+    maintenanceGroup: 1,
+    fuelTankCapacity: 70
   },
   {
     id: 'mitsobishi-faso-canter-6',
@@ -102,10 +107,10 @@ export const SMALL_TRUCKS: Truck[] = [
     tonnage: 6,
     leaseRate: 770,
     truckCategory: 'Small',
-    image: 'https://i.ibb.co/dJr6vnfZ/image-1763210698947.png',
+    image: 'https://i.ibb.co/VcP39yhL/fase-center-6t-v3.png',
     specifications: {
       capacity: '3.5 t',
-      enginePower: '3.0 L diesel • ~150 PS / 96 kW',
+      enginePower: '3.0 L diesel - 150 PS / 96 kW',
       fuelConsumption: 7.5,
       cargoTypes: [
         'Dry Goods',
@@ -118,7 +123,8 @@ export const SMALL_TRUCKS: Truck[] = [
     reliability: 'B',
     durability: 7,
     speed: 110,
-    maintenanceGroup: 2
+    maintenanceGroup: 2,
+    fuelTankCapacity: 100
   },
   {
     id: 'mitsobishi-canter-7c15-eco-hybrid',
@@ -135,14 +141,15 @@ export const SMALL_TRUCKS: Truck[] = [
     image: 'https://i.ibb.co/0pCDZXx5/image-1763328824019.png',
     specifications: {
       capacity: '4 t',
-      enginePower: '3.0 L diesel hybrid • up to ~110 PS / 129 kW',
+      enginePower: '3.0L hybrid - 110 PS/129 kW',
       fuelConsumption: 5.5,
       cargoTypes: ['Dry Goods', 'Construction Material']
     },
     reliability: 'B',
     durability: 6,
     speed: 120,
-    maintenanceGroup: 1
+    maintenanceGroup: 1,
+    fuelTankCapacity: 100
   },
   {
     id: 'mitsobishi-faso-canter-tf-75',
@@ -159,14 +166,15 @@ export const SMALL_TRUCKS: Truck[] = [
     image: 'https://i.ibb.co/bgTRP9Qq/image-1763503802788.png',
     specifications: {
       capacity: '4 t',
-      enginePower: '3.0 L diesel • up to ~175 PS / 129 kW',
+      enginePower: '3.0l diesel - 110 kW (150 PS)',
       fuelConsumption: 9.5,
       cargoTypes: ['Frozen / Refrigerated']
     },
     reliability: 'B',
     durability: 7,
     speed: 105,
-    maintenanceGroup: 2
+    maintenanceGroup: 2,
+    fuelTankCapacity: 100
   },
   {
     id: 'isuzu-npr75',
@@ -183,7 +191,7 @@ export const SMALL_TRUCKS: Truck[] = [
     image: 'https://i.ibb.co/cSCW6bzt/image-1763504014318.png',
     specifications: {
       capacity: '3.5 t',
-      enginePower: '5.2 L (4HK1) diesel • ~150 PS (Euro-spec)',
+      enginePower: '5.2l diesel - 140 kW (≈ 190 PS)',
       fuelConsumption: 11,
       cargoTypes: [
         'Dry Goods',
@@ -196,7 +204,8 @@ export const SMALL_TRUCKS: Truck[] = [
     reliability: 'C',
     durability: 6,
     speed: 105,
-    maintenanceGroup: 2
+    maintenanceGroup: 2,
+    fuelTankCapacity: 100
   },
   {
     id: 'isuzu-npr-6000l',
@@ -213,14 +222,15 @@ export const SMALL_TRUCKS: Truck[] = [
     image: 'https://i.ibb.co/YT7jJMJP/image-1763328853870.png',
     specifications: {
       capacity: '6000 L',
-      enginePower: '4KB1-TCG60 • ~130 hp',
+      enginePower: '4KB1-TCG60 - 140 kW (≈ 190 PS)',
       fuelConsumption: 10,
       cargoTypes: ['Liquid - Industrial / Chemical', 'Hazardous Materials']
     },
     reliability: 'C',
     durability: 5,
     speed: 100,
-    maintenanceGroup: 3
+    maintenanceGroup: 3,
+    fuelTankCapacity: 100
   },
   {
     id: 'isuzu-n-series-35-m27',
@@ -237,14 +247,15 @@ export const SMALL_TRUCKS: Truck[] = [
     image: 'https://i.ibb.co/vxjjFH45/image-1763212196433.png',
     specifications: {
       capacity: '2 t',
-      enginePower: 'M27 (Euro VI)',
+      enginePower: 'M27 Euro 4 - 110 kW (≈ 150 PS)',
       fuelConsumption: 7,
       cargoTypes: ['Dry Goods']
     },
     reliability: 'C',
     durability: 6,
     speed: 100,
-    maintenanceGroup: 1
+    maintenanceGroup: 1,
+    fuelTankCapacity: 75
   },
   {
     id: 'ivaco-daily-70c17',
@@ -261,14 +272,15 @@ export const SMALL_TRUCKS: Truck[] = [
     image: 'https://i.ibb.co/Z16qwSDm/image-1763328924961.png',
     specifications: {
       capacity: '3.5 t',
-      enginePower: '2,998 cm³ (3.0 L) 4-cylinder diesel',
+      enginePower: '3.0l diesel - 125 kW (≈ 170 PS)',
       fuelConsumption: 9,
       cargoTypes: ['Dry Goods']
     },
     reliability: 'B',
     durability: 8,
     speed: 120,
-    maintenanceGroup: 2
+    maintenanceGroup: 2,
+    fuelTankCapacity: 90
   },
 
   /* ------------------ Additional entries (second part) ------------------ */
@@ -288,14 +300,15 @@ export const SMALL_TRUCKS: Truck[] = [
     image: 'https://i.ibb.co/NgfkPFbx/image-1763504167012.png',
     specifications: {
       capacity: '4 t',
-      enginePower: '3.0 L (2,998 cm³) diesel • 132 kW / 180 PS',
+      enginePower: '3.0l diesel - 132 kW / 180 PS',
       fuelConsumption: 8,
       cargoTypes: ['Vehicles']
     },
     reliability: 'B',
     durability: 8,
     speed: 90,
-    maintenanceGroup: 2
+    maintenanceGroup: 2,
+    fuelTankCapacity: 90
   },
   {
     id: 'ivaco-daily-35c14-flatbed',
@@ -312,14 +325,15 @@ export const SMALL_TRUCKS: Truck[] = [
     image: 'https://i.ibb.co/LzVD1fW0/image-1763212532563.png',
     specifications: {
       capacity: '1.5 t',
-      enginePower: '2.3 L (2,287 cm³) 4-cylinder diesel • 100 kW (136 PS)',
+      enginePower: '2.3l diesel - 100 kW (136 PS)',
       fuelConsumption: 6,
       cargoTypes: ['Construction Material', 'Construction Debris']
     },
     reliability: 'B',
     durability: 7,
     speed: 120,
-    maintenanceGroup: 1
+    maintenanceGroup: 1,
+    fuelTankCapacity: 75
   },
   {
     id: 'renualt-mater-ll35',
@@ -343,7 +357,8 @@ export const SMALL_TRUCKS: Truck[] = [
     reliability: 'A',
     durability: 8,
     speed: 100,
-    maintenanceGroup: 1
+    maintenanceGroup: 1,
+    fuelTankCapacity: 80
   },
   {
     id: 'renualt-mater-145-4x2',
@@ -360,14 +375,15 @@ export const SMALL_TRUCKS: Truck[] = [
     image: 'https://i.ibb.co/3Yf9gpMz/image-1763504276593.png',
     specifications: {
       capacity: '4 t',
-      enginePower: '2.3 L Blue dCi (2,298 cm³) - 107 kW (145 PS)',
+      enginePower: '2.3l dCi - 107 kW (145 PS)',
       fuelConsumption: 9.5,
       cargoTypes: ['Dry Goods', 'Construction Material']
     },
     reliability: 'A',
     durability: 7,
     speed: 120,
-    maintenanceGroup: 2
+    maintenanceGroup: 2,
+    fuelTankCapacity: 80
   },
   {
     id: 'men-tge-3-180-koffer',
@@ -381,7 +397,7 @@ export const SMALL_TRUCKS: Truck[] = [
     tonnage: 3.5,
     leaseRate: 520,
     truckCategory: 'Small',
-    image: 'https://i.ibb.co/DHntDYKf/image-1763212702832.png',
+    image: 'https://i.ibb.co/20dqr61t/men-tge-3180-v3.png',
     specifications: {
       capacity: '1.5 t',
       enginePower: '1,968 cm³ (2.0 l) • 130 kW (≈ 177 PS)',
@@ -391,7 +407,8 @@ export const SMALL_TRUCKS: Truck[] = [
     reliability: 'A',
     durability: 8,
     speed: 120,
-    maintenanceGroup: 1
+    maintenanceGroup: 1,
+    fuelTankCapacity: 75
   },
   {
     id: 'men-tge-5-180-kipper',
@@ -408,14 +425,15 @@ export const SMALL_TRUCKS: Truck[] = [
     image: 'https://i.ibb.co/F4Z2ss9C/image-1763329016003.png',
     specifications: {
       capacity: '3 t',
-      enginePower: '2.0 L (1,968 cm³) 4-cylinder diesel • 130 kW (≈ 177 PS)',
+      enginePower: '2.0 L diesel - 130 kW (≈ 177 PS)',
       fuelConsumption: 10,
       cargoTypes: ['Construction Debris', 'Construction Material', 'Agricultural Bulk', 'Waste & Recycling']
     },
     reliability: 'A',
     durability: 7,
     speed: 110,
-    maintenanceGroup: 1
+    maintenanceGroup: 1,
+    fuelTankCapacity: 75
   },
   {
     id: 'marcedes-atego-818',
@@ -432,14 +450,15 @@ export const SMALL_TRUCKS: Truck[] = [
     image: 'https://i.ibb.co/HDgFvFdw/image-1763591853006.png',
     specifications: {
       capacity: '4 t',
-      enginePower: '130 kW (~177 PS)',
+      enginePower: '5.1l Euro 6 - 130 kW (~177 PS)',
       fuelConsumption: 9,
       cargoTypes: ['Dry Goods', 'Construction Material']
     },
     reliability: 'A',
     durability: 9,
     speed: 90,
-    maintenanceGroup: 2
+    maintenanceGroup: 2,
+    fuelTankCapacity: 140
   },
   {
     id: 'marcedes-atego-818-tanker',
@@ -463,7 +482,8 @@ export const SMALL_TRUCKS: Truck[] = [
     reliability: 'A',
     durability: 8,
     speed: 90,
-    maintenanceGroup: 2
+    maintenanceGroup: 2,
+    fuelTankCapacity: 160
   },
   {
     id: 'heno-xzu720',
@@ -480,14 +500,15 @@ export const SMALL_TRUCKS: Truck[] = [
     image: 'https://i.ibb.co/7d764gJJ/image-1763417711119.png',
     specifications: {
       capacity: '3.5 t',
-      enginePower: 'N04C • ~150 PS (~110 kW)',
+      enginePower: 'N04C - 150 PS (~110 kW)',
       fuelConsumption: 10,
       cargoTypes: ['Dry Goods', 'Construction Material']
     },
     reliability: 'C',
     durability: 5,
     speed: 100,
-    maintenanceGroup: 2
+    maintenanceGroup: 2,
+    fuelTankCapacity: 100
   },
   {
     id: 'fow-f914',
@@ -504,14 +525,15 @@ export const SMALL_TRUCKS: Truck[] = [
     image: 'https://i.ibb.co/hw0sRT3/image-1763503965853.png',
     specifications: {
       capacity: '4 t',
-      enginePower: 'FAWDE CA4DB1 series • ~150 PS (~110 kW)',
+      enginePower: 'CA4DB1 series - 150 PS (~110 kW)',
       fuelConsumption: 12,
       cargoTypes: ['Construction Material', 'Construction Debris', 'Waste & Recycling']
     },
     reliability: 'B',
     durability: 6,
     speed: 100,
-    maintenanceGroup: 2
+    maintenanceGroup: 2,
+    fuelTankCapacity: 100
   },
   {
     id: 'heno-300-series-5t',
@@ -535,7 +557,8 @@ export const SMALL_TRUCKS: Truck[] = [
     reliability: 'C',
     durability: 6,
     speed: 105,
-    maintenanceGroup: 1
+    maintenanceGroup: 1,
+    fuelTankCapacity: 85
   },
   {
     id: 'renualt-maxity',
@@ -559,7 +582,8 @@ export const SMALL_TRUCKS: Truck[] = [
     reliability: 'A',
     durability: 7,
     speed: 95,
-    maintenanceGroup: 1
+    maintenanceGroup: 1,
+    fuelTankCapacity: 65
   },
   {
     id: 'marcedes-atego-815',
@@ -576,14 +600,15 @@ export const SMALL_TRUCKS: Truck[] = [
     image: 'https://i.ibb.co/4ZPXdMjM/image-1763503735439.png',
     specifications: {
       capacity: '3.5 t',
-      enginePower: '4 cyl diesel • ~112 kW (≈150 PS)',
+      enginePower: '4 cyl diesel - 112 kW (≈150 PS)',
       fuelConsumption: 11,
       cargoTypes: ['Dry Goods', 'Construction Material']
     },
     reliability: 'A',
     durability: 8,
     speed: 90,
-    maintenanceGroup: 2
+    maintenanceGroup: 2,
+    fuelTankCapacity: 140
   },
   {
     id: 'marcedes-atego-812',
@@ -600,14 +625,15 @@ export const SMALL_TRUCKS: Truck[] = [
     image: 'https://i.ibb.co/QFVr9Lb3/image-1763417653745.png',
     specifications: {
       capacity: '3.0 t',
-      enginePower: 'OM 904 LA • ~90 kW (≈122 PS)',
+      enginePower: 'OM 904 LA - 90 kW (≈122 PS)',
       fuelConsumption: 10.5,
       cargoTypes: ['Construction Debris', 'Construction Material', 'Agricultural Bulk']
     },
     reliability: 'A',
     durability: 9,
     speed: 90,
-    maintenanceGroup: 2
+    maintenanceGroup: 2,
+    fuelTankCapacity: 100
   },
   {
     id: 'marcedes-atego-822r',
@@ -624,14 +650,15 @@ export const SMALL_TRUCKS: Truck[] = [
     image: 'https://i.ibb.co/Df0gjDqm/image-1763591527784.png',
     specifications: {
       capacity: '3.5 t',
-      enginePower: 'OM 924 LA • ~160 kW (≈218 PS)',
+      enginePower: 'OM 924LA - 160 kW (≈218 PS)',
       fuelConsumption: 13,
       cargoTypes: ['Frozen / Refrigerated']
     },
     reliability: 'A',
     durability: 8,
     speed: 90,
-    maintenanceGroup: 1
+    maintenanceGroup: 1,
+    fuelTankCapacity: 160
   },
   {
     id: 'renualt-master-frigo',
@@ -648,13 +675,14 @@ export const SMALL_TRUCKS: Truck[] = [
     image: 'https://i.ibb.co/QFVmyjSF/image-1763417736567.png',
     specifications: {
       capacity: '1.5 t',
-      enginePower: '2.3 dCi 165 PS',
+      enginePower: '2.3 dCi - 145 PS (≈ 107 kW)',
       fuelConsumption: 9,
       cargoTypes: ['Frozen / Refrigerated']
     },
     reliability: 'B',
     durability: 7,
     speed: 100,
-    maintenanceGroup: 1
+    maintenanceGroup: 1,
+    fuelTankCapacity: 80
   }
 ];

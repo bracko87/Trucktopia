@@ -7,26 +7,35 @@
  * - Provide top-level providers (GameProvider, JobMarketProvider)
  * - Configure routing (BrowserRouter + Routes)
  * - Mount non-visual background helpers (MechanicSkillAssigner, ClearPromotedSkills,
- *   StaffIdAssigner, ManagerSkillAssigner, EngineStarter) so they run side-effects.
+ *   StaffIdAssigner, ManagerSkillAssigner) so they run side-effects.
  *
- * Note: This file intentionally does not change page layout or UI. It only ensures
- * background helper components are correctly imported and mounted to avoid runtime
- * errors (e.g. ReferenceError when a helper was referenced but not imported).
+ * NOTE: EngineStarter and StaffConditionEngineStarter mounts were removed from this file
+ * to avoid runtime side-effects from background engines. If you want to re-enable them,
+ * re-introduce the imports and mounts intentionally after stabilizing the engines.
  */
 
+/* eslint-disable react/jsx-no-bind */
 import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router';
 import { GameProvider } from './contexts/GameContext';
 import { JobMarketProvider } from './contexts/JobMarketContext';
 import Layout from './components/layout/Layout';
-import EngineStarter from './components/EngineStarter';
-import StaffConditionEngineStarter from './components/staff/StaffConditionEngineStarter';
-
+import ExposeGameState from './components/Debug/ExposeGameState';
 // Background helpers (non-visual)
 import MechanicSkillAssigner from './components/staff/MechanicSkillAssigner';
 import ClearPromotedSkills from './components/staff/ClearPromotedSkills';
 import StaffIdAssigner from './components/staff/StaffIdAssigner';
 import ManagerSkillAssigner from './components/staff/ManagerSkillAssigner';
+import JobSanitizer from './components/JobSanitizer';
+import RemoveSpecs from './components/RemoveSpecs';
+import RemoveAnnouncement from './components/RemoveAnnouncement';
+
+// Dev runtime locator (temporary; logs DOM->React fiber mapping)
+import RuntimeSpecLocator from './components/Debug/RuntimeSpecLocator';
+import MarketRedirectListener from './components/MarketRedirectListener';
+
+// New: Trailer normalizer helper - moves misplaced trailers into company.trailers
+import TrailerNormalizer from './components/fleet/TrailerNormalizer';
 
 import './data/trailer-cleanup';
 import './data/trailer-additions';
@@ -74,14 +83,24 @@ function App() {
       <JobMarketProvider>
         <BrowserRouter>
           <Layout>
+            {/* Development-only helper: expose game state to window for debugging */}
+            <ExposeGameState />
+
+            {/* Dev runtime DOM->React fiber locator (temporary) */}
+            <RuntimeSpecLocator />
+
             {/* Mount background helpers (UI-less) to run side-effects and normalization */}
             <MechanicSkillAssigner />
             <ClearPromotedSkills />
             <StaffIdAssigner />
             <ManagerSkillAssigner />
-            {/* EngineStarter runs driver engines; keep after other assigners so ids/skills are normalized first */}
-            <EngineStarter debug={false} tickIntervalMs={60_000} />
-            <StaffConditionEngineStarter debug={false} tickIntervalMs={60_000} />
+
+            {/* Trailer normalizer: ensure trailers purchased into trucks are moved to trailers */}
+            <TrailerNormalizer />
+
+            {/* NOTE: EngineStarter and StaffConditionEngineStarter intentionally NOT mounted.
+                This ensures no background engine runs automatically and keeps job/staff mutations
+                explicit via UI actions and GameContext methods. */}
 
             <Routes>
               <Route path="/" element={<Home />} />
@@ -112,6 +131,7 @@ function App() {
               <Route path="/user-settings" element={<UserSettings />} />
               <Route path="/contract-jobs" element={<ContractJobs />} />
               <Route path="/cargo-trailer-compatibility" element={<CargoTrailerCompatibility />} />
+              <Route path="/migration" element={<Migration />} />
               {/* Redirect unknown routes to home */}
               <Route path="*" element={<Home />} />
             </Routes>

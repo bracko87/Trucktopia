@@ -1,0 +1,51 @@
+
+{
+  "gameRule": {
+    "id": "GR-008",
+    "name": "Truck Driving Engine Rules",
+    "description": "Rules governing truck movement, driver hours, fuel consumption and incident handling.",
+    "category": "Vehicles",
+    "status": "active",
+    "version": "1.0.0",
+    "lastModified": "2024-01-30",
+    "author": "System",
+    "codePaths": [
+      "src/utils/truckDrivingEngine.ts",
+      "src/utils/incidentEngine.ts",
+      "src/contexts/GameContext.tsx"
+    ],
+    "notes": "Produces truckLiveUpdate, routeCompleted and truckIncident events.",
+    "metadata": {}
+  },
+  "engine": {
+    "id": "E-001",
+    "name": "Truck Driving Engine",
+    "description": "Core truck movement & logistics simulation — driving hours, fuel consumption, condition degradation, mileage, incident integration.",
+    "path": "src/utils/truckDrivingEngine.ts",
+    "tags": [
+      "vehicles",
+      "simulation",
+      "core"
+    ],
+    "mountStatus": "not-mounted",
+    "status": "active",
+    "version": "1.0.0",
+    "lastModified": "2024-01-30",
+    "author": "System",
+    "notes": "Singleton engine used by UI/contexts via truckDrivingEngine export.",
+    "metadata": {}
+  },
+  "cron": {
+    "id": "C-001",
+    "name": "GameContext Background Tick",
+    "description": "Central periodic tick used by GameProvider to finalize trainings, reconcile staff, persist state and run background housekeeping.",
+    "path": "src/contexts/GameContext.tsx",
+    "schedule": "interval (dev 5000 ms) — production: configurable (e.g., 60000 ms)",
+    "trigger": "interval",
+    "status": "active",
+    "lastModified": "2024-01-30",
+    "author": "System",
+    "notes": "Currently set to 5s for dev. Recommendation: increase cadence for production to 1m or more.",
+    "metadata": {}
+  }
+}

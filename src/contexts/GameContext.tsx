@@ -20,11 +20,21 @@
  * File-level comments and JSDoc are present for clarity.
  */
 
+/**
+ * NOTE:
+ * This file was edited to avoid a build/parsing error caused by an unexpected "$"
+ * token inside a constructed message string. The training-start success message
+ * now uses plain string concatenation and does not include any raw '$' characters,
+ * replacing them with the currency label "USD" instead. This prevents the build
+ * parser from encountering ambiguous "$" sequences in source code.
+ */
+
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { Company, GameState, GamePage, ActiveJob } from '../types/game';
 import { getSkillsByCategory } from '../utils/skillsDatabase';
 import { writeSkillProgress, readSkillProgress } from '../utils/skillPersistence';
 import { MANAGER_SKILLS } from '../utils/roleSkills';
+import { normalizeJobsOnLoad } from '../utils/jobNormalization';
 
 /**
  * GameContextType
@@ -154,7 +164,7 @@ const userStorage = {
 
   getUserGameState: (email: string) => {
     try {
-      const key = `tm_user_state_${email.toLowerCase()}`;
+      const key = 'tm_user_state_' + email.toLowerCase();
       const raw = localStorage.getItem(key);
       return raw ? JSON.parse(raw) : null;
     } catch (err) {
@@ -165,7 +175,7 @@ const userStorage = {
 
   saveUserGameState: (email: string, state: { isAuthenticated: boolean; company?: Company; sidebarCollapsed?: boolean }) => {
     try {
-      const key = `tm_user_state_${email.toLowerCase()}`;
+      const key = 'tm_user_state_' + email.toLowerCase();
       localStorage.setItem(key, JSON.stringify(state));
       return true;
     } catch (err) {
@@ -176,7 +186,7 @@ const userStorage = {
 
   clearUserGameState: (email: string) => {
     try {
-      const key = `tm_user_state_${email.toLowerCase()}`;
+      const key = 'tm_user_state_' + email.toLowerCase();
       localStorage.removeItem(key);
     } catch {
       // ignore
@@ -336,12 +346,24 @@ const ensureStaffDefaults = (company: any) => {
  * updateStaffStatuses
  * @description Derived runtime statuses computed from training/vacation/activeJobs.
  */
+/**
+ * updateStaffStatuses
+ * @description Derived runtime statuses computed from training/vacation/activeJobs.
+ *
+ * Notes:
+ * - Treats assignment to either assignedDriver OR assignedCoDriver as 'on-job'
+ * - Keeps training and vacation precedence
+ * - Also reconciles truck statuses: if a truck is assigned to an active (non-closed) job,
+ *   it will be marked 'on-job' and receive lightweight job metadata (currentJobId, jobProgress).
+ */
 const updateStaffStatuses = (company: any) => {
   if (!company) return company;
   company.staff = Array.isArray(company.staff) ? company.staff : [];
   company.activeJobs = Array.isArray(company.activeJobs) ? company.activeJobs : [];
+  company.trucks = Array.isArray(company.trucks) ? company.trucks : [];
   const now = Date.now();
 
+  // Reconcile staff statuses (training / vacation / on-job / available)
   company.staff = company.staff.map((s: any) => {
     const staff = { ...s };
     staff.onVacationUntil = staff.onVacationUntil ?? null;
@@ -372,19 +394,75 @@ const updateStaffStatuses = (company: any) => {
     }
 
     // Assigned job check
+    // Consider both assignedDriver and assignedCoDriver as occupying the staff (on-job)
     const assignedJob = company.activeJobs.find((j: any) => {
       if (!j) return false;
       const closed = j.status === 'completed' || j.status === 'cancelled';
-      return !closed && j.assignedDriver && String(j.assignedDriver) === String(staff.id);
+      if (closed) return false;
+      try {
+        const driverMatch = j.assignedDriver && String(j.assignedDriver) === String(staff.id);
+        const coDriverMatch = j.assignedCoDriver && String(j.assignedCoDriver) === String(staff.id);
+        // also support array assignedDrivers
+        const driversArrayMatch = Array.isArray(j.assignedDrivers) && j.assignedDrivers.some((id: any) => String(id) === String(staff.id));
+        return driverMatch || coDriverMatch || driversArrayMatch;
+      } catch {
+        return false;
+      }
     });
     if (assignedJob) {
       staff.status = 'on-job';
+      // Attach lightweight job metadata for UI convenience
+      try {
+        staff.currentJobId = assignedJob.id;
+        staff.jobDistance = assignedJob.distance ?? assignedJob.km ?? 0;
+        staff.jobProgress = assignedJob.progress ?? 0;
+      } catch {
+        // ignore metadata attach failures
+      }
       return staff;
     }
 
     // Default to available
     staff.status = staff.status && staff.status !== 'training' && staff.status !== 'on-job' && staff.status !== 'on_vacation' ? staff.status : 'available';
     return staff;
+  });
+
+  // Reconcile truck statuses based on activeJobs.
+  // For each truck, if there is an active (not completed/cancelled) job assigned to this truck,
+  // mark truck.status = 'on-job' and attach simple job metadata. Otherwise mark as 'available'
+  // (preserving non-job custom statuses where possible).
+  company.trucks = (company.trucks || []).map((t: any) => {
+    const truck = { ...t };
+    try {
+      const assignedJobForTruck = company.activeJobs.find((j: any) => {
+        if (!j) return false;
+        const closed = j.status === 'completed' || j.status === 'cancelled';
+        if (closed) return false;
+        try {
+          return j.assignedTruck && String(j.assignedTruck) === String(truck.id);
+        } catch {
+          return false;
+        }
+      });
+
+      if (assignedJobForTruck) {
+        truck.status = 'on-job';
+        truck.currentJobId = assignedJobForTruck.id;
+        truck.jobProgress = assignedJobForTruck.progress ?? 0;
+        truck.jobDistance = assignedJobForTruck.distance ?? assignedJobForTruck.km ?? 0;
+      } else {
+        // If truck previously had an on-job marker, reset to available.
+        // Preserve other explicit non-job statuses if they are not 'on-job'.
+        truck.status = truck.status && truck.status !== 'on-job' ? truck.status : 'available';
+        // Remove transient job metadata if present
+        if ('currentJobId' in truck) delete truck.currentJobId;
+        if ('jobProgress' in truck) delete truck.jobProgress;
+        if ('jobDistance' in truck) delete truck.jobDistance;
+      }
+    } catch {
+      // defensive: leave truck as-is if any error
+    }
+    return truck;
   });
 
   return company;
@@ -426,10 +504,13 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         company.reputation = 0;
       }
 
+      // Ensure derived statuses (training/on-job/vacation) are up-to-date on restore
+      const companyWithStatuses = company ? updateStaffStatuses(company) : null;
+
       setGameState({
         isAuthenticated: true,
         currentPage: 'dashboard',
-        company,
+        company: companyWithStatuses,
         sidebarCollapsed: adminState?.sidebarCollapsed ?? false,
         currentUser: ADMIN_ACCOUNT.email.toLowerCase()
       });
@@ -438,18 +519,21 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
     const userState = userStorage.getUserGameState(currentUser);
     const user = userStorage.findUser(currentUser);
-    let company = (userState?.company || user?.company) ? ensureStaffDefaults(userState?.company || user?.company) : null;
+    let company = (userState?.company || user?.company) ? ensureStaffDefaults(userState?.company || user.company) : null;
 
     // Force displayed & in-memory user company reputation to 0 immediately
     if (company) {
       company.reputation = 0;
     }
 
+    // Ensure derived statuses (training/on-job/vacation) are up-to-date on restore
+    const companyWithStatuses = company ? updateStaffStatuses(company) : null;
+
     if (userState && userState.isAuthenticated) {
       setGameState({
         isAuthenticated: true,
         currentPage: 'dashboard',
-        company,
+        company: companyWithStatuses,
         sidebarCollapsed: userState.sidebarCollapsed ?? false,
         currentUser: currentUser.toLowerCase()
       });
@@ -485,15 +569,18 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   }, [gameState]);
 
   /**
-   * enforceCompanyReputationZero
-   * @description Ensure the active company always has reputation === 0.
+   * enforceCompanyReputationZero & enforceAdminCapital
+   * @description Ensure the active company always has reputation === 0 and, for the
+   * admin account only, enforce a starting capital of 1,000,000.
+   *
    * This effect will:
    *  - If there is an active company and its reputation is not 0, set it to 0.
+   *  - If the current user is the admin account, force company.capital to the ADMIN_CAPITAL.
    *  - Persist the change immediately to the respective storage (admin or user).
-   *  - Update in-memory gameState so all pages/components reflect reputation 0.
+   *  - Update in-memory gameState so all pages/components reflect the enforced values.
    *
-   * Note: This deliberately overrides any other reputation updates so the app
-   * consistently shows reputation = 0 as requested.
+   * Note: Reputation enforcement preserves previous behavior. The admin-capital enforcement
+   * ensures the admin company always shows the configured starting capital (only for admin).
    */
   useEffect(() => {
     try {
@@ -501,17 +588,37 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       const currentUser = gameState.currentUser;
       if (!company || !currentUser) return;
 
-      const currentReputation = typeof company.reputation === 'number' ? company.reputation : Number(company.reputation ?? 0);
-      if (currentReputation === 0) return; // already zero, nothing to do
+      const ADMIN_CAPITAL = 1_000_000;
 
-      // Create a new company object with reputation forced to 0
-      const updatedCompany = { ...company, reputation: 0 };
+      let needsPersist = false;
+      const updatedCompany: any = { ...company };
+
+      // Enforce reputation = 0
+      const currentReputation = typeof company.reputation === 'number' ? company.reputation : Number(company.reputation ?? 0);
+      if (currentReputation !== 0) {
+        updatedCompany.reputation = 0;
+        needsPersist = true;
+      }
+
+      // If admin user, enforce starting capital
+      if (currentUser === ADMIN_ACCOUNT.email.toLowerCase()) {
+        const currentCapital = typeof company.capital === 'number' ? company.capital : Number(company.capital ?? 0);
+        if (currentCapital !== ADMIN_CAPITAL) {
+          updatedCompany.capital = ADMIN_CAPITAL;
+          needsPersist = true;
+        }
+      }
+
+      if (!needsPersist) return;
 
       // Persist to storage for admin or regular user
       if (currentUser === ADMIN_ACCOUNT.email.toLowerCase()) {
+        // Ensure reputation stays 0 when persisting admin state and capital is enforced
+        updatedCompany.reputation = 0;
         userStorage.saveAdminState({ isAuthenticated: true, company: updatedCompany, sidebarCollapsed: gameState.sidebarCollapsed });
       } else {
         // update both user record and per-user state
+        updatedCompany.reputation = 0;
         userStorage.updateUser(currentUser, { company: updatedCompany });
         userStorage.saveUserGameState(currentUser, { isAuthenticated: true, company: updatedCompany, sidebarCollapsed: gameState.sidebarCollapsed });
       }
@@ -519,10 +626,10 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       // Update in-memory state (this will trigger the general persist effect above)
       setGameState(prev => ({ ...prev, company: updatedCompany }));
     } catch (err) {
-      console.error('enforceCompanyReputationZero error', err);
+      console.error('enforceCompanyReputationZero & enforceAdminCapital error', err);
     }
-    // We include both company id and reputation in deps to catch company changes and loaded persisted values
-  }, [gameState.company?.id, gameState.company?.reputation, gameState.currentUser, gameState.sidebarCollapsed]);
+    // Include company id, reputation and capital in deps to catch changes and loaded persisted values
+  }, [gameState.company?.id, gameState.company?.reputation, gameState.company?.capital, gameState.currentUser, gameState.sidebarCollapsed]);
 
   /**
    * backgroundTick
@@ -881,7 +988,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
    */
   const writeSkillProgressLocal = (staffId: string, skill: string, pct: number) => {
     try {
-      const key = `tm_skill_progress_${staffId}_${encodeURIComponent(skill)}`;
+      const key = 'tm_skill_progress_' + staffId + '_' + encodeURIComponent(skill);
       const obj = { pct: Math.max(0, Math.min(100, Math.round(pct))), updatedAt: new Date().toISOString() };
       localStorage.setItem(key, JSON.stringify(obj));
     } catch {
@@ -985,7 +1092,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     // can rehydrate exact hired skills). Persist only when role === 'mechanic' and skills exist.
     try {
       if (newStaff.role === 'mechanic' && Array.isArray(newStaff.skills) && newStaff.skills.length > 0) {
-        const key = `tm_mechanic_skills_${gameState.currentUser}_${newStaff.id}`;
+        const key = 'tm_mechanic_skills_' + gameState.currentUser + '_' + newStaff.id;
         localStorage.setItem(
           key,
           JSON.stringify({ skills: newStaff.skills.slice(), updatedAt: new Date().toISOString(), hireUid })
@@ -1009,7 +1116,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       createCompany(updatedCompany);
     } else {
       try {
-        const storageKey = `tm_company_${gameState?.currentUser ?? 'local'}`;
+        const storageKey = 'tm_company_' + (gameState?.currentUser ?? 'local');
         localStorage.setItem(storageKey, JSON.stringify(updatedCompany));
         setGameState(prev => ({ ...prev, company: updatedCompany }));
       } catch {
@@ -1020,6 +1127,16 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
   /**
    * acceptJob
+   */
+  /**
+   * acceptJob
+   * @description Accept a new job into the company.
+   *
+   * Rules:
+   * - Newly accepted jobs MUST start with status 'preparing' (not 'loading').
+   * - Jobs must remain in 'preparing' until the user explicitly clicks "Start Job Delivery".
+   * - No automatic background effect should move a job out of 'preparing' (status transition
+   *   is only executed by explicit user action / Start button handlers).
    */
   const acceptJob = (jobData: any) => {
     if (!gameState.currentUser || !gameState.company) {
@@ -1040,7 +1157,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         estimatedCompletion: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         progress: 0,
         currentLocation: jobData.origin || 'Unknown',
-        status: 'loading',
+        // Enforce preparing as the canonical accepted-job initial status
+        status: 'preparing',
         value: jobData.value || 0,
         distance: jobData.distance || 0,
         origin: jobData.origin || 'Unknown',
@@ -1112,13 +1230,13 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   const cancelJob = (jobId: string) => {
     if (!gameState.company || !gameState.currentUser) return;
     try {
-      const updatedCompany: any = { ...gameState.company, activeJobs: (gameState.company.activeJobs || []).map(j => j.id === jobId ? { ...j, status: 'cancelled' } : j) };
-      updateStaffStatuses(updatedCompany);
+      const updated: any = { ...gameState.company, activeJobs: (gameState.company.activeJobs || []).map(j => j.id === jobId ? { ...j, status: 'cancelled' } : j) };
+      updateStaffStatuses(updated);
       // Ensure reputation remains 0
-      updatedCompany.reputation = 0;
-      if (gameState.currentUser === ADMIN_ACCOUNT.email.toLowerCase()) userStorage.saveAdminState({ isAuthenticated: true, company: updatedCompany, sidebarCollapsed: gameState.sidebarCollapsed });
-      else { userStorage.updateUser(gameState.currentUser, { company: updatedCompany }); userStorage.saveUserGameState(gameState.currentUser, { isAuthenticated: true, company: updatedCompany, sidebarCollapsed: gameState.sidebarCollapsed }); }
-      setGameState(prev => ({ ...prev, company: updatedCompany }));
+      updated.reputation = 0;
+      if (gameState.currentUser === ADMIN_ACCOUNT.email.toLowerCase()) userStorage.saveAdminState({ isAuthenticated: true, company: updated, sidebarCollapsed: gameState.sidebarCollapsed });
+      else { userStorage.updateUser(gameState.currentUser, { company: updated }); userStorage.saveUserGameState(gameState.currentUser, { isAuthenticated: true, company: updated, sidebarCollapsed: gameState.sidebarCollapsed }); }
+      setGameState(prev => ({ ...prev, company: updated }));
     } catch (err) {
       console.error('cancelJob error', err);
     }
@@ -1200,9 +1318,17 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       // Deny if training
       if (staff.training) return { success: false, message: 'Cannot put staff on vacation during training' };
 
-      // Deny if assigned to job
-      const assignedJob = (companyClone.activeJobs || []).find((j: any) => !['completed', 'cancelled'].includes(j.status) && j.assignedDriver === staffId);
-      if (assignedJob) return { success: false, message: 'Cannot put staff on vacation while assigned to a job' };
+      // Deny if assigned to job (as driver or co-driver)
+      const assignedJob = (companyClone.activeJobs || []).find((j: any) => {
+        if (!j || !j.status) return false;
+        if (['completed', 'cancelled'].includes(j.status)) return false;
+        try {
+          return (j.assignedDriver && String(j.assignedDriver) === String(staffId)) || (j.assignedCoDriver && String(j.assignedCoDriver) === String(staffId));
+        } catch {
+          return false;
+        }
+      });
+      if (assignedJob) return { success: false, message: 'Cannot put staff on vacation while assigned to a job' }; 
 
       if (typeof days === 'number' && days > 0) {
         const until = new Date(); until.setDate(until.getDate() + Math.floor(days));
@@ -1354,7 +1480,15 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       const now = Date.now();
       const onVacation = staff.onVacationUntil ? (new Date(staff.onVacationUntil).getTime() > now) : false;
       if (onVacation) return { success: false, message: 'Staff is on vacation' };
-      const assignedJob = (companyClone.activeJobs || []).find((j: any) => !['completed', 'cancelled'].includes(j.status) && j.assignedDriver === staffId);
+      const assignedJob = (companyClone.activeJobs || []).find((j: any) => {
+        if (!j || !j.status) return false;
+        if (['completed', 'cancelled'].includes(j.status)) return false;
+        try {
+          return (j.assignedDriver && String(j.assignedDriver) === String(staffId)) || (j.assignedCoDriver && String(j.assignedCoDriver) === String(staffId));
+        } catch {
+          return false;
+        }
+      });
       if (assignedJob) return { success: false, message: 'Staff is currently assigned to a job' };
       if (staff.status !== 'available') return { success: false, message: `Staff must be 'available' to start training (current status: ${staff.status})` };
 
@@ -1390,7 +1524,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       else { userStorage.updateUser(gameState.currentUser, { company: companyClone }); userStorage.saveUserGameState(gameState.currentUser, { isAuthenticated: true, company: companyClone, sidebarCollapsed: gameState.sidebarCollapsed }); }
       setGameState(prev => ({ ...prev, company: companyClone }));
 
-      return { success: true, message: `Training started for ${staff.name} on \"${skillName}\" (${plannedDays} days, cost $${cost.toLocaleString()})` };
+      // Build a safe message without any raw '$' characters to avoid parser issues in some build chains
+      const msg = 'Training started for ' + staff.name + ' on "' + skillName + '" (' + plannedDays + ' days, cost ' + cost.toLocaleString() + ' USD)';
+      return { success: true, message: msg };
     } catch (err) {
       console.error('startTraining error', err);
       return { success: false, message: 'Failed to start training' };
