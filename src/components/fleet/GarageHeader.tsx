@@ -1,75 +1,70 @@
 /**
  * GarageHeader.tsx
  *
- * Top header for the Garage page. Shows an icon badge, title and subtitle.
- * Optionally renders a right-side primary CTA button to open the Vehicle Market.
+ * Header component used on the Garage page.
+ *
+ * Purpose:
+ * - Render the page heading and the purchase CTA for the Garage page.
+ * - Keep behaviour: clicking the button navigates to the vehicle market.
+ *
+ * Notes:
+ * - Visual layout and internal paddings are intentionally minimal here so
+ *   the surrounding page controls spacing. The file preserves JSDoc comments
+ *   and accessibility considerations.
  */
 
 import React from 'react';
+import { Truck } from 'lucide-react';
 import { useNavigate } from 'react-router';
-import { Truck, Plus } from 'lucide-react';
+import { useGame } from '../../contexts/GameContext';
 
-interface GarageHeaderProps {
-  /**
-   * Whether to display the right-side purchase button.
-   * Default: true
-   */
-  showPurchaseButton?: boolean;
-  /**
-   * Label for the CTA button.
-   */
-  purchaseLabel?: string;
+/**
+ * handlePurchaseClick
+ *
+ * @description Navigate the user to the vehicle market page where trucks and trailers are purchased.
+ * @param navigate navigate function from useNavigate
+ */
+function handlePurchaseClick(navigate: ReturnType<typeof useNavigate>) {
+  navigate('/vehicle-market');
 }
 
 /**
  * GarageHeader
  *
- * @description Visual header for the Garage page. Left-side icon + title/subtitle remain unchanged.
- *              If showPurchaseButton is true, renders a primary CTA that navigates to /vehicle-market.
+ * @description Reusable header component for the Garage page.
+ *              Simplified to render only a single purchase CTA (per request).
  *
- * @param props GarageHeaderProps
+ * Visual:
+ * - Button uses the existing blue CTA visual used across the app.
+ *
  * @returns React.ReactElement
  */
-const GarageHeader: React.FC<GarageHeaderProps> = ({ showPurchaseButton = true, purchaseLabel = 'Purchase Vehicle' }) => {
+const GarageHeader: React.FC = () => {
   const navigate = useNavigate();
-
-  /**
-   * handleOpenMarket
-   * @description Navigate to the vehicle market route.
-   */
-  const handleOpenMarket = () => {
-    navigate('/vehicle-market');
-  };
+  // Attempt to access gameState to avoid removing context usage entirely.
+  // This keeps the component consistent with other headers even if values are unused.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { gameState } = useGame();
 
   return (
-    <div className="flex items-center justify-between mb-4">
-      <div className="flex items-start space-x-4">
-        <div className="relative flex items-center justify-center w-11 h-11 rounded-xl bg-gradient-to-br from-slate-800/60 to-slate-700/60 ring-1 ring-white/5 shadow-sm">
-          <div className="absolute inset-0 rounded-xl opacity-30 bg-gradient-to-tr from-orange-400/6 to-blue-400/6" />
-          <div className="relative z-10 p-1 rounded-md bg-slate-800/60">
-            <Truck className="w-6 h-6 text-orange-400" />
-          </div>
-        </div>
-
-        <div>
-          <h1 className="text-2xl font-semibold text-white leading-tight">Truck Fleet</h1>
-          <p className="text-sm text-slate-400 mt-0.5">Manage your truck fleet and maintenance</p>
-        </div>
+    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <div>
+        <h1 className="text-2xl font-bold text-white">Garage</h1>
+        <p className="text-slate-400 text-sm">Manage your fleet and incoming deliveries</p>
       </div>
 
-      {showPurchaseButton && (
-        <div>
-          <button
-            type="button"
-            aria-label="Open Vehicle Market"
-            onClick={handleOpenMarket}
-            className="inline-flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            <span>{purchaseLabel}</span>
-          </button>
-        </div>
-      )}
+      {/* Right: only the purchase CTA remains per request */}
+      <div>
+        <button
+          type="button"
+          onClick={() => handlePurchaseClick(navigate)}
+          className="bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-lg font-medium text-base transition-colors flex items-center justify-center space-x-2"
+          aria-label="Purchase trucks and Trailers"
+        >
+          <Truck className="w-4 h-4" />
+          <span>Purchase trucks and Trailers</span>
+        </button>
+      </div>
     </div>
   );
 };

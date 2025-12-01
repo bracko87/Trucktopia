@@ -1,73 +1,140 @@
 /**
  * IncomingDeliveryFinalizer.tsx
  *
- * UI-less component that periodically runs processIncomingDeliveries and attempts to
- * persist the results via GameContext when available. It also emits a window event
- * ('incomingDeliveriesMoved') with details so other UI parts can listen and animate arrivals.
+ * File-level:
+ * Background helper that:
+ *  - processes incoming deliveries on mount and on an interval,
+ *  - intercepts button clicks for friendly confirmation flows (replacing native confirm/alert),
+ *  - shows a polished modal confirmation and dispatches toasts for job-accept flows.
  *
  * Responsibilities:
- * - Periodically check for expired incoming deliveries and request the application to persist moves.
- * - Keep behaviour resilient if GameContext shape differs across projects (try best-effort).
+ *  - Run a one-time delivery finalization scan on mount and every 60s afterwards.
+ *  - Intercept buttons that explicitly opt-in via data-friendly-confirm="true" OR buttons whose text
+ *    matches common accept patterns (e.g. "Accept Full Load", "Accept Job", "Accept Offer", "Accept").
+ *  - Display a styled, accessible modal rather than allowing native browser confirm/alert popups.
+ *  - On user confirm: replay the original click while temporarily replacing native dialogs with
+ *    friendly toast dispatches so no white native popups are shown.
+ *
+ * Notes:
+ *  - This component intentionally mounts UI (Toaster + Modal) but is safe to keep hidden most of the time.
+ *  - Avoids global permanent monkeypatches of window.confirm/alert — replaces them only briefly during replay.
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { X } from 'lucide-react';
 import { processIncomingDeliveries } from '../../utils/incomingDeliveryUtils';
 import { useGame } from '../../contexts/GameContext';
+import Toaster from '../notifications/Toaster';
+
+interface FriendlyConfirmState {
+  open: boolean;
+  message: string;
+  targetElement: HTMLElement | null;
+}
+
+/**
+ * safeDispatchToast
+ * @description Emit an app-level toast that the global Toaster listens to.
+ * @param detail Toast detail object: { title?, message, variant?, ttl? }
+ */
+function safeDispatchToast(detail: { title?: string; message: string; variant?: 'info' | 'success' | 'error' | 'neutral'; ttl?: number }) {
+  try {
+    window.dispatchEvent(new CustomEvent('app:toast', { detail }));
+  } catch {
+    // noop in SSR / restricted env
+  }
+}
+
+/**
+ * findNearbyJobTitle
+ * @description Attempt to resolve a human-friendly title near the clicked button.
+ *              Searches common nearby selectors and falls back to button text.
+ * @param btn Button element
+ * @returns string|null human-friendly name
+ */
+function findNearbyJobTitle(btn: HTMLElement | null): string | null {
+  try {
+    if (!btn) return null;
+    const candidates: Array<HTMLElement | null> = [
+      btn.closest('[data-job-title]') as HTMLElement | null,
+      btn.closest('[data-job-id]') as HTMLElement | null,
+      btn.closest('.bg-slate-800, .bg-slate-700') as HTMLElement | null,
+      btn.parentElement,
+    ];
+
+    const selectors = ['[data-job-title]', '.text-white.font-medium', 'h3', 'h2', '.job-title', '[title]'];
+
+    for (const root of candidates) {
+      if (!root) continue;
+      for (const sel of selectors) {
+        try {
+          const el = root.querySelector(sel) as HTMLElement | null;
+          if (el) {
+            const txt = (el.innerText || el.getAttribute('title') || '').trim();
+            if (txt) return txt;
+          }
+        } catch {
+          // ignore selector errors
+        }
+      }
+    }
+
+    // fallback: button label
+    const btnText = (btn.innerText || btn.getAttribute('aria-label') || '').trim();
+    return btnText || null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * IncomingDeliveryFinalizer
- * @description Runs in background and processes incoming deliveries periodically.
+ * @description Component mounted globally to process incoming deliveries and replace native confirm flows
+ *              with a friendly UI modal + toast notifications.
  */
 const IncomingDeliveryFinalizer: React.FC = () => {
+  const { gameState } = useGame();
   const intervalRef = useRef<number | null>(null);
-
-  // Try to obtain GameContext. We are defensive: GameContext may expose different shapes.
-  let gameContext: any = null;
-  try {
-    // If useGame is not a function or not available, this will throw; we catch below.
-    gameContext = useGame ? useGame() : null;
-  } catch (e) {
-    gameContext = null;
-  }
+  const [confirmState, setConfirmState] = useState<FriendlyConfirmState>({ open: false, message: '', targetElement: null });
 
   useEffect(() => {
+    /**
+     * runOnce
+     * @description Run one processing scan and emit events/toasts when items moved.
+     */
     const runOnce = () => {
       try {
-        if (!gameContext || !gameContext.company) {
-          // If there's no GameContext or it does not expose company, emit a request event so a listener can pick it up.
+        if (typeof window === 'undefined' || typeof document === 'undefined') return;
+
+        if (!gameState || !gameState.company) {
           window.dispatchEvent(new CustomEvent('requestProcessIncomingDeliveries'));
           return;
         }
 
-        const { updatedCompany, moved } = processIncomingDeliveries(gameContext.company);
+        const { updatedCompany, moved } = processIncomingDeliveries(gameState.company);
 
         if (moved && moved.length > 0) {
-          // Prefer to call context setter functions if present (conservative API checks)
-          if (typeof gameContext.setCompany === 'function') {
-            gameContext.setCompany(updatedCompany);
-          } else if (typeof gameContext.updateCompany === 'function') {
-            gameContext.updateCompany(updatedCompany);
-          } else if (typeof gameContext.saveCompany === 'function') {
-            gameContext.saveCompany(updatedCompany);
-          } else {
-            // If no setter is available, emit an event containing the needed updates. GameContext can listen and persist.
-            window.dispatchEvent(new CustomEvent('incomingDeliveriesProcessed', { detail: { updatedCompany, moved } }));
-          }
-
-          // Always emit a user-level event for UI listeners / animations
+          window.dispatchEvent(new CustomEvent('incomingDeliveriesProcessed', { detail: { updatedCompany, moved } }));
           window.dispatchEvent(new CustomEvent('incomingDeliveriesMoved', { detail: { moved } }));
+          safeDispatchToast({ title: 'Deliveries Processed', message: `${moved.length} incoming delivery(ies) finalized.`, variant: 'success' });
         }
       } catch (err) {
-        // Keep the finalizer resilient: swallow errors and try again on next tick
+        // resilient - don't break mount
         // eslint-disable-next-line no-console
-        console.error('IncomingDeliveryFinalizer error', err);
+        console.error('IncomingDeliveryFinalizer runOnce error', err);
       }
     };
 
-    // Run immediately once, then start interval
+    // Emit engine-mounted event for admin/manifest tools
+    try {
+      window.dispatchEvent(new CustomEvent('engineMounted', { detail: { id: 'E-018' } }));
+    } catch {
+      // noop
+    }
+
+    // Run immediately and set interval (60s)
     runOnce();
-    // Default to 5s interval (dev); this is soft and can be adjusted later
-    intervalRef.current = window.setInterval(runOnce, 5000) as unknown as number;
+    intervalRef.current = window.setInterval(runOnce, 60000) as unknown as number;
 
     return () => {
       if (intervalRef.current) {
@@ -75,11 +142,231 @@ const IncomingDeliveryFinalizer: React.FC = () => {
         intervalRef.current = null;
       }
     };
-    // Intentionally run once on mount; do not include gameContext in deps to avoid rapid re-subscriptions
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // run once on mount
+
+  /**
+   * handleDocumentClick
+   * @description Capture clicks and show friendly modal for matched buttons.
+   *
+   * Rules:
+   *  - Intercept when:
+   *      1) button has data-friendly-confirm="true"
+   *      2) OR button text matches accept-like flows:
+   *         /Accept Full Load|Accept Job|Accept Offer|Accept/i
+   *
+   * Interception:
+   *  - prevent default + stop propagation
+   *  - show modal; on confirm replay the click with a one-time bypass dataset and
+   *    temporarily replace window.alert/confirm/prompt so native popups don't appear.
+   */
+  useEffect(() => {
+    const onClick = (ev: MouseEvent) => {
+      try {
+        const target = ev.target as HTMLElement | null;
+        if (!target) return;
+        const button = target.closest('button') as HTMLButtonElement | null;
+        if (!button) return;
+
+        // Allow explicit replay bypass
+        if (button.dataset && button.dataset.friendlyConfirmBypass === '1') {
+          // cleanup bypass attribute and allow normal flow
+          delete button.dataset.friendlyConfirmBypass;
+          return;
+        }
+
+        const explicit = String(button.dataset?.friendlyConfirm ?? '').toLowerCase() === 'true';
+        const label = (button.innerText || '').trim();
+
+        // Heuristic accept text matching
+        const textMatch = /\b(accept full load|accept job|accept offer|accept)\b/i.test(label);
+
+        if (!explicit && !textMatch) return;
+
+        // Prevent native behavior and show friendly modal
+        ev.preventDefault();
+        ev.stopPropagation();
+
+        setConfirmState({
+          open: true,
+          message: label || 'Confirm action',
+          targetElement: button,
+        });
+      } catch (err) {
+        // ignore interception errors
+      }
+    };
+
+    document.addEventListener('click', onClick, true);
+    return () => {
+      document.removeEventListener('click', onClick, true);
+    };
   }, []);
 
-  return null;
+  /**
+   * handleConfirmResult
+   * @description Called when user confirms or cancels the friendly modal.
+   * When confirmed:
+   *  - tries to resolve a nearby job/item name for better notifications
+   *  - dispatches friendly toasts
+   *  - temporarily overrides native dialogs and replays the click with bypass
+   */
+  const handleConfirmResult = (confirmed: boolean) => {
+    const target = confirmState.targetElement;
+    setConfirmState({ open: false, message: '', targetElement: null });
+
+    if (!target) return;
+    if (!confirmed) return;
+
+    try {
+      const resolvedName = findNearbyJobTitle(target);
+
+      // Immediate notification for job-accept-like flows
+      if (/\baccept\b/i.test(target.innerText || '')) {
+        if (resolvedName) {
+          safeDispatchToast({ title: 'Job accepted', message: resolvedName, variant: 'neutral' });
+        } else {
+          safeDispatchToast({ title: 'Accepted', message: 'Action accepted. Processing…', variant: 'neutral' });
+        }
+      }
+
+      // Temporarily override native dialogs so legacy handlers don't show white popups.
+      const glob: any = (typeof window !== 'undefined' ? window : (globalThis as any));
+      const originals: Partial<Record<string, any>> = {
+        alert: typeof glob.alert === 'function' ? glob.alert : undefined,
+        confirm: typeof glob.confirm === 'function' ? glob.confirm : undefined,
+        prompt: typeof glob.prompt === 'function' ? glob.prompt : undefined,
+      };
+
+      // Replacement alert that forwards to in-app toast (captures legacy alert messages)
+      const replacementAlert = (msg?: any) => {
+        try {
+          const text = typeof msg === 'string' ? msg : JSON.stringify(msg ?? '');
+          safeDispatchToast({ title: resolvedName ? `Job accepted` : 'Notice', message: text, variant: 'success' });
+        } catch {
+          // ignore formatting errors
+        }
+        return undefined;
+      };
+
+      // Replacement confirm always returns true (we already asked the user)
+      const replacementConfirm = (_msg?: any) => true;
+      const replacementPrompt = (_msg?: any) => null;
+
+      try {
+        glob.alert = replacementAlert;
+      } catch { /* ignore */ }
+      try {
+        glob.confirm = replacementConfirm;
+      } catch { /* ignore */ }
+      try {
+        glob.prompt = replacementPrompt;
+      } catch { /* ignore */ }
+
+      // Mark one-time bypass, then replay the original click so existing handlers run.
+      try {
+        target.dataset.friendlyConfirmBypass = '1';
+        setTimeout(() => {
+          try {
+            target.click();
+          } catch (err) {
+            // fallback event dispatch if click() throws
+            try {
+              target.dispatchEvent(new CustomEvent('friendlyConfirm:confirmed', { bubbles: true }));
+            } catch { /* ignore */ }
+          }
+        }, 0);
+      } catch (err) {
+        // ignore replay errors
+      }
+
+      // Restore native dialogs after a short grace period
+      setTimeout(() => {
+        try { if (originals.alert !== undefined) glob.alert = originals.alert; } catch { /* ignore */ }
+        try { if (originals.confirm !== undefined) glob.confirm = originals.confirm; } catch { /* ignore */ }
+        try { if (originals.prompt !== undefined) glob.prompt = originals.prompt; } catch { /* ignore */ }
+      }, 1500);
+
+      // Follow-up success toast for job acceptance flows
+      if (/\baccept\b/i.test(target.innerText || '')) {
+        setTimeout(() => {
+          const title = 'Success';
+          const message = resolvedName ? `Job accepted successfully! You can track "${resolvedName}" in "My Jobs".` : `Job accepted successfully! You can track it in "My Jobs".`;
+          safeDispatchToast({ title, message, variant: 'success' });
+        }, 700);
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('handleConfirmResult error', err);
+    }
+  };
+
+  // Modal keyboard support - close on Escape
+  useEffect(() => {
+    if (!confirmState.open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setConfirmState({ open: false, message: '', targetElement: null });
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [confirmState.open]);
+
+  return (
+    <>
+      {/* Mount global toaster so captured alerts and our toasts are visible */}
+      <Toaster />
+
+      {/* Friendly confirmation modal */}
+      {confirmState.open && (
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setConfirmState({ open: false, message: '', targetElement: null })}
+          />
+
+          <div className="relative z-10 w-full max-w-md bg-slate-800 rounded-lg border border-slate-700 shadow-lg overflow-hidden">
+            <div className="flex items-start justify-between p-4 border-b border-slate-700">
+              <div>
+                <h3 className="text-lg font-semibold text-white">Confirm action</h3>
+                <p className="text-sm text-slate-400 mt-1">Please confirm your choice to proceed.</p>
+              </div>
+              <button
+                onClick={() => setConfirmState({ open: false, message: '', targetElement: null })}
+                className="text-slate-300 hover:text-white p-2 rounded-md"
+                aria-label="Close confirmation"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4">
+              <div className="text-sm text-slate-200 mb-4">{confirmState.message}</div>
+
+              <div className="flex items-center justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setConfirmState({ open: false, message: '', targetElement: null })}
+                  className="px-3 py-2 rounded-md bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm border border-slate-600"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleConfirmResult(true)}
+                  className="inline-flex items-center px-4 py-2 rounded-md bg-green-600 hover:bg-green-700 text-white text-sm"
+                >
+                  Confirm
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
 };
 
 export default IncomingDeliveryFinalizer;

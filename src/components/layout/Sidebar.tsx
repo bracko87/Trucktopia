@@ -1,23 +1,31 @@
 /**
- * Professional retractable sidebar with Football Manager 2024 style navigation
+ * Sidebar.tsx
+ *
+ * Professional retractable sidebar with Football Manager 2024 style navigation.
+ *
+ * Responsibilities:
+ * - Render the main application sidebar with navigation items.
+ * - Provide a collapse toggle and status area.
+ * - Include the new "Infrastructure" navigation entry.
  */
 
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import { useGame } from '../../contexts/GameContext';
-import { 
-  LayoutDashboard, 
-  Warehouse, 
-  Users, 
-  Briefcase, 
-  FileText, 
+import {
+  LayoutDashboard,
+  Warehouse,
+  Users,
+  Briefcase,
+  FileText,
   DollarSign,
   Map,
   Settings,
   ChevronLeft,
   ChevronRight,
   LogOut,
-  Shield
+  Shield,
+  Server
 } from 'lucide-react';
 import { GamePage } from '../../types/game';
 
@@ -29,6 +37,11 @@ interface NavItem {
   path: string;
 }
 
+/**
+ * Sidebar
+ *
+ * @description Main application sidebar. Renders navigation and company status.
+ */
 const Sidebar: React.FC = () => {
   const { gameState, setCurrentPage, toggleSidebar } = useGame();
   const navigate = useNavigate();
@@ -36,63 +49,71 @@ const Sidebar: React.FC = () => {
 
   const navItems: NavItem[] = [
     {
-      id: 'dashboard',
+      id: 'dashboard' as GamePage,
       label: 'My Company',
       icon: <LayoutDashboard className="w-5 h-5" />,
       description: 'Company Overview',
       path: '/dashboard'
     },
     {
-      id: 'garage',
+      id: 'garage' as GamePage,
       label: 'Fleet',
       icon: <Warehouse className="w-5 h-5" />,
       description: 'Fleet Management',
       path: '/garage'
     },
     {
-      id: 'staff',
+      id: 'staff' as GamePage,
       label: 'Staff Management',
       icon: <Users className="w-5 h-5" />,
       description: 'Company Staff',
       path: '/staff'
     },
     {
-      id: 'market',
+      id: 'market' as GamePage,
       label: 'Freight Market',
       icon: <Briefcase className="w-5 h-5" />,
       description: 'Available Freight Load Offers',
       path: '/market'
     },
     {
-      id: 'contract-jobs',
+      id: 'contract-jobs' as GamePage,
       label: 'Contract Jobs',
       icon: <Briefcase className="w-5 h-5" />,
       description: 'State & Private Company Contracts',
       path: '/contract-jobs'
     },
     {
-      id: 'jobs',
+      id: 'jobs' as GamePage,
       label: 'My Jobs',
       icon: <FileText className="w-5 h-5" />,
       description: 'Active Contracts',
       path: '/jobs'
     },
+    // New: Infrastructure nav entry, placed after My Jobs
     {
-      id: 'finances',
+      id: 'infrastructure' as GamePage,
+      label: 'Infrastructure',
+      icon: <Server className="w-5 h-5" />,
+      description: 'Hubs & Facilities',
+      path: '/infrastructure'
+    },
+    {
+      id: 'finances' as GamePage,
       label: 'Finances',
       icon: <DollarSign className="w-5 h-5" />,
       description: 'Financial Overview',
       path: '/finances'
     },
     {
-      id: 'map',
+      id: 'map' as GamePage,
       label: 'Map',
       icon: <Map className="w-5 h-5" />,
       description: 'Live Operations Map',
       path: '/map'
     },
     {
-      id: 'user-settings',
+      id: 'user-settings' as GamePage,
       label: 'Settings',
       icon: <Settings className="w-5 h-5" />,
       description: 'Account & Game Settings',
@@ -127,6 +148,7 @@ const Sidebar: React.FC = () => {
         <button
           onClick={toggleSidebar}
           className="p-1.5 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 transition-colors"
+          aria-label="Toggle sidebar"
         >
           {gameState.sidebarCollapsed ? (
             <ChevronRight className="w-4 h-4 text-slate-300" />
@@ -142,7 +164,7 @@ const Sidebar: React.FC = () => {
           const active = isActive(item.path);
           return (
             <button
-              key={item.id}
+              key={item.id as string}
               onClick={() => handleNavigation(item)}
               className={`w-full flex items-center p-3 rounded-lg transition-all duration-200 ${
                 active
@@ -162,13 +184,13 @@ const Sidebar: React.FC = () => {
             </button>
           );
         })}
-        
+
         {/* Admin Dashboard - Only show for admin users */}
         {gameState.company?.id === 'admin-company' && (
           <button
             onClick={() => {
               navigate('/admin');
-              setCurrentPage('admin-dashboard');
+              setCurrentPage('admin-dashboard' as GamePage);
             }}
             className={`w-full flex items-center p-3 rounded-lg transition-all duration-200 ${
               location.pathname === '/admin'
@@ -187,7 +209,7 @@ const Sidebar: React.FC = () => {
             </div>
           </button>
         )}
-        
+
         {/* Logout Button - Added to main sidebar */}
         <div className="pt-4 border-t border-slate-700 mt-4">
           <button
@@ -223,7 +245,7 @@ const Sidebar: React.FC = () => {
               {gameState.company.name}
             </div>
             <div className="w-full bg-slate-700 rounded-full h-1.5">
-              <div 
+              <div
                 className="bg-blue-500 h-1.5 rounded-full transition-all duration-500"
                 style={{ width: '35%' }}
               />

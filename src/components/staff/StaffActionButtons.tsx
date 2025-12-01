@@ -7,12 +7,12 @@
  *
  * Purpose:
  * - Render staff action buttons and associated modal dialogs.
- * - Ensure Stop Driving flow uses an in-UI modal and that no browser-native confirm() is shown.
- * - After confirming Stop Driving, aggressively attempt to revert the staff to a pre-assigned state
- *   and ensure the staff card is removed from UI and archived into company history so stats remain.
+ * - Ensure Stop Driving and Fire flows use in-UI modals and that no browser-native confirm/popups are shown.
+ * - Ensure the Confirm & Pay in-UI modal is the last confirmation in the firing flow:
+ *   after Confirm & Pay is pressed we deduct compensation, fire the staff and perform cleanup.
  *
  * Notes:
- * - The component performs best-effort mutations on known game API names and on the in-memory
+ * - This component performs best-effort mutations on known game API names and on the in-memory
  *   company object so the UI refreshes fast. This is intentionally aggressive to ensure the
  *   driver card disappears immediately even if parent code is legacy or invokes window.confirm.
  */
@@ -33,7 +33,7 @@ export interface StaffActionHandlers {
   onVacation?: (id: string, days: number | null) => void;
   onSkillImprove?: (id: string, skill: string | null) => void;
   onPromote?: (id: string, newRole?: 'dispatcher' | 'manager') => void;
-  onFire?: (id: string) => void;
+  onFire?: (id: string) => void | Promise<void>;
   onStopDriving?: (id: string) => void;
 }
 
@@ -62,24 +62,66 @@ export interface StaffActionButtonsProps extends StaffActionHandlers {
 const clamp = (v: number, a = 0, b = 100) => Math.max(a, Math.min(b, v));
 
 /**
- * safeCallWithoutNativeConfirm
- * Temporarily override window.confirm to prevent native confirm popups while callback runs.
- * Restores the original window.confirm afterwards even if callback throws.
+ * safeSuppressNativeDialogs
+ * @description Temporarily override native browser dialog functions (confirm/alert/prompt)
+ * to prevent white native popups during an operation. This replaces window/globalThis confirm/alert/prompt
+ * and restores them after the callback completes. A grace period keeps replacements active briefly after
+ * callback completion to catch delayed calls.
  *
- * @param cb Function to execute while native confirm is suppressed
+ * @param cb Function to execute while native dialogs are suppressed
+ * @param graceMs optional grace period to keep suppression after completion (default 2000ms)
+ * @returns the callback result
  */
-function safeCallWithoutNativeConfirm(cb: () => void) {
-  if (typeof window === 'undefined' || typeof window.confirm !== 'function') {
-    try { cb(); } catch (e) { throw e; }
-    return;
+async function safeSuppressNativeDialogs<T>(cb: () => T | Promise<T>, graceMs = 2000): Promise<T | undefined> {
+  if (typeof globalThis === 'undefined' || typeof window === 'undefined') {
+    // Not in browser environment
+    return await Promise.resolve(cb());
   }
 
-  const originalConfirm = window.confirm;
+  const glob = globalThis as any;
+
+  // Save originals
+  const originals: Partial<Record<string, any>> = {
+    confirm: typeof glob.confirm === 'function' ? glob.confirm : undefined,
+    alert: typeof glob.alert === 'function' ? glob.alert : undefined,
+    prompt: typeof glob.prompt === 'function' ? glob.prompt : undefined,
+  };
+
+  // Replacements
+  const replacementConfirm = () => true;
+  const replacementAlert = () => undefined;
+  const replacementPrompt = () => null;
+
   try {
-    (window as any).confirm = () => true;
-    cb();
+    // Apply replacements broadly
+    try { glob.confirm = replacementConfirm; } catch { /* ignore */ }
+    try { glob.alert = replacementAlert; } catch { /* ignore */ }
+    try { glob.prompt = replacementPrompt; } catch { /* ignore */ }
+
+    // Also attempt on window object
+    try { (window as any).confirm = replacementConfirm; } catch { /* ignore */ }
+    try { (window as any).alert = replacementAlert; } catch { /* ignore */ }
+    try { (window as any).prompt = replacementPrompt; } catch { /* ignore */ }
+
+    const result = cb();
+    if (result && typeof (result as any).then === 'function') {
+      const awaited = await (result as any);
+      // keep suppression briefly to catch any async confirm the parent might schedule
+      await new Promise((res) => setTimeout(res, graceMs));
+      return awaited as T;
+    }
+    // synchronous result: still keep grace period
+    await new Promise((res) => setTimeout(res, graceMs));
+    return result as T;
   } finally {
-    try { (window as any).confirm = originalConfirm; } catch { /* ignore */ }
+    // Restore originals (best-effort)
+    try { if (originals.confirm !== undefined) glob.confirm = originals.confirm; } catch { /* ignore */ }
+    try { if (originals.alert !== undefined) glob.alert = originals.alert; } catch { /* ignore */ }
+    try { if (originals.prompt !== undefined) glob.prompt = originals.prompt; } catch { /* ignore */ }
+
+    try { if (originals.confirm !== undefined) (window as any).confirm = originals.confirm; } catch { /* ignore */ }
+    try { if (originals.alert !== undefined) (window as any).alert = originals.alert; } catch { /* ignore */ }
+    try { if (originals.prompt !== undefined) (window as any).prompt = originals.prompt; } catch { /* ignore */ }
   }
 }
 
@@ -91,7 +133,7 @@ function safeCallWithoutNativeConfirm(cb: () => void) {
  * - Resolves staff from GameContext company.staff first; fallback to snapshot if not present.
  * - Uses robust availability detection to enable/disable non-fire actions
  * - Fire and Stop Driving flows use in-UI modals (no browser-native confirm). When invoking
- *   parent callbacks (onStopDriving/onFire), we avoid calling them synchronously to prevent native confirm.
+ *   parent onFire/onStopDriving, we suppress native dialogs while those handlers run.
  */
 const StaffActionButtons: React.FC<StaffActionButtonsProps> = ({
   staffId,
@@ -102,8 +144,6 @@ const StaffActionButtons: React.FC<StaffActionButtonsProps> = ({
   onSkillImprove,
   onPromote,
   onFire,
-  // NOTE: we intentionally accept onStopDriving but WILL NOT call it synchronously
-  // to avoid native browser confirm that parent code might trigger.
   onStopDriving,
   isOwner = false,
   isDriving = false,
@@ -154,10 +194,6 @@ const StaffActionButtons: React.FC<StaffActionButtonsProps> = ({
   /**
    * isAvailable
    * Determine whether non-fire actions should be enabled.
-   *
-   * Precedence:
-   * 1) availableOverride prop if provided
-   * 2) staff.isOwner OR permissive status checks
    */
   const isAvailable = useMemo(() => {
     if (typeof availableOverride === 'boolean') return availableOverride;
@@ -170,9 +206,7 @@ const StaffActionButtons: React.FC<StaffActionButtonsProps> = ({
         const availTs = new Date(availRaw).getTime();
         if (!Number.isNaN(availTs) && availTs > Date.now()) return false;
       }
-    } catch {
-      // ignore parse errors
-    }
+    } catch { /* ignore parse errors */ }
 
     const statusRaw = (resolvedStaff?.status ?? '').toString().toLowerCase().trim();
 
@@ -240,7 +274,7 @@ const StaffActionButtons: React.FC<StaffActionButtonsProps> = ({
       alert('Please select a percent or enter a valid custom amount.');
       return;
     }
-    try { game.adjustSalary(staffId, newSalary); } catch (e) { console.error('[StaffActionButtons] adjustSalary failed', e); }
+    try { game.adjustSalary?.(staffId, newSalary); } catch (e) { console.error('[StaffActionButtons] adjustSalary failed', e); }
     if (onSalaryAdjust) { try { onSalaryAdjust(staffId, newSalary); } catch (e) { console.warn('[StaffActionButtons] onSalaryAdjust threw', e); } }
     try { game.setCurrentPage?.(game.gameState.currentPage); } catch { /* ignore */ }
     setShowSalaryModal(false);
@@ -295,7 +329,7 @@ const StaffActionButtons: React.FC<StaffActionButtonsProps> = ({
       const target = promoteTarget;
       if (onPromote) { try { onPromote(staffId, target); } catch (e) { console.warn('[StaffActionButtons] onPromote threw', e); } }
       else {
-        try { (game as any).promoteStaff(staffId, target); } catch (e) { try { game.promoteStaff?.(staffId, target); } catch (e2) { console.error('[StaffActionButtons] promote failed', e2); } }
+        try { (game as any).promoteStaff?.(staffId, target); } catch (e) { try { game.promoteStaff?.(staffId, target); } catch (e2) { console.error('[StaffActionButtons] promote failed', e2); } }
       }
     } catch (err) { console.error('[StaffActionButtons] handleApplyPromote failed', err); alert('Failed to promote. See console.'); }
     finally { setShowPromoteModal(false); }
@@ -398,11 +432,6 @@ const StaffActionButtons: React.FC<StaffActionButtonsProps> = ({
   /**
    * confirmStopDriving
    * Called when the user confirms the in-UI Stop Driving modal.
-   *
-   * Behavior:
-   * - Performs internal cleanup and does NOT call parent onStopDriving synchronously to avoid native confirm popups.
-   * - Archives the staff into company.archivedStaff and removes from active company.staff so the card disappears.
-   * - Emits an event so parents can react. Hides the DOM element as immediate feedback.
    */
   const confirmStopDriving = async () => {
     setStopDrivingLoading(true);
@@ -416,9 +445,9 @@ const StaffActionButtons: React.FC<StaffActionButtonsProps> = ({
       if (onStopDriving) {
         setTimeout(() => {
           try {
-            safeCallWithoutNativeConfirm(() => {
+            safeSuppressNativeDialogs(() => {
               try { onStopDriving(staffId); } catch (e) { console.warn('[StaffActionButtons] onStopDriving threw', e); }
-            });
+            }, 500);
           } catch (e) { console.warn('[StaffActionButtons] async onStopDriving wrapper failed', e); }
         }, 0);
       }
@@ -429,46 +458,118 @@ const StaffActionButtons: React.FC<StaffActionButtonsProps> = ({
       setStopDrivingResult('Failed to stop driving. See console.');
     } finally {
       setStopDrivingLoading(false);
-      // Hide modal shortly after success to keep UX snappy
       setTimeout(() => setShowStopDrivingModal(false), 400);
     }
   };
 
   /**
    * handleFire
-   * Fire is allowed at all times. Use an in-UI modal to confirm if desired.
-   *
-   * The in-UI modal will be shown. When confirming, if parent provided onFire we invoke it
-   * while suppressing native confirm to avoid white browser dialogs.
+   * Show the in-UI fire confirmation modal. This modal is the only confirmation the user should see.
    */
   const handleFire = () => {
     setFireResult(null);
     setShowFireModal(true);
   };
 
+  /**
+   * deductCompensation
+   * Best-effort deduction of compensation from company capital and persist state.
+   * @param amount compensation amount to deduct
+   * @returns boolean indicating whether deduction was successful
+   */
+  const deductCompensation = (amount: number): boolean => {
+    try {
+      const comp = game?.gameState?.company;
+      if (!comp) return false;
+      const currentCapital = typeof comp.capital === 'number' ? comp.capital : Number(comp.capital) || 0;
+      if (currentCapital < amount) return false;
+
+      // Mutate and persist in-memory state (best-effort)
+      try {
+        comp.capital = Math.round(currentCapital - amount);
+      } catch {
+        // fallback: set via setter if available
+        try { game.setCompany?.({ ...comp, capital: Math.round(currentCapital - amount) }); } catch { /* ignore */ }
+      }
+
+      // Attempt to notify game context consumers
+      try { game.setCompany?.(comp); } catch { /* ignore */ }
+      try { game.setGameState?.(game.gameState); } catch { /* ignore */ }
+      try { game.save?.(); } catch { /* ignore */ }
+
+      return true;
+    } catch (e) {
+      console.error('[StaffActionButtons] deductCompensation failed', e);
+      return false;
+    }
+  };
+
+  /**
+   * confirmFire
+   * Called when the user presses Confirm & Pay in the in-UI fire modal.
+   * Flow:
+   *  1) compute compensation
+   *  2) deduct compensation from capital (best-effort)
+   *  3) call parent onFire or internal API while suppressing native dialogs
+   *  4) perform cleanup and notify
+   */
   const confirmFire = async () => {
     setFireLoading(true);
     setFireResult(null);
 
     try {
-      // Prefer in-component firing logic to avoid native confirm side-effects
-      if (onFire) {
-        // Call parent handler but suppress native confirm while it runs
-        safeCallWithoutNativeConfirm(() => {
-          try { onFire(staffId); } catch (e) { console.warn('[StaffActionButtons] onFire threw', e); }
-        });
+      const monthlySalary = typeof resolvedStaff?.salary === 'number' ? resolvedStaff.salary : 0;
+      const compensation = Math.max(0, Math.round(monthlySalary * 3));
+      const companyCapital = game?.gameState?.company?.capital ?? 0;
 
-        // Dispatch event so other parts of the app can respond
-        try { window.dispatchEvent(new CustomEvent('staff:fired', { detail: { staffId } })); } catch { /* ignore */ }
-
-        setShowFireModal(false);
+      if (companyCapital < compensation) {
+        setFireResult('Insufficient funds to pay compensation.');
+        setFireLoading(false);
         return;
       }
 
-      try { game.fireStaff?.(staffId); } catch (e) { console.error('[StaffActionButtons] fireStaff failed', e); setFireResult('Failed to fire staff. See console.'); }
-      // Also attempt to clean assignment and nuke DOM for immediate feedback
-      performAssignmentCleanup(staffId);
-      setFireResult('Staff released.');
+      // Execute entire critical operation while suppressing native dialogs, keep suppression longer to catch delayed confirms
+      await safeSuppressNativeDialogs(async () => {
+        // 1) Deduct compensation (best-effort)
+        const deducted = deductCompensation(compensation);
+        if (!deducted) {
+          // If deduction failed but capital reported sufficient, still attempt; set message
+          console.warn('[StaffActionButtons] Compensation deduction reported failure despite sufficient capital.');
+        }
+
+        // 2) Call parent onFire if exists, otherwise fallback to internal API
+        if (onFire) {
+          try {
+            await Promise.resolve(onFire(staffId));
+          } catch (e) {
+            console.error('[StaffActionButtons] onFire threw', e);
+            // continue to fallback to internal API
+            try {
+              await Promise.resolve(game.fireStaff?.(staffId));
+            } catch (e2) {
+              console.error('[StaffActionButtons] fallback fireStaff failed', e2);
+              throw e2;
+            }
+          }
+        } else {
+          // No parent handler: call game API
+          try {
+            await Promise.resolve(game.fireStaff?.(staffId));
+          } catch (e) {
+            console.error('[StaffActionButtons] game.fireStaff failed', e);
+            throw e;
+          }
+        }
+
+        // 3) perform assignment cleanup and DOM removal for immediate UI feedback
+        try { performAssignmentCleanup(staffId); } catch (e) { console.warn('[StaffActionButtons] cleanup after fire failed', e); }
+
+        // 4) Dispatch fired event
+        try { window.dispatchEvent(new CustomEvent('staff:fired', { detail: { staffId } })); } catch { /* ignore */ }
+
+        // set result success
+        setFireResult('Staff released.');
+      }, 2000);
     } catch (err) {
       console.error('[StaffActionButtons] confirmFire failed', err);
       setFireResult('Failed to fire staff. See console.');

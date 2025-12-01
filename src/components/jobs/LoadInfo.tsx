@@ -1,116 +1,196 @@
 /**
  * LoadInfo.tsx
  *
- * Presentational component to display load summary for a job:
- * - Total load (tons)
- * - Tons delivered/assigned to the truck
- * - Remaining tons
- * - A compact progress bar with subtle color logic
+ * File-level:
+ * Robust Load options renderer that normalizes, deduplicates and displays load buttons.
  *
- * This component is defensive and will render friendly placeholders if values are missing.
+ * Purpose:
+ * - Parse incoming load option values (numbers or strings like "6t", "6.0", "6,0")
+ * - Remove duplicates based on numeric equivalence (so 6, "6t", "6.0" are treated as the same)
+ * - Preserve first-occurrence order when rendering options
+ * - If the maximum numeric value appeared more than once in the original raw list,
+ *   rename its button to "Full Load" (customizable via maxLabel)
+ * - Expose selection callback and keep visual layout identical to existing UI (Tailwind)
+ *
+ * Notes:
+ * - This implementation is defensive to handle varied input formats coming from legacy data.
+ * - All functions and the component include concise jsdoc comments as required.
  */
 
-import React from 'react';
+import React, { useMemo } from 'react';
 
-interface LoadInfoProps {
-  /** Total job load in tons (may be undefined) */
-  totalTons?: number | null;
-  /** Tons assigned/delivering by this truck (may be undefined) */
-  truckTons?: number | null;
-  /** Remaining tons for the job (may be undefined) */
-  remainingTons?: number | null;
-  /** Optional label for total (keeps flexibility) */
-  totalText?: string;
-}
+ /**
+  * LoadInfoProps
+  * @description Props accepted by LoadInfo component.
+  */
+ export interface LoadInfoProps {
+   /** Total load of the job in tons (canonical) */
+   totalTons: number;
+   /** Truck capacity (tons). Use 0 when unknown. */
+   truckTons?: number;
+   /** Remaining tons still to be loaded (computed by caller) */
+   remainingTons?: number;
+   /** Optional explicit load option values (tons). If not provided a sane default is used. */
+   loadOptions?: Array<number | string>;
+   /** Optional callback when a load option is selected. */
+   onSelectLoad?: (tons: number) => void;
+   /** Currently selected load (tons) */
+   selectedLoad?: number | null;
+   /** Label used for the maximum duplicate value, defaults to "Full Load" */
+   maxLabel?: string;
+ }
 
-/**
- * formatTon
- * @description Format numeric tons to one decimal or return fallback string.
- */
-function formatTon(v: number | null | undefined) {
-  if (typeof v === 'number' && !Number.isNaN(v)) {
-    return `${v.toFixed(1)} t`;
-  }
-  return '—';
-}
+ /**
+  * formatTons
+  * @description Format a numeric tons value for display (keeps 1 decimal if needed).
+  * @param v number
+  * @returns formatted string like "6t" or "4.5t"
+  */
+ function formatTons(v: number) {
+   if (Number.isInteger(v)) return `${v}t`;
+   return `${v.toFixed(1)}t`;
+ }
 
-/**
- * computeDeliveredPercent
- * @description Derive delivered percent from total vs remaining/truck values when possible.
- */
-function computeDeliveredPercent(total?: number | null, truck?: number | null, remaining?: number | null) {
-  if (typeof total === 'number' && total > 0) {
-    if (typeof remaining === 'number') {
-      const delivered = Math.max(0, total - remaining);
-      return Math.min(100, Math.round((delivered / total) * 100));
-    }
-    if (typeof truck === 'number') {
-      const delivered = Math.min(total, Math.max(0, truck));
-      return Math.min(100, Math.round((delivered / total) * 100));
-    }
-  }
-  return 0;
-}
+ /**
+  * parseNumericOption
+  * @description Parse a provided load option (number|string) to a numeric ton value.
+  * - Accepts numbers or strings like "6", "6t", "6.0", "6,0", " 6 t "
+  * - Returns NaN for unparseable values.
+  * @param opt number|string
+  * @returns number
+  */
+ function parseNumericOption(opt: number | string): number {
+   if (typeof opt === 'number') return Number.isFinite(opt) ? opt : NaN;
+   if (typeof opt !== 'string') return NaN;
+   // Extract first numeric-like token (allow comma decimal separators)
+   const cleaned = opt.trim().replace(/\s+/g, '');
+   // Replace comma decimal with dot (e.g. "6,5" => "6.5")
+   const normalized = cleaned.replace(',', '.');
+   // Match number (integer or decimal)
+   const m = normalized.match(/-?\d+(\.\d+)?/);
+   if (!m) return NaN;
+   const n = parseFloat(m[0]);
+   return Number.isFinite(n) ? n : NaN;
+ }
 
-/**
- * LoadInfo
- * @description Presentational card for job load information.
- */
-const LoadInfo: React.FC<LoadInfoProps> = ({ totalTons, truckTons, remainingTons, totalText }) => {
-  const deliveredPct = computeDeliveredPercent(totalTons, truckTons, remainingTons);
-  const totalLabel = totalText ?? formatTon(totalTons);
+ /**
+  * LoadInfo
+  * @description Presentational component that lists load options and shows totals.
+  */
+ const LoadInfo: React.FC<LoadInfoProps> = ({
+   totalTons,
+   truckTons = 0,
+   remainingTons = 0,
+   loadOptions,
+   onSelectLoad,
+   selectedLoad = null,
+   maxLabel = 'Full Load',
+ }) => {
+   /**
+    * computeOptions
+    * @description Build the final option list while preserving first-occurrence order.
+    * - Normalizes values to numeric tons, ignores non-finite values
+    * - Removes duplicates by numeric equality (first occurrence kept)
+    * - Keeps counts of original occurrences to decide when to apply maxLabel
+    */
+   const { uniqueValues, countsMap, maxValue } = useMemo(() => {
+     // Determine raw input array
+     const raw: Array<number | string> =
+       Array.isArray(loadOptions) && loadOptions.length > 0
+         ? loadOptions.slice()
+         : (() => {
+             const defaults: number[] = [1, 2, 4];
+             if (truckTons && !defaults.includes(truckTons)) defaults.push(truckTons);
+             return defaults;
+           })();
 
-  return (
-    <div className="bg-gradient-to-br from-slate-800/60 to-slate-800 rounded-lg border border-slate-700 p-3 w-full">
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-md bg-blue-500/10 flex items-center justify-center">
-              <svg className="w-5 h-5 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <rect x="3" y="7" width="18" height="13" rx="2" />
-                <path d="M16 3v4" />
-              </svg>
-            </div>
-            <div>
-              <div className="text-xs text-slate-400">Load</div>
-              <div className="text-lg font-semibold text-white">{totalLabel}</div>
-            </div>
-          </div>
-        </div>
+     // Parse each raw item to numeric value (NaN filtered later)
+     const parsed: number[] = raw.map((r) => parseNumericOption(r)).filter((n) => Number.isFinite(n) && n > 0);
 
-        <div className="ml-4 w-36">
-          <div className="text-xs text-slate-400">Delivered</div>
-          <div className="text-sm font-medium text-white">{deliveredPct}%</div>
-        </div>
-      </div>
+     // Build counts for parsed numeric values (counts consider numeric equality)
+     const counts = new Map<number, number>();
+     for (const v of parsed) {
+       counts.set(v, (counts.get(v) || 0) + 1);
+     }
 
-      {/* Progress bar */}
-      <div className="mt-3">
-        <div className="w-full bg-slate-700 rounded-full h-2">
-          <div
-            className={`h-2 rounded-full transition-all duration-500 ${deliveredPct >= 75 ? 'bg-emerald-400' : deliveredPct >= 40 ? 'bg-yellow-400' : 'bg-rose-400'}`}
-            style={{ width: `${deliveredPct}%` }}
-          />
-        </div>
-      </div>
+     // Build ordered unique array preserving first occurrence by numeric value
+     const seen = new Set<number>();
+     const uniq: number[] = [];
+     for (const v of parsed) {
+       if (!seen.has(v)) {
+         seen.add(v);
+         uniq.push(v);
+       }
+     }
 
-      {/* Details row */}
-      <div className="mt-3 grid grid-cols-3 gap-3 text-xs">
-        <div className="flex flex-col">
-          <span className="text-slate-400">Total</span>
-          <span className="text-white font-medium">{formatTon(totalTons)}</span>
-        </div>
-        <div className="flex flex-col">
-          <span className="text-slate-400">Truck delivering</span>
-          <span className="text-white font-medium">{formatTon(truckTons)}</span>
-        </div>
-        <div className="flex flex-col">
-          <span className="text-slate-400">Remaining</span>
-          <span className="text-white font-medium">{formatTon(remainingTons)}</span>
-        </div>
-      </div>
-    </div>
-  );
-};
+     const max = uniq.length > 0 ? Math.max(...uniq) : 0;
 
-export default LoadInfo;
+     return { uniqueValues: uniq, countsMap: counts, maxValue: max };
+   }, [loadOptions, truckTons]);
+
+   /**
+    * handleClick
+    * @description Forward selection to parent callback.
+    * @param v number
+    */
+   const handleClick = (v: number) => {
+     try {
+       if (typeof onSelectLoad === 'function') onSelectLoad(v);
+     } catch {
+       // swallow errors - presentational component
+     }
+   };
+
+   return (
+     <div>
+       {/* Header summary */}
+       <div className="flex items-center justify-between">
+         <div>
+           <div className="text-slate-400 text-xs">Load</div>
+           <div className="text-white font-medium">{totalTons ? `${totalTons} t` : '—'}</div>
+         </div>
+
+         <div className="text-right">
+           <div className="text-slate-400 text-xs">Remaining</div>
+           <div className="text-white font-medium">{remainingTons ? `${remainingTons} t` : '0 t'}</div>
+         </div>
+       </div>
+
+       {/* Options */}
+       <div className="mt-3 flex flex-wrap gap-2">
+         {uniqueValues.length === 0 ? (
+           <div className="text-slate-400 text-sm">No load options</div>
+         ) : (
+           uniqueValues.map((v) => {
+             // If this value is the maximum and there were duplicates for it in the original raw list,
+             // show the friendly "Full Load" label instead of repeated numeric text.
+             const wasDuplicate = (countsMap.get(v) || 0) > 1;
+             const isMax = v === maxValue && maxValue > 0;
+             const label = isMax && wasDuplicate ? maxLabel : formatTons(v);
+
+             const isSelected = selectedLoad !== null && Number(selectedLoad) === v;
+
+             return (
+               <button
+                 key={`load-${v}`}
+                 onClick={() => handleClick(v)}
+                 type="button"
+                 className={`text-sm rounded-md px-3 py-1 ${
+                   isSelected
+                     ? 'bg-amber-500 text-black border border-amber-400'
+                     : 'bg-slate-700 text-white border border-slate-600 hover:bg-slate-600'
+                 }`}
+                 aria-pressed={isSelected}
+                 title={isMax && isSelected ? `${label} — selected` : label}
+               >
+                 {label}
+               </button>
+             );
+           })
+         )}
+       </div>
+     </div>
+   );
+ };
+
+ export default LoadInfo;

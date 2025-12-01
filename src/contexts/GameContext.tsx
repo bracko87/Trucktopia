@@ -65,7 +65,14 @@ export interface GameContextType {
    *              Returns success + message. Training days default to 7..10.
    */
   startTraining: (staffId: string, skillName: string, days?: number) => { success: boolean; message: string };
+  /**
+   * upgradeHub
+   * @description Upgrade a hub (by id) to the next level if the company has sufficient capital.
+   *              Deducts cost from company.capital and persists the change.
+   */
+  upgradeHub: (hubId: string) => { success: boolean; message: string };
 }
+
 
 /**
  * Create the context

@@ -14,11 +14,73 @@
  * - Current Deliveries follow below in their own card area
  */
 
-import React, { useMemo } from 'react';
+/* eslint-disable react/jsx-no-bind */
+import React, { useMemo, useState } from 'react';
 import { useGame } from '../contexts/GameContext';
 import JobList from '../components/jobs/JobList';
 import JobCard from '../components/jobs/JobCard';
 import { Truck } from 'lucide-react';
+
+/**
+ * safeSuppressNativeDialogs
+ * @description Temporarily override native browser dialog functions (confirm/alert/prompt)
+ * to prevent white native popups during an operation. This replaces window.confirm/alert/prompt
+ * and globalThis equivalents and restores them after the callback completes.
+ *
+ * Important:
+ * - confirm() is overridden to always return true so any legacy confirm checks proceed.
+ * - alert/prompt become no-ops to avoid showing blocking native dialogs.
+ * - The replacement stays active through the awaited callback and for a small grace period
+ *   afterwards (default 1000ms) to cover async/queued confirm calls triggered by parent handlers.
+ *
+ * @param cb Function to execute while native dialogs are suppressed
+ * @param graceMs optional grace period to keep suppression after completion (default 1000ms)
+ * @returns the callback result
+ */
+async function safeSuppressNativeDialogs<T>(cb: () => T | Promise<T>, graceMs = 1000): Promise<T | undefined> {
+  if (typeof window === 'undefined' && typeof globalThis === 'undefined') {
+    return await Promise.resolve(cb());
+  }
+
+  const glob = typeof globalThis !== 'undefined' ? globalThis as any : (window as any);
+
+  const originals: Partial<Record<string, any>> = {
+    confirm: glob?.confirm,
+    alert: glob?.alert,
+    prompt: glob?.prompt
+  };
+
+  const replacementConfirm = () => true;
+  const replacementAlert = () => undefined;
+  const replacementPrompt = () => null;
+
+  try {
+    try { if (glob) glob.confirm = replacementConfirm; } catch {}
+    try { if (glob) glob.alert = replacementAlert; } catch {}
+    try { if (glob) glob.prompt = replacementPrompt; } catch {}
+
+    try { if (typeof window !== 'undefined') (window as any).confirm = replacementConfirm; } catch {}
+    try { if (typeof window !== 'undefined') (window as any).alert = replacementAlert; } catch {}
+    try { if (typeof window !== 'undefined') (window as any).prompt = replacementPrompt; } catch {}
+
+    const result = cb();
+    if (result && typeof (result as any).then === 'function') {
+      const awaited = await (result as any);
+      await new Promise(res => setTimeout(res, graceMs));
+      return awaited as T;
+    }
+    await new Promise(res => setTimeout(res, graceMs));
+    return result as T;
+  } finally {
+    try { if (glob && originals.confirm !== undefined) glob.confirm = originals.confirm; } catch {}
+    try { if (glob && originals.alert !== undefined) glob.alert = originals.alert; } catch {}
+    try { if (glob && originals.prompt !== undefined) glob.prompt = originals.prompt; } catch {}
+
+    try { if (typeof window !== 'undefined' && originals.confirm !== undefined) (window as any).confirm = originals.confirm; } catch {}
+    try { if (typeof window !== 'undefined' && originals.alert !== undefined) (window as any).alert = originals.alert; } catch {}
+    try { if (typeof window !== 'undefined' && originals.prompt !== undefined) (window as any).prompt = originals.prompt; } catch {}
+  }
+}
 
 /**
  * JobsPage
@@ -27,6 +89,9 @@ import { Truck } from 'lucide-react';
 const JobsPage: React.FC = () => {
   const { gameState, createCompany, completeJob, cancelJob } = useGame();
   const company = gameState?.company;
+
+  // Local transient notice to show non-blocking feedback (replaces native alert usage)
+  const [notice, setNotice] = useState<string | null>(null);
 
   // Guard: no company -> friendly message
   if (!company) {
@@ -61,52 +126,62 @@ const JobsPage: React.FC = () => {
   /**
    * startDelivery
    * @description Create a cloned in-flight delivery from a canonical accepted job.
+   * This function wraps operations in safeSuppressNativeDialogs to prevent any native
+   * alert/confirm from appearing due to legacy handlers.
    */
-  const startDelivery = (parentJobId: string) => {
+  const startDelivery = async (parentJobId: string) => {
     try {
       const parent = (company.activeJobs || []).find((j: any) => j.id === parentJobId && !j.parentJobId);
       if (!parent) {
-        alert('Parent job not found');
+        // non-blocking in-UI feedback
+        setNotice('Parent job not found');
+        setTimeout(() => setNotice(null), 3000);
         return;
       }
 
-      const ts = Date.now();
-      const cloneId = `job-clone-${parent.id}-${String(ts).slice(-6)}`;
-      const remaining = Math.max(0, (parent.weight || 0) - (parent.deliveredTons || 0));
-      const cloneJob: any = {
-        id: cloneId,
-        parentJobId: parent.id,
-        title: parent.title,
-        contractId: parent.contractId || `contract-${cloneId}`,
-        assignedTruck: parent.assignedTruck ?? '',
-        assignedTrailer: parent.assignedTrailer ?? '',
-        assignedDriver: parent.assignedDriver ?? '',
-        startTime: new Date(),
-        estimatedCompletion: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
-        progress: 0,
-        currentLocation: parent.origin,
-        status: 'picking-up',
-        value: parent.value || 0,
-        distance: parent.distance || 0,
-        origin: parent.origin,
-        destination: parent.destination,
-        deadline: parent.deadline,
-        cargoType: parent.cargoType,
-        weight: remaining,
-        deliveredTons: 0
-      };
+      await safeSuppressNativeDialogs(async () => {
+        const ts = Date.now();
+        const cloneId = `job-clone-${parent.id}-${String(ts).slice(-6)}`;
+        const remaining = Math.max(0, (parent.weight || 0) - (parent.deliveredTons || 0));
+        const cloneJob: any = {
+          id: cloneId,
+          parentJobId: parent.id,
+          title: parent.title,
+          contractId: parent.contractId || `contract-${cloneId}`,
+          assignedTruck: parent.assignedTruck ?? '',
+          assignedTrailer: parent.assignedTrailer ?? '',
+          assignedDriver: parent.assignedDriver ?? '',
+          startTime: new Date(),
+          estimatedCompletion: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
+          progress: 0,
+          currentLocation: parent.origin,
+          status: 'picking-up',
+          value: parent.value || 0,
+          distance: parent.distance || 0,
+          origin: parent.origin,
+          destination: parent.destination,
+          deadline: parent.deadline,
+          cargoType: parent.cargoType,
+          weight: remaining,
+          deliveredTons: 0
+        };
 
-      const updatedCompany: any = JSON.parse(JSON.stringify(company));
-      updatedCompany.activeJobs = Array.isArray(updatedCompany.activeJobs) ? updatedCompany.activeJobs : [];
-      updatedCompany.activeJobs = updatedCompany.activeJobs.map((j: any) => (j.id === parent.id ? { ...j, status: 'picking-up' } : j));
-      updatedCompany.activeJobs.push(cloneJob);
+        const updatedCompany: any = JSON.parse(JSON.stringify(company));
+        updatedCompany.activeJobs = Array.isArray(updatedCompany.activeJobs) ? updatedCompany.activeJobs : [];
+        updatedCompany.activeJobs = updatedCompany.activeJobs.map((j: any) => (j.id === parent.id ? { ...j, status: 'picking-up' } : j));
+        updatedCompany.activeJobs.push(cloneJob);
 
-      createCompany(updatedCompany);
-      alert('Delivery started.');
+        createCompany(updatedCompany);
+
+        // Non-blocking UX feedback (replaces native alert)
+        setNotice('Delivery started.');
+        setTimeout(() => setNotice(null), 3000);
+      });
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('startDelivery error', err);
-      alert('Failed to start delivery');
+      setNotice('Failed to start delivery');
+      setTimeout(() => setNotice(null), 3000);
     }
   };
 
@@ -120,7 +195,8 @@ const JobsPage: React.FC = () => {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('complete job error', err);
-      alert('Failed to complete job');
+      setNotice('Failed to complete job');
+      setTimeout(() => setNotice(null), 3000);
     }
   };
 
@@ -134,7 +210,8 @@ const JobsPage: React.FC = () => {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('cancel job error', err);
-      alert('Failed to cancel job');
+      setNotice('Failed to cancel job');
+      setTimeout(() => setNotice(null), 3000);
     }
   };
 
@@ -157,6 +234,13 @@ const JobsPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Transient notice (replaces native alert) */}
+      {notice && (
+        <div className="bg-amber-500/10 text-amber-200 border border-amber-500/20 rounded p-3 text-sm">
+          {notice}
+        </div>
+      )}
 
       {/* Accepted Jobs (stacked above deliveries) */}
       <section>

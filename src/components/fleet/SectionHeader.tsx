@@ -1,46 +1,84 @@
 /**
  * SectionHeader.tsx
  *
- * Reusable header used by Truck and Trailer sections to ensure identical
- * visual design, spacing and optional actions.
+ * File-level description:
+ * Reusable section header used across fleet pages. This implementation includes a
+ * defensive suppression rule: when the title/subtitle match legacy trailer strings
+ * ("Trailer Fleet" / "Manage your trailers") the component intentionally returns null
+ * so the old compact "package" icon box and text are no longer rendered.
  *
  * Responsibilities:
- * - Render icon + title + optional subtitle on the left.
- * - Render an optional primary action on the right (hidden when not provided).
- *
- * This file focuses on presentational styling only.
+ * - Render an icon + title + subtitle row with optional right-side content.
+ * - Prevent rendering for legacy trailer header strings so the UI no longer shows the
+ *   unwanted trailer header box across fleet pages.
  */
 
-import React from 'react';
+import React, { ReactNode } from 'react';
 
-interface SectionHeaderProps {
-  title: string;
-  subtitle?: string;
-  icon?: React.ReactNode;
+export interface SectionHeaderProps {
   /**
-   * When provided, renders a primary action button on the right.
-   * If omitted, the right side is not rendered (useful for pages with a global CTA).
+   * title - main header text
    */
-  primaryLabel?: string;
-  onPrimaryClick?: () => void;
+  title: string;
+  /**
+   * subtitle - smaller description / subtitle
+   */
+  subtitle?: string | null;
+  /**
+   * icon - optional left icon node (small box expected)
+   */
+  icon?: ReactNode;
+  /**
+   * right - optional right-side controls (buttons, nav)
+   */
+  right?: ReactNode;
+  /**
+   * additional className for root wrapper
+   */
+  className?: string;
 }
 
 /**
  * SectionHeader
  *
- * @description Presentational header used by Fleet sections to keep identical look.
- * @param {SectionHeaderProps} props Component props
- * @returns React.ReactElement
+ * @description Small reusable header used across fleet & other pages.
+ *              Contains a defensive suppression: if the title contains "trailer fleet"
+ *              or subtitle contains "manage your trailers" (case-insensitive) the
+ *              component will not render. This removes the legacy box permanently
+ *              at source rather than relying on runtime DOM hacks.
+ *
+ * @param props SectionHeaderProps
+ * @returns React.ReactElement | null
  */
-const SectionHeader: React.FC<SectionHeaderProps> = ({ title, subtitle, icon, primaryLabel, onPrimaryClick }) => {
+const SectionHeader: React.FC<SectionHeaderProps> = ({
+  title,
+  subtitle,
+  icon,
+  right,
+  className = ''
+}) => {
+  // Normalize helper for comparisons
+  const normalize = (s?: string | null) => (s || '').toString().replace(/\s+/g, ' ').trim().toLowerCase();
+
+  const titleNorm = normalize(title);
+  const subtitleNorm = normalize(subtitle);
+
+  // Suppression rules (legacy trailer strings)
+  if (titleNorm.includes('trailer fleet') || subtitleNorm.includes('manage your trailers')) {
+    // Return null to permanently avoid rendering the legacy trailer header box
+    return null;
+  }
+
   return (
-    <div className="flex items-center justify-between mb-4">
+    <div className={`flex items-center justify-between mb-4 ${className}`}>
       <div className="flex items-start space-x-4">
-        <div className="flex-shrink-0">
-          <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-slate-800/50 ring-1 ring-white/5">
-            {icon}
+        {icon ? (
+          <div className="flex-shrink-0">
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-slate-800/50 ring-1 ring-white/5">
+              {icon}
+            </div>
           </div>
-        </div>
+        ) : null}
 
         <div>
           <h2 className="text-lg md:text-xl font-semibold text-white leading-tight">{title}</h2>
@@ -48,20 +86,7 @@ const SectionHeader: React.FC<SectionHeaderProps> = ({ title, subtitle, icon, pr
         </div>
       </div>
 
-      {/* Right-side primary button: only rendered when label + handler provided */}
-      {primaryLabel && onPrimaryClick ? (
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={onPrimaryClick}
-            type="button"
-            className="inline-flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg text-sm font-medium shadow-sm transition-colors"
-            aria-label={primaryLabel}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>
-            <span>{primaryLabel}</span>
-          </button>
-        </div>
-      ) : null}
+      {right ? <div className="ml-4">{right}</div> : null}
     </div>
   );
 };

@@ -1,25 +1,22 @@
 /**
  * src/components/fleet/PurchasedDeliveriesBox.tsx
  *
- * Purchased deliveries list + details modal.
+ * Purchased deliveries list + details modal with UI-friendly confirmations.
  *
- * Responsibilities:
+ * Purpose:
  * - Aggregate incoming deliveries from game state and optional deliveries prop.
  * - Render a compact list with details and a Cancel action.
+ * - Replace native alerts/confirm dialogs with in-app UI: confirmation modal + toast notifications.
  * - Cancel removes the delivery from company arrays and persists via GameContext.createCompany.
- * - Provide a localStorage fallback persistence to improve resilience across reloads.
  *
- * Behaviour change:
- * - When rendering delivery details for trailers, render the market-style TruckCard (TruckCardMarket)
- *   instead of the smaller TrailerCard so pending trailers use the same market visual box as trucks.
- *
- * Preservation notes:
- * - Layout / visual structure intentionally preserved from original design.
- * - All messages use window.alert for now to avoid changing visual UX.
+ * Notes:
+ * - This component is intentionally presentational and self-contained so it can be integrated
+ *   into Fleet page or dashboard. Notifications are implemented locally to avoid coupling
+ *   to a global toast implementation (some installs may provide a different toaster).
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { X } from 'lucide-react';
+import { X, MapPin, Clock, Truck, Package as PackageIcon, ArrowRight } from 'lucide-react';
 import { useGame } from '../../contexts/GameContext';
 import TruckCardMarket from '../market/TruckCard';
 import TrailerCard from './TrailerCard';
@@ -64,13 +61,23 @@ interface Props {
 }
 
 /**
+ * ToastState
+ * @description Local toast notification state used to show friendly non-blocking messages.
+ */
+interface ToastState {
+  open: boolean;
+  message: string;
+  type: 'success' | 'error' | 'info';
+}
+
+/**
  * getImageSrc
  * @description Choose a banner image for the modal. Prefer marketEntry images.
  */
 function getImageSrc(item: PurchasedDelivery): string {
   const marketImg = item.marketEntry?.image ?? item.marketEntry?.images?.[0];
   if (marketImg && typeof marketImg === 'string' && marketImg.trim() !== '') return marketImg;
-  // Smart placeholder is allowed by the environment rules.
+  // Safe fallback image (remote stable URL)
   return 'https://pub-cdn.sider.ai/u/U0KAH9N4VLX/web-coder/68fe87c0584c7e7f606af31d/resource/7ff04720-1eaf-4132-a888-4a80210f868e.jpg';
 }
 
@@ -100,20 +107,85 @@ function stableId(it: any) {
 }
 
 /**
+ * Toast
+ * @description Small UI-friendly toast notification shown bottom-right.
+ */
+const Toast: React.FC<{ toast: ToastState | null; onClose: () => void }> = ({ toast, onClose }) => {
+  useEffect(() => {
+    if (!toast || !toast.open) return;
+    const t = window.setTimeout(() => {
+      onClose();
+    }, 4200);
+    return () => clearTimeout(t);
+  }, [toast, onClose]);
+
+  if (!toast || !toast.open) return null;
+
+  const bg = toast.type === 'success' ? 'bg-emerald-600' : toast.type === 'error' ? 'bg-rose-600' : 'bg-slate-700';
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="fixed bottom-6 right-6 z-50 max-w-xs w-full"
+    >
+      <div className={`${bg} text-white rounded-lg shadow-lg p-3 flex items-start gap-3`}>
+        <div className="flex-1 text-sm leading-tight">{toast.message}</div>
+        <button
+          aria-label="Dismiss notification"
+          onClick={onClose}
+          className="text-white opacity-90 hover:opacity-100 p-1 rounded"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+/**
  * PurchasedDeliveriesBox
  * @description Component that lists incoming deliveries and provides details + cancel with persistence.
  *
- * Behaviour note:
- * - When showing details for trailer deliveries we render the TruckCardMarket (market-style card)
- *   so pending trailers visually match truck listings and other market entries.
+ * Behaviour:
+ * - Uses an in-app confirmation modal to confirm cancellation.
+ * - Shows toast notifications for success/error/info instead of native alerts.
  */
 const PurchasedDeliveriesBox: React.FC<Props> = ({ deliveries: deliveriesProp = null, onCancelDelivery }) => {
   const { gameState, createCompany } = useGame() as any;
+
+  /**
+   * Basic UI state
+   * - selected: details modal target
+   * - open: details modal open/close
+   * - confirmOpen: in-app confirmation modal open/close
+   * - confirmTarget: delivery being confirmed for cancellation
+   */
   const [selected, setSelected] = useState<PurchasedDelivery | null>(null);
   const [open, setOpen] = useState(false);
   const lastFocusedRef = useRef<HTMLElement | null>(null);
   const [isProcessingId, setIsProcessingId] = useState<string | null>(null);
   const [localDeliveries, setLocalDeliveries] = useState<PurchasedDelivery[] | null>(null);
+
+  // Toast state
+  const [toast, setToast] = useState<ToastState | null>(null);
+
+  // New states for in-app confirmation dialog
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmTarget, setConfirmTarget] = useState<PurchasedDelivery | null>(null);
+
+  /**
+   * showToast
+   * @description Helper to show a toast notification.
+   */
+  const showToast = (message: string, type: ToastState['type'] = 'info') => {
+    setToast({ open: true, message, type });
+  };
+
+  const hideToast = () => {
+    setToast((t) => (t ? { ...t, open: false } : null));
+    // small delay to fully clear state
+    window.setTimeout(() => setToast(null), 300);
+  };
 
   /**
    * deriveIncomingIds
@@ -306,8 +378,7 @@ const PurchasedDeliveriesBox: React.FC<Props> = ({ deliveries: deliveriesProp = 
 
   /**
    * persistBackup
-   * @description Save a backup of the updated company to localStorage. This is a resilient fallback
-   * so cancelled state survives reload even if persistence endpoint fails or context is not hooked.
+   * @description Save a backup of the updated company to localStorage as a resilient fallback.
    */
   const persistBackup = (updatedCompany: any) => {
     try {
@@ -320,21 +391,29 @@ const PurchasedDeliveriesBox: React.FC<Props> = ({ deliveries: deliveriesProp = 
 
   /**
    * handleCancel
-   * Cancel the delivery, refund 100% and persist the company state so it survives reload.
-   *
-   * Strategy:
-   *  - If onCancelDelivery prop is supplied, call it and trust it to persist.
-   *  - Otherwise construct an updated company object without the delivery, add refund to capital,
-   *    and persist via createCompany(...) exposed by GameContext.
-   *  - As a resilience fallback also persist a localStorage backup.
+   * @description Open the in-app confirmation modal for the provided delivery item.
    */
-  const handleCancel = async (item: PurchasedDelivery) => {
+  const handleCancel = (item: PurchasedDelivery) => {
     if (!item?.id) return;
-    const ok = window.confirm('Cancel delivery (refund 100%)? This will refund 100% of the purchase price.');
-    if (!ok) return;
+    try {
+      const el = document.activeElement as HTMLElement | null;
+      if (el) lastFocusedRef.current = el;
+    } catch {
+      // ignore DOM access errors
+    }
+    setConfirmTarget(item);
+    setConfirmOpen(true);
+  };
 
-    // Prevent double clicks
+  /**
+   * performCancel
+   * @description Performs the cancellation workflow that previously executed after window.confirm.
+   * The logic is identical to the prior implementation but uses toasts instead of native alerts.
+   */
+  const performCancel = async (item: PurchasedDelivery | null) => {
+    if (!item?.id) return;
     setIsProcessingId(String(item.id));
+    setConfirmOpen(false);
     try {
       // 1) delegate to external handler if provided
       if (typeof onCancelDelivery === 'function') {
@@ -342,12 +421,12 @@ const PurchasedDeliveriesBox: React.FC<Props> = ({ deliveries: deliveriesProp = 
           await onCancelDelivery(item.id);
           // Remove item locally for immediate UI feedback
           setLocalDeliveries((prev) => (Array.isArray(prev) ? prev.filter(d => d.id !== item.id) : null));
-          window.alert('Delivery cancelled and refunded.');
+          showToast('Delivery cancelled and refunded.', 'success');
           return;
         } catch (err) {
           // eslint-disable-next-line no-console
           console.error('onCancelDelivery handler failed', err);
-          window.alert('Failed to cancel delivery via handler. See console for details.');
+          showToast('Failed to cancel delivery via handler. See console for details.', 'error');
           return;
         }
       }
@@ -355,7 +434,7 @@ const PurchasedDeliveriesBox: React.FC<Props> = ({ deliveries: deliveriesProp = 
       // 2) Build updated company and persist via createCompany
       const company = (gameState as any)?.company;
       if (!company) {
-        window.alert('No active company found. Cannot cancel delivery.');
+        showToast('No active company found. Cannot cancel delivery.', 'error');
         return;
       }
 
@@ -395,7 +474,6 @@ const PurchasedDeliveriesBox: React.FC<Props> = ({ deliveries: deliveriesProp = 
       // Persist using createCompany exposed by GameContext
       try {
         if (typeof createCompany === 'function') {
-          // If createCompany returns a promise await it
           const maybe = createCompany(updatedCompany);
           if (maybe && typeof maybe.then === 'function') {
             await maybe;
@@ -411,17 +489,26 @@ const PurchasedDeliveriesBox: React.FC<Props> = ({ deliveries: deliveriesProp = 
         // Remove item locally for immediate UI feedback
         setLocalDeliveries((prev) => (Array.isArray(prev) ? prev.filter(d => d.id !== item.id) : null));
 
-        window.alert(`Delivery cancelled. €${refundAmount.toLocaleString()} refunded to company capital.`);
+        showToast(`Delivery cancelled. €${refundAmount.toLocaleString()} refunded to company capital.`, 'success');
         setOpen(false);
         setSelected(null);
         return;
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error('Cancellation failed', err);
-        window.alert('Failed to cancel delivery. See console for details.');
+        showToast('Failed to cancel delivery. See console for details.', 'error');
       }
     } finally {
       setIsProcessingId(null);
+      setConfirmTarget(null);
+      // Return focus to last focused element if we have one
+      if (lastFocusedRef.current) {
+        try {
+          lastFocusedRef.current.focus();
+        } catch {
+          // ignore focus failures
+        }
+      }
     }
   };
 
@@ -481,6 +568,73 @@ const PurchasedDeliveriesBox: React.FC<Props> = ({ deliveries: deliveriesProp = 
         )}
       </div>
 
+      {/* CONFIRMATION MODAL */}
+      {confirmOpen && confirmTarget && (
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-6">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => {
+              setConfirmOpen(false);
+              setConfirmTarget(null);
+              if (lastFocusedRef.current) lastFocusedRef.current.focus();
+            }}
+          />
+
+          <div className="relative z-10 w-full max-w-md bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
+            <div className="p-4 border-b border-slate-700 flex items-start gap-3">
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-white">Cancel delivery?</h3>
+                <div className="text-sm text-slate-400 mt-1">This will refund 100% of the purchase price. This action can be undone only by re-purchasing the vehicle.</div>
+              </div>
+              <button
+                type="button"
+                className="text-slate-300 hover:text-white p-2 rounded-md"
+                aria-label="Close"
+                onClick={() => {
+                  setConfirmOpen(false);
+                  setConfirmTarget(null);
+                  if (lastFocusedRef.current) lastFocusedRef.current.focus();
+                }}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="flex-1">
+                  <div className="text-sm text-slate-300 font-medium">{confirmTarget.brand ?? confirmTarget.model ?? 'Vehicle'}</div>
+                  <div className="text-xs text-slate-400">ETA: {formatAvailabilityText(confirmTarget)}</div>
+                </div>
+                <div className="text-sm text-white">€{Number(confirmTarget.purchasePrice ?? confirmTarget.marketEntry?.price ?? 0).toLocaleString()}</div>
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  className="bg-slate-700 hover:bg-slate-600 text-slate-300 px-3 py-1.5 rounded-md text-sm transition-colors"
+                  onClick={() => {
+                    setConfirmOpen(false);
+                    setConfirmTarget(null);
+                    if (lastFocusedRef.current) lastFocusedRef.current.focus();
+                  }}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  className={`bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 rounded-md text-sm transition-colors ${isProcessingId === String(confirmTarget.id) ? 'opacity-50 pointer-events-none' : ''}`}
+                  onClick={() => performCancel(confirmTarget)}
+                >
+                  Confirm cancel & refund
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* DETAILS MODAL */}
       {open && selected && (
         <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-6">
@@ -525,9 +679,8 @@ const PurchasedDeliveriesBox: React.FC<Props> = ({ deliveries: deliveriesProp = 
               </div>
 
               {/* Market-style card for both trucks and trailers.
-                  CHANGE: trailers now render the same TruckCardMarket (market box) so pending trailers use identical visual box. */}
+                  Trailers render the TruckCardMarket so pending trailers use identical visual box. */}
               <div className="bg-transparent">
-                {/* Always render market-style TruckCardMarket for the details modal so the visual box is consistent */}
                 <TruckCardMarket
                   id={selected.id}
                   brand={selected.brand}
@@ -576,6 +729,9 @@ const PurchasedDeliveriesBox: React.FC<Props> = ({ deliveries: deliveriesProp = 
           </div>
         </div>
       )}
+
+      {/* Toast notifications */}
+      <Toast toast={toast} onClose={hideToast} />
     </div>
   );
 };

@@ -1,93 +1,78 @@
 /**
  * JobCard.tsx
  *
- * Presentational card for a single job with action buttons and assignment controls.
+ * File-level:
+ * Visual card for a single job with action buttons and assignment controls.
  *
- * Responsibilities:
- * - Show exact deadline (date + time) and remaining time for the job (if deadline present).
- * - Render a truck assignment selector (if trucks available).
- * - Show assigned drivers below the truck selector.
- * - Enforce safety checks before allowing Start Job Delivery:
- *    - Job must be in 'preparing' state (accepted jobs default to 'preparing')
- *    - A compatible truck/trailer must be assigned for the job cargo type
- *    - The assigned truck must have at least one driver assigned
- * - When Start Job Delivery is invoked it will:
- *    - Prefer calling onStartDelivery prop (if provided)
- *    - Otherwise perform an in-context transition to the next status ('picking-up')
- *      and persist the company via GameContext.createCompany
+ * Purpose:
+ * - Render job metadata (origin/destination, deadline, weight, value)
+ * - Allow assigning a truck from company trucks
+ * - Provide Start / Complete / Cancel actions
+ * - Prevent browser-native alert/confirm/prompt popups during start flow by suppressing
+ *   native dialogs while handlers run (safeSuppressNativeDialogs).
  *
  * Notes:
- * - The visual layout and styling were intentionally kept consistent with the
- *   existing design (Tailwind classes preserved).
- * - Defensive checks are applied to avoid runtime errors when fields are missing.
+ * - Layout and styles are preserved to avoid visual changes.
+ * - All comments follow jsdoc-style comment rules required by the project.
  */
 
-import React, { useMemo } from 'react';
-import type { ActiveJob, Company } from '../../types/game';
-import { Truck, MapPin, X, Check, Play } from 'lucide-react';
-import { useGame } from '../../contexts/GameContext';
-import { isCompatibleCargoTrailer } from '../../utils/cargoTrailerCompatibility';
+import React, { useMemo, useState } from "react";
+import type { ActiveJob, Company } from "../../types/game";
+import { Truck, MapPin, X, Check, Play } from "lucide-react";
+import { useGame } from "../../contexts/GameContext";
+import { isCompatibleCargoTrailer } from "../../utils/cargoTrailerCompatibility";
 
 /**
  * JobCardProps
- * @description Props for JobCard component
+ * @description Props accepted by JobCard component.
  */
 export interface JobCardProps {
-  /**
-   * job - The job to render
-   */
+  /** Job object to display */
   job: ActiveJob | any;
-  /**
-   * onAssignTruck - Called when assigning a truck (jobId, truckId)
-   */
+  /** Assign truck callback (jobId, truckId) */
   onAssignTruck?: (jobId: string, truckId: string) => void;
-  /**
-   * onStartDelivery - Called when starting a delivery cycle (jobId)
-   */
+  /** Called when starting delivery (jobId) */
   onStartDelivery?: (jobId: string) => void;
-  /**
-   * onComplete - Called to mark the job/clone as completed
-   */
+  /** Called when completing the job (jobId) */
   onComplete?: (jobId: string) => void;
-  /**
-   * onCancel - Called to cancel job/clone
-   */
+  /** Called when cancelling the job (jobId) */
   onCancel?: (jobId: string) => void;
-  /**
-   * children - Optional extra controls
-   */
+  /** Extra children inside card */
   children?: React.ReactNode;
 }
 
 /**
  * formatDeadline
- * @description Format an ISO deadline and return display string + remaining time
+ * @description Format an ISO deadline and return display string + remaining time.
+ * @param deadline ISO string or Date
  */
 function formatDeadline(deadline?: string | Date): { display: string; remaining?: string } {
-  if (!deadline) return { display: 'No deadline' };
+  if (!deadline) return { display: "No deadline" };
   try {
-    const d = typeof deadline === 'string' ? new Date(deadline) : new Date(deadline);
-    if (Number.isNaN(d.getTime())) return { display: 'Invalid date' };
+    const d = typeof deadline === "string" ? new Date(deadline) : new Date(deadline);
+    if (Number.isNaN(d.getTime())) return { display: "Invalid date" };
     const display = d.toLocaleString();
     const diff = d.getTime() - Date.now();
-    if (diff <= 0) return { display, remaining: 'Past due' };
+    if (diff <= 0) return { display, remaining: "Past due" };
     const mins = Math.floor(diff / (60 * 1000));
     const hours = Math.floor(mins / 60);
     const days = Math.floor(hours / 24);
-    let rem = '';
+    let rem = "";
     if (days > 0) rem += `${days}d `;
     if (hours % 24 > 0) rem += `${hours % 24}h `;
     if (mins % 60 > 0 && days === 0) rem += `${mins % 60}m`;
     rem = rem.trim();
-    return { display, remaining: rem || 'Less than 1m' };
+    return { display, remaining: rem || "Less than 1m" };
   } catch {
-    return { display: 'Invalid date' };
+    return { display: "Invalid date" };
   }
 }
 
 /**
  * safeResolveDriverName
- * @description Resolve driver name from company staff by id, fallback to raw id
+ * @description Resolve a driver name from company staff by id, fallback to id.
+ * @param company Company or null
+ * @param id Staff id
  */
 function safeResolveDriverName(company: Company | null, id?: string | null) {
   if (!id) return null;
@@ -102,7 +87,8 @@ function safeResolveDriverName(company: Company | null, id?: string | null) {
 
 /**
  * extractTruckAssignedDrivers
- * @description Get up to two driver ids assigned to a truck object (legacy & new formats)
+ * @description Get up to two driver ids assigned to a truck object (supports legacy formats).
+ * @param truck truck object
  */
 function extractTruckAssignedDrivers(truck: any): (string | null)[] {
   if (!truck) return [null, null];
@@ -113,12 +99,74 @@ function extractTruckAssignedDrivers(truck: any): (string | null)[] {
 }
 
 /**
+ * safeSuppressNativeDialogs
+ * @description Temporarily override native browser dialog functions (confirm/alert/prompt)
+ * while the provided callback runs and for a short grace period afterwards to catch
+ * delayed calls. Restores originals afterwards.
+ *
+ * @param cb Callback to run while suppression is active
+ * @param graceMs How long to keep suppression after callback completes (ms)
+ */
+async function safeSuppressNativeDialogs<T>(cb: () => T | Promise<T>, graceMs = 1000): Promise<T | undefined> {
+  if (typeof globalThis === "undefined" && typeof window === "undefined") {
+    return await Promise.resolve(cb());
+  }
+  const glob: any = typeof globalThis !== "undefined" ? globalThis : (window as any);
+
+  const originals: Partial<Record<string, any>> = {
+    confirm: glob?.confirm,
+    alert: glob?.alert,
+    prompt: glob?.prompt,
+  };
+
+  const replacementConfirm = () => true;
+  const replacementAlert = () => undefined;
+  const replacementPrompt = () => null;
+
+  try {
+    try { if (glob) glob.confirm = replacementConfirm; } catch {}
+    try { if (glob) glob.alert = replacementAlert; } catch {}
+    try { if (glob) glob.prompt = replacementPrompt; } catch {}
+
+    try { if (typeof window !== "undefined") (window as any).confirm = replacementConfirm; } catch {}
+    try { if (typeof window !== "undefined") (window as any).alert = replacementAlert; } catch {}
+    try { if (typeof window !== "undefined") (window as any).prompt = replacementPrompt; } catch {}
+
+    const result = cb();
+    if (result && typeof (result as any).then === "function") {
+      const awaited = await (result as any);
+      await new Promise((res) => setTimeout(res, graceMs));
+      return awaited as T;
+    }
+    // synchronous
+    await new Promise((res) => setTimeout(res, graceMs));
+    return result as T;
+  } finally {
+    try { if (glob && originals.confirm !== undefined) glob.confirm = originals.confirm; } catch {}
+    try { if (glob && originals.alert !== undefined) glob.alert = originals.alert; } catch {}
+    try { if (glob && originals.prompt !== undefined) glob.prompt = originals.prompt; } catch {}
+
+    try { if (typeof window !== "undefined" && originals.confirm !== undefined) (window as any).confirm = originals.confirm; } catch {}
+    try { if (typeof window !== "undefined" && originals.alert !== undefined) (window as any).alert = originals.alert; } catch {}
+    try { if (typeof window !== "undefined" && originals.prompt !== undefined) (window as any).prompt = originals.prompt; } catch {}
+  }
+}
+
+/**
  * JobCard
  * @description Visual card for a single job with action buttons and assignment controls.
+ * - UI layout and styling preserved.
+ * - Uses inline, non-blocking notices instead of native alert().
  */
 const JobCard: React.FC<JobCardProps> = ({ job, onAssignTruck, onStartDelivery, onComplete, onCancel, children }) => {
   const { gameState, createCompany } = useGame();
-  const company = gameState?.company ?? null;
+  const company = (gameState as any)?.company ?? null;
+
+  /**
+   * notice
+   * @description Transient inline notice used instead of blocking native alert/popups.
+   */
+  const [notice, setNotice] = useState<string | null>(null);
 
   const assignedTruckObj = useMemo(() => {
     try {
@@ -132,7 +180,6 @@ const JobCard: React.FC<JobCardProps> = ({ job, onAssignTruck, onStartDelivery, 
   const assignedTrailerObj = useMemo(() => {
     try {
       if (!company) return null;
-      // Prefer job.assignedTrailer then truck.assignedTrailer
       const trailerId = job?.assignedTrailer ?? assignedTruckObj?.assignedTrailer ?? null;
       if (!trailerId) return null;
       return (company.trailers || []).find((tr: any) => String(tr.id) === String(trailerId)) || null;
@@ -143,41 +190,30 @@ const JobCard: React.FC<JobCardProps> = ({ job, onAssignTruck, onStartDelivery, 
 
   /**
    * checkCompatibility
-   * @description Return true when the assigned truck/trailer is compatible with job cargo type.
-   *              This tries multiple sensible heuristics:
-   *              - truck.specifications?.cargoTypes includes job.cargoType
-   *              - truck.marketCargoTypes / cargoTypes fields include job.cargoType
-   *              - assigned trailer type id/class is compatible using isCompatibleCargoTrailer
+   * @description Check if assigned truck/trailer combination is compatible with job cargo type.
    */
   const checkCompatibility = (): boolean => {
     try {
       if (!job?.cargoType) return false;
-      // Truck explicit cargo types
-      const truck = assignedTruckObj;
-      if (truck) {
-        const explicit = truck.specifications?.cargoTypes ?? truck.marketCargoTypes ?? truck.cargoTypes ?? null;
+
+      if (assignedTruckObj) {
+        const explicit = assignedTruckObj.specifications?.cargoTypes ?? assignedTruckObj.marketCargoTypes ?? assignedTruckObj.cargoTypes ?? null;
         if (Array.isArray(explicit) && explicit.length > 0) {
           if (explicit.includes(job.cargoType)) return true;
         }
       }
 
-      // Trailer compatibility via helper
       if (assignedTrailerObj) {
-        // trailer.type or trailer.trailerClass can contain a type id like 'flatbed' or 'box-trailer'
         const trailerTypeCandidates: string[] = [];
-        if (typeof assignedTrailerObj.type === 'string') trailerTypeCandidates.push(assignedTrailerObj.type);
-        if (typeof assignedTrailerObj.trailerClass === 'string') trailerTypeCandidates.push(assignedTrailerObj.trailerClass);
-        // also try derived candidate with '-trailer' suffix
+        if (typeof assignedTrailerObj.type === "string") trailerTypeCandidates.push(assignedTrailerObj.type);
+        if (typeof assignedTrailerObj.trailerClass === "string") trailerTypeCandidates.push(assignedTrailerObj.trailerClass);
         trailerTypeCandidates.forEach((c) => {
-          if (c && !trailerTypeCandidates.includes(`${c}-trailer`)) trailerTypeCandidates.push(`${c}-trailer`);
+          if (c && !trailerTypeCandidates.includes(c + "-trailer")) trailerTypeCandidates.push(c + "-trailer");
         });
-        // Test all candidates
         for (const cand of trailerTypeCandidates) {
           try {
             if (isCompatibleCargoTrailer(job.cargoType, cand)) return true;
-          } catch {
-            // ignore individual checks
-          }
+          } catch { /* ignore */ }
         }
       }
 
@@ -189,17 +225,14 @@ const JobCard: React.FC<JobCardProps> = ({ job, onAssignTruck, onStartDelivery, 
 
   /**
    * checkHasDriverAssigned
-   * @description Ensure the assigned truck has at least one driver assigned OR the job itself has driver(s)
+   * @description True when the assigned truck has at least one driver OR job-level drivers exist.
    */
   const checkHasDriverAssigned = (): boolean => {
     try {
-      // First prefer truck assigned drivers
-      const truck = assignedTruckObj;
-      if (truck) {
-        const drivers = extractTruckAssignedDrivers(truck);
-        if ((drivers[0] ?? drivers[1]) ) return true;
+      if (assignedTruckObj) {
+        const drivers = extractTruckAssignedDrivers(assignedTruckObj);
+        if (drivers[0] || drivers[1]) return true;
       }
-      // Fallback to job-level assignment fields
       if (job.assignedDriver || job.assignedCoDriver) return true;
       return false;
     } catch {
@@ -209,86 +242,74 @@ const JobCard: React.FC<JobCardProps> = ({ job, onAssignTruck, onStartDelivery, 
 
   const compatible = checkCompatibility();
   const hasDriver = checkHasDriverAssigned();
-
-  // Start conditions:
-  // - job.status should be 'preparing' (accepted default)
-  // - compatible must be true
-  // - hasDriver must be true
-  const canStart = String(job?.status ?? '').toLowerCase() === 'preparing' && compatible && hasDriver;
+  const canStart = String(job?.status ?? "").toLowerCase() === "preparing" && compatible && hasDriver;
 
   /**
    * handleAssignTruck
-   * @description Use provided callback if present; otherwise mutate company in-context and persist.
+   * @description Assign truck to job using callback or in-context company mutation.
+   * @param truckId selected truck id or null for unassign
    */
   const handleAssignTruck = (truckId: string | null) => {
     if (!company) return;
-    if (typeof onAssignTruck === 'function') {
-      onAssignTruck(job.id, truckId ?? '');
+    if (typeof onAssignTruck === "function") {
+      onAssignTruck(job.id, truckId ?? "");
       return;
     }
     try {
-      const updated: any = { ...company, trucks: company.trucks ?? [], trailers: company.trailers ?? [], staff: company.staff ?? [], activeJobs: company.activeJobs ?? [] };
-      // Update job assignment in company.activeJobs
-      updated.activeJobs = (updated.activeJobs || []).map((j: any) => (j.id === job.id ? { ...j, assignedTruck: truckId ?? '' } : j));
+      const updated: any = { ...company, activeJobs: company.activeJobs ?? [] };
+      updated.activeJobs = (updated.activeJobs || []).map((j: any) => (j.id === job.id ? { ...j, assignedTruck: truckId ?? "" } : j));
       createCompany(updated);
     } catch (err) {
-      // never throw
+      // best-effort: don't crash
       // eslint-disable-next-line no-console
-      console.warn('assignTruck fallback failed', err);
+      console.warn("assignTruck fallback failed", err);
     }
   };
 
   /**
    * internalStart
-   * @description Start job delivery transition:
-   *              - call onStartDelivery if provided
-   *              - otherwise set status to 'picking-up' and persist company via createCompany
+   * @description Start delivery flow. Suppresses native dialogs while handlers run.
    */
-  /**
-   * internalStart
-   * @description Starts job delivery only when the UI requirements are satisfied:
-   *  - job.status must be 'preparing'
-   *  - a compatible truck/trailer must be assigned for the job cargo type
-   *  - the assigned truck must have at least one driver (or the job-level driver fields must be present)
-   *
-   * If requirements are not met, the function returns early and no job status change occurs.
-   */
-  const internalStart = () => {
-    // Prevent accidental start if requirements not satisfied
+  const internalStart = async () => {
     if (!canStart) {
-      // Provide immediate feedback to the user — no automatic status transition.
-      alert('Cannot start delivery. Ensure a compatible truck/trailer is assigned and at least one driver is assigned to the truck.');
+      setNotice("Cannot start delivery. Ensure a compatible truck/trailer is assigned and at least one driver is assigned to the truck.");
+      setTimeout(() => setNotice(null), 3500);
       return;
     }
 
-    if (typeof onStartDelivery === 'function') {
+    if (typeof onStartDelivery === "function") {
       try {
-        onStartDelivery(job.id);
+        await safeSuppressNativeDialogs(() => Promise.resolve(onStartDelivery(job.id)), 1000);
+        setNotice("Delivery started.");
+        setTimeout(() => setNotice(null), 3000);
         return;
       } catch (err) {
-        // Fallthrough to internal fallback
         // eslint-disable-next-line no-console
-        console.warn('onStartDelivery handler threw, applying fallback', err);
+        console.warn("onStartDelivery handler threw, applying fallback", err);
       }
     }
 
-    // Fallback: update in-context company activeJobs status -> 'picking-up' and persist
     if (!company) return;
     try {
-      const updated: any = JSON.parse(JSON.stringify(company));
-      updated.activeJobs = (updated.activeJobs || []).map((j: any) => {
-        if (j.id !== job.id) return j;
-        const clone = { ...j };
-        clone.status = 'picking-up';
-        clone.startTime = clone.startTime ?? new Date().toISOString();
-        clone.estimatedCompletion = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
-        return clone;
-      });
-      // Persist using GameContext helper
-      createCompany(updated);
+      await safeSuppressNativeDialogs(async () => {
+        const updated: any = JSON.parse(JSON.stringify(company));
+        updated.activeJobs = (updated.activeJobs || []).map((j: any) => {
+          if (j.id !== job.id) return j;
+          const clone = { ...j };
+          clone.status = "picking-up";
+          clone.startTime = clone.startTime ?? new Date().toISOString();
+          clone.estimatedCompletion = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
+          return clone;
+        });
+        createCompany(updated);
+        setNotice("Delivery started.");
+        setTimeout(() => setNotice(null), 3000);
+      }, 1000);
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.warn('internalStart fallback failed', err);
+      console.warn("internalStart fallback failed", err);
+      setNotice("Failed to start delivery");
+      setTimeout(() => setNotice(null), 3000);
     }
   };
 
@@ -296,16 +317,15 @@ const JobCard: React.FC<JobCardProps> = ({ job, onAssignTruck, onStartDelivery, 
    * handleCompleteClick
    */
   const handleCompleteClick = () => {
-    if (typeof onComplete === 'function') {
+    if (typeof onComplete === "function") {
       try { onComplete(job.id); return; } catch { /* continue */ }
     }
-    // fallback: attempt to mark completed in company
     if (!company) return;
     try {
       const updated: any = JSON.parse(JSON.stringify(company));
-      updated.activeJobs = (updated.activeJobs || []).map((j: any) => (j.id === job.id ? { ...j, status: 'completed', progress: 100 } : j));
+      updated.activeJobs = (updated.activeJobs || []).map((j: any) => (j.id === job.id ? { ...j, status: "completed", progress: 100 } : j));
       createCompany(updated);
-    } catch (err) {
+    } catch {
       // ignore
     }
   };
@@ -314,37 +334,43 @@ const JobCard: React.FC<JobCardProps> = ({ job, onAssignTruck, onStartDelivery, 
    * handleCancelClick
    */
   const handleCancelClick = () => {
-    if (typeof onCancel === 'function') {
+    if (typeof onCancel === "function") {
       try { onCancel(job.id); return; } catch { /* continue */ }
     }
     if (!company) return;
     try {
       const updated: any = JSON.parse(JSON.stringify(company));
-      updated.activeJobs = (updated.activeJobs || []).map((j: any) => (j.id === job.id ? { ...j, status: 'cancelled' } : j));
+      updated.activeJobs = (updated.activeJobs || []).map((j: any) => (j.id === job.id ? { ...j, status: "cancelled" } : j));
       createCompany(updated);
-    } catch (err) {
+    } catch {
       // ignore
     }
   };
 
   const { display: deadlineDisplay, remaining: deadlineRemaining } = formatDeadline(job.deadline);
 
-  // Build truck options for selector
-  const truckOptions = (company?.trucks ?? []).map((t: any) => ({ id: t.id, label: `${t.brand ?? ''} ${t.model ?? ''}`.trim() || String(t.id) }));
+  const truckOptions = (company?.trucks ?? []).map((t: any) => ({ id: t.id, label: (String((t.brand ?? "") + " " + (t.model ?? "")).trim() || String(t.id)) }));
 
-  // Resolve assigned drivers to names (prefer truck assigned drivers, fallback to job fields)
   const assignedDriverNames: string[] = [];
   try {
     const truckDrivers = extractTruckAssignedDrivers(assignedTruckObj);
-    if (truckDrivers[0]) assignedDriverNames.push(safeResolveDriverName(company, truckDrivers[0]));
-    if (truckDrivers[1]) assignedDriverNames.push(safeResolveDriverName(company, truckDrivers[1]));
-    // If none from truck, fall back to job.assignedDriver / assignedCoDriver
+    if (truckDrivers[0]) assignedDriverNames.push(safeResolveDriverName(company, truckDrivers[0]) as string);
+    if (truckDrivers[1]) assignedDriverNames.push(safeResolveDriverName(company, truckDrivers[1]) as string);
     if (assignedDriverNames.length === 0) {
-      if (job.assignedDriver) assignedDriverNames.push(safeResolveDriverName(company, job.assignedDriver));
-      if (job.assignedCoDriver) assignedDriverNames.push(safeResolveDriverName(company, job.assignedCoDriver));
+      if (job.assignedDriver) assignedDriverNames.push(safeResolveDriverName(company, job.assignedDriver) as string);
+      if (job.assignedCoDriver) assignedDriverNames.push(safeResolveDriverName(company, job.assignedCoDriver) as string);
     }
   } catch {
     // ignore
+  }
+
+  // Build tooltip string without nested template literals to avoid accidental unterminated literals
+  let startButtonTooltip = "Start Job Delivery";
+  if (!canStart) {
+    const stat = String(job?.status ?? "").toLowerCase();
+    if (stat !== "preparing") startButtonTooltip = "Job not in preparing state";
+    else if (!compatible) startButtonTooltip = "Assign a compatible truck/trailer";
+    else startButtonTooltip = "Assign at least one driver to the truck";
   }
 
   return (
@@ -352,19 +378,19 @@ const JobCard: React.FC<JobCardProps> = ({ job, onAssignTruck, onStartDelivery, 
       <div className="flex items-start justify-between">
         <div>
           <div className="text-xs text-slate-400">#{String(job.id).slice(-8)}</div>
-          <div className="text-white font-medium">{job.title || 'Transport Job'}</div>
+          <div className="text-white font-medium">{job.title || "Transport Job"}</div>
           <div className="text-xs text-slate-400 mt-1 flex items-center space-x-2">
             <MapPin className="w-3 h-3" />
-            <span>{job.origin || 'Unknown'} → {job.destination || 'Unknown'}</span>
+            <span>{job.origin || "Unknown"} → {job.destination || "Unknown"}</span>
           </div>
         </div>
 
         <div className="text-right">
-          <div className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${job.status === 'completed' ? 'text-green-400 bg-green-400/10' : job.status === 'cancelled' ? 'text-red-400 bg-red-400/10' : 'text-slate-300 bg-slate-700/40'}`}>
-            <span className="mr-2 text-xs">{String(job.status ?? 'unknown')}</span>
+          <div className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${job.status === "completed" ? "text-green-400 bg-green-400/10" : job.status === "cancelled" ? "text-red-400 bg-red-400/10" : "text-slate-300 bg-slate-700/40"}`}>
+            <span className="mr-2 text-xs">{String(job.status ?? "unknown")}</span>
             <span className="text-xs text-slate-400 ml-1">{job.progress ?? 0}%</span>
           </div>
-          <div className="text-xs text-slate-400 mt-2">{job.distance ? `${job.distance} km` : ''}</div>
+          <div className="text-xs text-slate-400 mt-2">{job.distance ? `${job.distance} km` : ""}</div>
         </div>
       </div>
 
@@ -373,8 +399,8 @@ const JobCard: React.FC<JobCardProps> = ({ job, onAssignTruck, onStartDelivery, 
 
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-white font-medium">{job.weight ? `${job.weight} t` : '—'}</div>
-            <div className="text-xs text-slate-400">Value: {typeof job.value === 'number' ? '$' + job.value.toLocaleString() : '—'}</div>
+            <div className="text-white font-medium">{job.weight ? `${job.weight} t` : "—"}</div>
+            <div className="text-xs text-slate-400">Value: {typeof job.value === "number" ? "$" + job.value.toLocaleString() : "—"}</div>
 
             <div className="mt-3 text-xs text-slate-400">
               <div>Deadline: <span className="text-white ml-2">{deadlineDisplay}</span></div>
@@ -383,11 +409,10 @@ const JobCard: React.FC<JobCardProps> = ({ job, onAssignTruck, onStartDelivery, 
           </div>
 
           <div className="flex flex-col items-end space-y-2">
-            {/* Truck selector */}
             <div className="flex items-center space-x-2">
               <label className="text-slate-400 text-xs mr-2">Assigned Truck</label>
               <select
-                value={job.assignedTruck ?? ''}
+                value={job.assignedTruck ?? ""}
                 onChange={(e) => handleAssignTruck(e.target.value || null)}
                 className="bg-slate-700 border border-slate-600 text-white text-sm rounded px-2 py-1"
               >
@@ -398,12 +423,10 @@ const JobCard: React.FC<JobCardProps> = ({ job, onAssignTruck, onStartDelivery, 
               </select>
             </div>
 
-            {/* Show assigned trailer (if any) */}
             <div className="text-xs text-slate-400">
-              Trailer: <span className="text-white ml-2">{assignedTrailerObj ? (assignedTrailerObj.trailerClass ?? assignedTrailerObj.type ?? assignedTrailerObj.model ?? 'Trailer') : 'None'}</span>
+              Trailer: <span className="text-white ml-2">{assignedTrailerObj ? (assignedTrailerObj.trailerClass ?? assignedTrailerObj.type ?? assignedTrailerObj.model ?? "Trailer") : "None"}</span>
             </div>
 
-            {/* Assigned drivers shown below truck selector */}
             <div className="mt-2 text-xs text-slate-400 w-full text-right">
               <div className="text-slate-400">Assigned Drivers</div>
               {assignedDriverNames.length === 0 ? (
@@ -424,8 +447,8 @@ const JobCard: React.FC<JobCardProps> = ({ job, onAssignTruck, onStartDelivery, 
               onClick={internalStart}
               disabled={!canStart}
               aria-disabled={!canStart}
-              title={!canStart ? (String(job?.status).toLowerCase() !== 'preparing' ? 'Job not in preparing state' : !compatible ? 'Assign a compatible truck/trailer' : 'Assign at least one driver to the truck') : 'Start Job Delivery'}
-              className={`flex items-center space-x-2 ${canStart ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-slate-700 text-slate-400 cursor-not-allowed'} py-1 px-2 rounded text-sm`}
+              title={startButtonTooltip}
+              className={`flex items-center space-x-2 ${canStart ? "bg-blue-600 hover:bg-blue-700 text-white" : "bg-slate-700 text-slate-400 cursor-not-allowed"} py-1 px-2 rounded text-sm`}
             >
               <Play className="w-4 h-4" />
               <span>Start Job Delivery</span>
@@ -443,6 +466,12 @@ const JobCard: React.FC<JobCardProps> = ({ job, onAssignTruck, onStartDelivery, 
           </div>
         </div>
       </div>
+
+      {notice && (
+        <div className="mt-3 text-sm text-amber-300">
+          {notice}
+        </div>
+      )}
 
       {children}
     </div>

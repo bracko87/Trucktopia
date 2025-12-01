@@ -1,13 +1,17 @@
 /**
  * src/components/fleet/TruckSection.tsx
  *
- * Truck section container. Renders the truck fleet area (header + list or empty message).
+ * Truck section container. Renders the truck fleet area (optional header + list or empty message).
  *
  * Responsibilities:
  * - Display Truck fleet using SectionHeader and TruckCard components.
  * - Be defensive: always use arrays for trucks/trailers so .length/.map never read undefined.
  * - Ensure trailer-like items are excluded from the Truck list using the shared isTrailer heuristic.
  * - Ensure incoming / purchased items are excluded from the truck fleet until delivery completes.
+ *
+ * Notes:
+ * - Added `showHeader` prop so callers (pages) can opt-out of the small SectionHeader
+ *   (icon + title + subtitle) when needed (e.g. Garage page). Default behaviour is preserved.
  */
 
 import React from 'react';
@@ -29,7 +33,8 @@ interface TrailerRef {
 /**
  * Props
  * @description Optional props so the component can be mounted without data and will fall back to context.
- * showPrimaryButton - when false, the SectionHeader will be rendered without the purchase CTA.
+ * - showPrimaryButton - when false, the SectionHeader will be rendered without the purchase CTA.
+ * - showHeader - when false, the entire small SectionHeader (icon + title + subtitle) is hidden.
  */
 interface Props {
   trucks?: TruckCardData[] | null;
@@ -37,18 +42,24 @@ interface Props {
   onSellTruck?: (truckId: string) => void;
   onPurchaseTruck?: () => void;
   showPrimaryButton?: boolean;
+  showHeader?: boolean;
 }
 
 /**
  * TruckSection
- * @description Renders the Trucks box (header + list or empty message). Defensive - never reads .length of undefined.
+ * @description Renders the Trucks box (optional header + list or empty message).
+ *              Defensive - never reads .length of undefined.
+ *
+ * @param props Props component props
+ * @returns React.ReactElement
  */
 const TruckSection: React.FC<Props> = ({
   trucks: trucksProp = null,
   trailers: trailersProp = null,
   onSellTruck,
   onPurchaseTruck,
-  showPrimaryButton = true
+  showPrimaryButton = true,
+  showHeader = true
 }) => {
   const navigate = useNavigate();
 
@@ -68,7 +79,6 @@ const TruckSection: React.FC<Props> = ({
     gameState = undefined;
   }
 
-  // Resolve trucks/trailers from context in a tolerant manner and ensure arrays.
   const trucksFromContext: TruckCardData[] =
     Array.isArray(gameState?.company?.trucks)
       ? gameState.company.trucks
@@ -87,7 +97,6 @@ const TruckSection: React.FC<Props> = ({
       ? gameState.company.fleet.trailers
       : [];
 
-  // Final arrays used for rendering - guarantee arrays to avoid reading .length on undefined.
   const trucks: TruckCardData[] = Array.isArray(trucksProp)
     ? trucksProp
     : Array.isArray(trucksFromContext)
@@ -135,15 +144,16 @@ const TruckSection: React.FC<Props> = ({
 
   return (
     <section className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-      <SectionHeader
-        title="Truck Fleet"
-        subtitle="Manage your truck fleet and maintenance"
-        icon={<TruckIcon className="w-6 h-6 text-orange-400" />}
-        /* Only provide the primary CTA props when showPrimaryButton is true.
-           SectionHeader implementation should hide the button if primaryLabel/onPrimaryClick are not provided. */
-        primaryLabel={showPrimaryButton ? 'Purchase Truck' : undefined}
-        onPrimaryClick={showPrimaryButton ? handlePrimaryClick : undefined}
-      />
+      {showHeader && (
+        <SectionHeader
+          title="Truck Fleet"
+          subtitle="Manage your truck fleet and maintenance"
+          icon={<TruckIcon className="w-6 h-6 text-orange-400" />}
+          primaryLabel={showPrimaryButton ? 'Purchase Truck' : undefined}
+          onPrimaryClick={showPrimaryButton ? handlePrimaryClick : undefined}
+          visible={showHeader}
+        />
+      )}
 
       <div className="space-y-3">
         {filteredTrucks.length === 0 ? (
@@ -153,7 +163,6 @@ const TruckSection: React.FC<Props> = ({
         ) : (
           <div className="grid gap-3">
             {filteredTrucks.map((t) => {
-              // find assigned trailer safely; ignore trailers that are incoming
               const assigned =
                 trailers.find((tr) => String(tr.id) === String((t as any).assignedTrailer)) ?? null;
               const assignedLabel = assigned

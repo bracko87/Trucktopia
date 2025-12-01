@@ -36,6 +36,19 @@ import MarketRedirectListener from './components/MarketRedirectListener';
 
 // New: Trailer normalizer helper - moves misplaced trailers into company.trailers
 import TrailerNormalizer from './components/fleet/TrailerNormalizer';
+import HideTrailerFleetHeader from './components/fleet/HideTrailerFleetHeader';
+import HideTrailerPackageIconBox from './components/fleet/HideTrailerPackageIconBox';
+import ForceHidePackageIconBox from './components/fleet/ForceHidePackageIconBox';
+import IncomingDeliveryFinalizer from './components/fleet/IncomingDeliveryFinalizer';
+import ManifestSynchronizer from './components/ManifestSynchronizer';
+
+// New background synchronizer for hubs
+import HubsSynchronizer from './components/infrastructure/HubsSynchronizer';
+import AdminForceMainHubReset from './components/admin/AdminForceMainHubReset';
+import GrantFundsToAllUsers from './components/admin/GrantFundsToAllUsers';
+import ForceGrantFundsToUser from './components/admin/ForceGrantFundsToUser';
+
+import { manifest as rulesManifest } from './data/game-rules-engines';
 
 import './data/trailer-cleanup';
 import './data/trailer-additions';
@@ -73,6 +86,9 @@ import CargoTrailerCompatibility from './pages/CargoTrailerCompatibility';
 // Migration page
 import Migration from './pages/Migration';
 
+// New Infrastructure page
+import Infrastructure from './pages/Infrastructure';
+
 /**
  * App
  * @description Root application component: mounts providers, layout and routing.
@@ -97,10 +113,18 @@ function App() {
 
             {/* Trailer normalizer: ensure trailers purchased into trucks are moved to trailers */}
             <TrailerNormalizer />
+            {/* Helper: aggressively hide legacy "Trailer Fleet" small headers across the DOM */}
+            <HideTrailerFleetHeader /> 
+            <TrailerNormalizer />
 
-            {/* NOTE: EngineStarter and StaffConditionEngineStarter intentionally NOT mounted.
-                This ensures no background engine runs automatically and keeps job/staff mutations
-                explicit via UI actions and GameContext methods. */}
+            {/* IncomingDeliveryFinalizer: periodically moves delivered incoming items into fleet arrays */}
+            <IncomingDeliveryFinalizer />
+
+            {/* ManifestSynchronizer: persist runtime manifest overrides so admin UI reflects mounted engines */}
+            <ManifestSynchronizer mountedEngineIds={rulesManifest.engines.map((e) => e.id)} />
+
+            {/* HubsSynchronizer: normalize hubs into company state when found in other gameState locations */}
+            <HubsSynchronizer />
 
             <Routes>
               <Route path="/" element={<Home />} />
@@ -132,6 +156,10 @@ function App() {
               <Route path="/contract-jobs" element={<ContractJobs />} />
               <Route path="/cargo-trailer-compatibility" element={<CargoTrailerCompatibility />} />
               <Route path="/migration" element={<Migration />} />
+
+              {/* Infrastructure route */}
+              <Route path="/infrastructure" element={<Infrastructure />} />
+
               {/* Redirect unknown routes to home */}
               <Route path="*" element={<Home />} />
             </Routes>

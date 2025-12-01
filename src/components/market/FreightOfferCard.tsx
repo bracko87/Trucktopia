@@ -1,45 +1,61 @@
 /**
- * Freight offer card component with collapsible load section
- * Updated to display a "City" badge for in-city offers (origin === destination or flagged).
+ * FreightOfferCard.tsx
+ *
+ * Visual and interactive freight offer card with load selection controls.
+ *
+ * Responsibilities:
+ * - Render single freight offer details
+ * - Provide collapsible load selection UI with quick-select weights
+ * - Ensure duplicate numeric weight options are not shown (e.g. avoid two "16t" buttons)
+ * - Ensure Full Load pays the full price and smaller loads are priced as a proportional
+ *   share of the full load price.
+ *
+ * Notes:
+ * - Price model: compute canonical full-load price using the existing algorithm,
+ *   then evaluate any partial load as (fullPrice * selectedWeight / offer.weight)
+ *   which guarantees the full load yields the full price and smaller loads scale
+ *   proportionally.
  */
 
-import React, { useState } from 'react'
-import { Button } from '../ui/button'
-import { ChevronDown, ChevronUp, Truck, User, Weight, MapPin, DollarSign, Clock } from 'lucide-react'
-import { getCountryCode } from '../../utils/countryMapping'
-import { getCountryName } from '../../utils/countryNames'
+import React, { useState } from 'react';
+import { Button } from '../ui/button';
+import { ChevronDown, ChevronUp, Truck, User, Weight, MapPin, DollarSign, Clock } from 'lucide-react';
+import { getCountryCode } from '../../utils/countryMapping';
+import { getCountryName } from '../../utils/countryNames';
 
 /**
  * FreightOffer shape for component props
  */
 interface FreightOffer {
-  id: string
-  title: string
-  client: string
-  value: number
-  distance: number
-  origin: string
-  destination: string
-  originCountry: string
-  destinationCountry: string
-  cargoType: string
-  trailerType: string
-  weight: number
-  experience: number
-  jobType: 'local' | 'state' | 'international' | string
-  tags: string[]
-  deadline: string
-  allowPartialLoad: boolean
-  remainingWeight: number
-  cityJob?: boolean
+  id: string;
+  title: string;
+  client: string;
+  value: number;
+  distance: number;
+  origin: string;
+  destination: string;
+  originCountry: string;
+  destinationCountry: string;
+  cargoType: string;
+  trailerType: string;
+  weight: number;
+  experience: number;
+  jobType: 'local' | 'state' | 'international' | string;
+  tags: string[];
+  deadline: string;
+  allowPartialLoad: boolean;
+  remainingWeight: number;
+  cityJob?: boolean;
+  loadOptions?: Array<number | string>;
+  loadMaxWasDuplicate?: boolean;
 }
 
 /**
  * Props for FreightOfferCard
  */
 interface FreightOfferCardProps {
-  offer: FreightOffer
-  onAcceptJob: (jobData: any, acceptedWeight: number) => void
+  offer: FreightOffer;
+  onAcceptJob: (jobData: any, acceptedWeight: number) => void;
 }
 
 /**
@@ -48,113 +64,155 @@ interface FreightOfferCardProps {
  * Adds a small "City" badge next to title when the offer is an in-city offer.
  */
 export default function FreightOfferCard({ offer, onAcceptJob }: FreightOfferCardProps) {
-  const [selectedWeight, setSelectedWeight] = useState<number>(offer.remainingWeight)
-  const [showLoadSection, setShowLoadSection] = useState(false)
+  const [selectedWeight, setSelectedWeight] = useState<number>(offer.remainingWeight);
+  const [showLoadSection, setShowLoadSection] = useState(false);
 
   /**
-   * calculatePrice
-   * Calculate price for given weight using the same model the generator uses.
+   * calculateCanonicalFullPrice
+   * @description Calculate canonical price for the full job weight using the original model.
+   * This function is intentionally the authoritative calculation for a full load price.
+   * @param fullWeight number - the canonical full load weight (tons)
+   * @returns number - rounded price for the full load
    */
-  const calculatePrice = (weight: number) => {
-    const baseRatePerKm = 2.5 // Base rate per km for trucking
+  const calculateCanonicalFullPrice = (fullWeight: number) => {
+    const baseRatePerKm = 2.5; // Base rate per km for trucking
 
     // Weight multipliers (economies of scale)
-    let weightMultiplier = 1.0
-    if (weight <= 8) weightMultiplier = 1.4  // Premium for small loads
-    else if (weight <= 16) weightMultiplier = 1.0 // Standard
-    else weightMultiplier = 0.8 // Economy for large loads
+    let weightMultiplier = 1.0;
+    if (fullWeight <= 8) weightMultiplier = 1.4; // Premium for small loads
+    else if (fullWeight <= 16) weightMultiplier = 1.0; // Standard
+    else weightMultiplier = 0.8; // Economy for large loads
 
     // Job type multipliers (complexity and time)
-    let jobMultiplier = 1.0
-    if (offer.jobType === 'state') jobMultiplier = 1.6
-    else if (offer.jobType === 'international') jobMultiplier = 2.2
+    let jobMultiplier = 1.0;
+    if (offer.jobType === 'state') jobMultiplier = 1.6;
+    else if (offer.jobType === 'international') jobMultiplier = 2.2;
 
     // Cargo type bonuses (special handling requirements)
-    let cargoBonus = 1.0
-    if ((offer.cargoType || '').includes('Frozen') || (offer.cargoType || '').includes('Refrigerated')) cargoBonus = 1.25
-    if ((offer.cargoType || '').includes('Hazardous')) cargoBonus = 1.35
-    if ((offer.cargoType || '').includes('Bulk')) cargoBonus = 1.1
-    if ((offer.cargoType || '').includes('Construction')) cargoBonus = 1.15
-    if ((offer.cargoType || '').includes('Heavy')) cargoBonus = 1.3
+    let cargoBonus = 1.0;
+    if ((offer.cargoType || '').includes('Frozen') || (offer.cargoType || '').includes('Refrigerated')) cargoBonus = 1.25;
+    if ((offer.cargoType || '').includes('Hazardous')) cargoBonus = 1.35;
+    if ((offer.cargoType || '').includes('Bulk')) cargoBonus = 1.1;
+    if ((offer.cargoType || '').includes('Construction')) cargoBonus = 1.15;
+    if ((offer.cargoType || '').includes('Heavy')) cargoBonus = 1.3;
 
     // Calculate base price
-    const basePrice = (offer.distance * baseRatePerKm) * weightMultiplier * jobMultiplier * cargoBonus
+    const basePrice = (offer.distance * baseRatePerKm) * weightMultiplier * jobMultiplier * cargoBonus;
 
     // Add weight component (per ton)
-    const weightComponent = weight * 15
+    const weightComponent = fullWeight * 15;
 
-    return Math.round(basePrice + weightComponent)
-  }
+    return Math.round(basePrice + weightComponent);
+  };
+
+  /**
+   * calculateProportionalPrice
+   * @description Ensure that full load has canonical full price and partial loads
+   * are proportional to the full load price.
+   * - fullPrice computed via calculateCanonicalFullPrice(offer.weight)
+   * - partial price = round(fullPrice * (selectedWeight / offer.weight))
+   * This keeps pricing consistent no matter which minor multipliers the canonical
+   * calculation applied to the full load.
+   * @param weight number - selected weight (tons)
+   * @returns number - rounded price for this selected weight
+   */
+  const calculateProportionalPrice = (weight: number) => {
+    const canonicalFull = calculateCanonicalFullPrice(offer.weight || weight);
+    // Avoid divide-by-zero; if offer.weight is falsy fall back to proportional by selected weight
+    if (!offer.weight || offer.weight <= 0) {
+      return Math.round(canonicalFull * (weight / Math.max(weight, 1)));
+    }
+    return Math.round((canonicalFull * weight) / offer.weight);
+  };
 
   const handleWeightChange = (weight: number) => {
-    setSelectedWeight(weight)
-  }
+    setSelectedWeight(weight);
+  };
 
   const handleAcceptJob = () => {
     if (selectedWeight > offer.remainingWeight) {
-      alert('Cannot accept more weight than available')
-      return
+      alert('Cannot accept more weight than available');
+      return;
     }
 
-    const calculatedValue = calculatePrice(selectedWeight)
+    const calculatedValue = calculateProportionalPrice(selectedWeight);
     onAcceptJob({
       ...offer,
       calculatedValue
-    }, selectedWeight)
-  }
+    }, selectedWeight);
+  };
 
   const getExperienceColor = (exp: number) => {
-    if (exp === 0) return 'text-green-400'
-    if (exp <= 40) return 'text-orange-400'
-    return 'text-purple-400'
-  }
+    if (exp === 0) return 'text-green-400';
+    if (exp <= 40) return 'text-orange-400';
+    return 'text-purple-400';
+  };
 
   const getJobTypeColor = (type: string) => {
     switch (type) {
-      case 'local': return 'bg-green-500/20 text-green-400 border-green-500/30'
-      case 'state': return 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-      case 'international': return 'bg-purple-500/20 text-purple-400 border-purple-500/30'
-      default: return 'bg-slate-500/20 text-slate-400 border-slate-500/30'
+      case 'local': return 'bg-green-500/20 text-green-400 border-green-500/30';
+      case 'state': return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
+      case 'international': return 'bg-purple-500/20 text-purple-400 border-purple-500/30';
+      default: return 'bg-slate-500/20 text-slate-400 border-slate-500/30';
     }
-  }
+  };
 
   const getDeadlineColor = (deadline: string) => {
     if (deadline.includes('16h') || deadline.includes('22h') || deadline.includes('24h'))
-      return 'text-red-400'
+      return 'text-red-400';
     if (deadline.includes('36h') || deadline.includes('48h'))
-      return 'text-orange-400'
-    return 'text-green-400'
-  }
+      return 'text-orange-400';
+    return 'text-green-400';
+  };
 
   const getAvailableWeightText = () => {
     if (offer.remainingWeight === offer.weight) {
-      return `${offer.weight} tons available`
+      return `${offer.weight} tons available`;
     }
-    return `${offer.remainingWeight}/${offer.weight} tons available`
-  }
+    return `${offer.remainingWeight}/${offer.weight} tons available`;
+  };
 
   /**
    * getFlagUrl
    * Build a flag URL by country code. Defensive in case code is missing.
    */
   const getFlagUrl = (cityName: string) => {
-    const countryCode = getCountryCode(cityName) || ''
+    const countryCode = getCountryCode(cityName) || '';
     // If no country code, return a blank 1x1 to avoid broken image
-    return countryCode ? `https://flagcdn.com/w40/${countryCode}.png` : 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs='
-  }
+    return countryCode ? `https://flagcdn.com/w40/${countryCode}.png` : 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+  };
 
   /**
    * isCityOffer
    * Determine if this offer is an in-city job. Use multiple checks for robustness.
    */
   const isCityOffer = (): boolean => {
-    if (offer.cityJob === true) return true
-    if (Array.isArray(offer.tags) && offer.tags.includes('City')) return true
-    if (typeof offer.origin === 'string' && typeof offer.destination === 'string' && offer.origin === offer.destination) return true
-    return false
-  }
+    if (offer.cityJob === true) return true;
+    if (Array.isArray(offer.tags) && offer.tags.includes('City')) return true;
+    if (typeof offer.origin === 'string' && typeof offer.destination === 'string' && offer.origin === offer.destination) return true;
+    return false;
+  };
 
-  const isCity = isCityOffer()
+  const isCity = isCityOffer();
+
+  /**
+   * buildQuickWeights
+   * @description Build the quick-select weight buttons ensuring no duplicates.
+   * - Preserve first occurrence order from the fixed list
+   * - Append the remainingWeight only if not already included
+   */
+  const buildQuickWeights = (): number[] => {
+    const fixed = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20];
+    // Keep only those <= remainingWeight
+    const filtered = fixed.filter(w => w <= offer.remainingWeight);
+    // If remainingWeight is not already present, append it
+    if (!filtered.includes(offer.remainingWeight)) {
+      filtered.push(offer.remainingWeight);
+    }
+    return filtered;
+  };
+
+  const quickWeights = buildQuickWeights();
 
   return (
     <div className="bg-slate-800 rounded-xl p-6 border border-slate-700 hover:border-slate-600 transition-all duration-200">
@@ -164,14 +222,12 @@ export default function FreightOfferCard({ offer, onAcceptJob }: FreightOfferCar
           <div className="flex items-center gap-3 mb-2">
             <h3 className="text-xl font-bold text-white truncate">
               {offer.title}
-              {/* City badge - small, unobtrusive pill */}
               {isCity && (
                 <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-400 text-black">
                   City
                 </span>
               )}
             </h3>
-            {/* Deadline display */}
             <div className={`flex items-center gap-1 ${getDeadlineColor(offer.deadline)}`}>
               <Clock className="w-4 h-4" />
               <span className="text-sm font-medium">{offer.deadline}</span>
@@ -186,7 +242,7 @@ export default function FreightOfferCard({ offer, onAcceptJob }: FreightOfferCar
         </div>
         <div className="mt-2 lg:mt-0 lg:ml-4">
           <div className="text-2xl font-bold text-green-400 text-right">
-            ${calculatePrice(selectedWeight).toLocaleString()}
+            ${calculateProportionalPrice(selectedWeight).toLocaleString()}
           </div>
           <div className="text-sm text-slate-400 text-right">{offer.distance} km</div>
         </div>
@@ -194,7 +250,6 @@ export default function FreightOfferCard({ offer, onAcceptJob }: FreightOfferCar
 
       {/* Locations */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-        {/* Origin */}
         <div className="flex items-center space-x-3 p-3 bg-slate-700/50 rounded-lg">
           <div className="flex-shrink-0">
             <MapPin className="w-5 h-5 text-green-400" />
@@ -212,7 +267,6 @@ export default function FreightOfferCard({ offer, onAcceptJob }: FreightOfferCar
           </div>
         </div>
 
-        {/* Destination */}
         <div className="flex items-center space-x-3 p-3 bg-slate-700/50 rounded-lg">
           <div className="flex-shrink-0">
             <MapPin className="w-5 h-5 text-red-400" />
@@ -233,7 +287,6 @@ export default function FreightOfferCard({ offer, onAcceptJob }: FreightOfferCar
 
       {/* Details Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-        {/* Cargo Type */}
         <div className="flex items-center space-x-2 p-2 bg-slate-700/30 rounded">
           <Truck className="w-4 h-4 text-blue-400" />
           <div className="min-w-0">
@@ -242,7 +295,6 @@ export default function FreightOfferCard({ offer, onAcceptJob }: FreightOfferCar
           </div>
         </div>
 
-        {/* Trailer Type */}
         <div className="flex items-center space-x-2 p-2 bg-slate-700/30 rounded">
           <div className="w-4 h-4 flex items-center justify-center">
             <div className="w-2 h-2 bg-orange-400 rounded-full"></div>
@@ -253,7 +305,6 @@ export default function FreightOfferCard({ offer, onAcceptJob }: FreightOfferCar
           </div>
         </div>
 
-        {/* Experience */}
         <div className="flex items-center space-x-2 p-2 bg-slate-700/30 rounded">
           <User className={`w-4 h-4 ${getExperienceColor(offer.experience)}`} />
           <div>
@@ -270,7 +321,6 @@ export default function FreightOfferCard({ offer, onAcceptJob }: FreightOfferCar
           </div>
         </div>
 
-        {/* Weight - Clickable to expand/collapse */}
         <div
           className="flex items-center space-x-2 p-2 bg-slate-700/30 rounded cursor-pointer hover:bg-slate-700/50 transition-colors"
           onClick={() => offer.allowPartialLoad && setShowLoadSection(!showLoadSection)}
@@ -300,7 +350,7 @@ export default function FreightOfferCard({ offer, onAcceptJob }: FreightOfferCar
           <div className="flex items-center justify-between mb-3">
             <div className="text-slate-300 font-medium">Load Selection</div>
             <div className="text-green-400 font-bold">
-              ${calculatePrice(selectedWeight).toLocaleString()}
+              ${calculateProportionalPrice(selectedWeight).toLocaleString()}
             </div>
           </div>
 
@@ -309,7 +359,7 @@ export default function FreightOfferCard({ offer, onAcceptJob }: FreightOfferCar
             <div>
               <div className="flex justify-between text-sm text-slate-400 mb-2">
                 <span>Select weight to transport:</span>
-                <span>{selectedWeight} / {offer.remainingWeight} tons</span>
+                <span>{selectedWeight} / {offer.weight} tons</span>
               </div>
               <input
                 type="range"
@@ -328,20 +378,16 @@ export default function FreightOfferCard({ offer, onAcceptJob }: FreightOfferCar
 
             {/* Quick Select Buttons */}
             <div className="flex flex-wrap gap-2">
-              {[2, 4, 6, 8, 10, 12, 14, 16, 18, 20, offer.remainingWeight]
-                .filter(w => w <= offer.remainingWeight)
-                .map((weight) => (
-                  <Button
-                    key={weight}
-                    variant={selectedWeight === weight ? "default" : "outline"}
-                    onClick={() => handleWeightChange(weight)}
-                    className={`h-9 px-3 text-xs bg-transparent ${
-                      selectedWeight === weight ? 'bg-blue-600 text-white' : ''
-                    }`}
-                  >
-                    {weight}t
-                  </Button>
-                ))}
+              {quickWeights.map((weight) => (
+                <Button
+                  key={weight}
+                  variant={selectedWeight === weight ? "default" : "outline"}
+                  onClick={() => handleWeightChange(weight)}
+                  className={`h-9 px-3 text-xs bg-transparent ${selectedWeight === weight ? 'bg-blue-600 text-white' : ''}`}
+                >
+                  {weight}t
+                </Button>
+              ))}
             </div>
           </div>
         </div>
@@ -349,7 +395,6 @@ export default function FreightOfferCard({ offer, onAcceptJob }: FreightOfferCar
 
       {/* Footer */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        {/* Tags */}
         <div className="flex flex-wrap gap-2">
           <div className={`inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold ${getJobTypeColor(offer.jobType)}`}>
             {offer.jobType.charAt(0).toUpperCase() + offer.jobType.slice(1)}
@@ -364,7 +409,6 @@ export default function FreightOfferCard({ offer, onAcceptJob }: FreightOfferCar
           ))}
         </div>
 
-        {/* Action Button */}
         <Button
           onClick={handleAcceptJob}
           className="h-10 px-4 py-2 bg-green-600 hover:bg-green-700 text-white border-green-500/30"
@@ -374,5 +418,5 @@ export default function FreightOfferCard({ offer, onAcceptJob }: FreightOfferCar
         </Button>
       </div>
     </div>
-  )
+  );
 }

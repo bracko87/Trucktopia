@@ -11,9 +11,8 @@
  * - Optionally render market-style cards inside the Garage when explicitly allowed.
  *
  * Note:
- * - To reliably react to the Garage's opt-in, this component listens for a
- *   CustomEvent('allowMarketInGarageChanged') and keeps a small local state so
- *   re-renders happen when the Garage page sets/cleans the global flag.
+ * - This component accepts `showHeader` prop and forwards it to SectionHeader via the
+ *   `visible` prop so callers control header visibility explicitly.
  */
 
 import React from 'react';
@@ -25,45 +24,29 @@ import { isTrailer, extractTrailerClass, isIncoming } from '../../utils/vehicleT
 import TruckCardMarket from '../market/TruckCard';
 import { useLocation } from 'react-router';
 
-/**
- * Props
- * @description Props for the TrailerSection component.
- */
 interface Props {
   trailers?: TrailerCardData[] | null;
   trucks?: { id: string; assignedTrailer?: string | null; [key: string]: any }[] | null;
   onSellTrailer?: (trailerId: string) => void;
   onPurchaseTrailer?: () => void;
   showPrimaryButton?: boolean;
-  /**
-   * When true, treat owned trailers that contain purchase metadata (purchasePrice) as market-style entries
-   * and render them with the market card. Default true for existing behaviour.
-   */
   renderOwnedAsMarket?: boolean;
-  /**
-   * Explicitly allow rendering market-style cards inside the Garage page.
-   * When omitted the component will consult window.__ALLOW_MARKET_IN_GARAGE as a fallback.
-   */
   allowMarketInGarage?: boolean;
+  /** When false, the small SectionHeader (icon + title + subtitle) is hidden. Default: true. */
+  showHeader?: boolean;
 }
 
 /**
  * looksLikeMarketEntry
  * @description Heuristic to determine whether an item should be rendered with the market card.
- * Returns true when we detect a marketEntry, price/purchasePrice or availability fields, or when
- * the item contains purchase metadata and renderOwnedAsMarket is desired.
- * @param t any
- * @param renderOwnedAsMarket boolean
  */
 function looksLikeMarketEntry(t: any, renderOwnedAsMarket = true): boolean {
   if (!t || typeof t !== 'object') return false;
   if (t.marketEntry) return true;
   if (t.price !== undefined || t.purchasePrice !== undefined) return true;
   if (t.availability || t.deliveryEta || t.deliveryDays) return true;
-  // Some listings embed purchase info in _source or have explicit listing flags
   if (t._source && (t._source.marketEntry || t._source.purchasePrice || t._source.price)) return true;
   if (String(t.isListing ?? '').toLowerCase() === 'true') return true;
-  // Owned but with purchase metadata -> if allowed, render as market listing style
   if (renderOwnedAsMarket && (t.purchasePrice !== undefined || t.marketEntry !== undefined || t.listing === true)) return true;
   return false;
 }
@@ -81,6 +64,7 @@ const TrailerSection: React.FC<Props> = ({
   showPrimaryButton = true,
   renderOwnedAsMarket = true,
   allowMarketInGarage,
+  showHeader = true,
 }) => {
   // Safely access GameContext
   let gameState: any = undefined;
@@ -100,12 +84,6 @@ const TrailerSection: React.FC<Props> = ({
   const location = useLocation();
   const isGaragePage = typeof location?.pathname === 'string' && location.pathname === '/garage';
 
-  /**
-   * allowMarketWhenGarageState
-   * @description Local React state that represents whether market-style cards are allowed inside Garage.
-   *              It is initialized from the prop or window global and updated when Garage dispatches
-   *              the 'allowMarketInGarageChanged' CustomEvent so the component re-renders reliably.
-   */
   const [allowMarketWhenGarageState, setAllowMarketWhenGarageState] = React.useState<boolean>(() => {
     return typeof allowMarketInGarage === 'boolean'
       ? allowMarketInGarage
@@ -113,10 +91,6 @@ const TrailerSection: React.FC<Props> = ({
   });
 
   React.useEffect(() => {
-    /**
-     * handler
-     * @description Update local state when the Garage page toggles the global flag and dispatches the event.
-     */
     const handler = () => {
       const val = typeof allowMarketInGarage === 'boolean'
         ? allowMarketInGarage
@@ -124,19 +98,14 @@ const TrailerSection: React.FC<Props> = ({
       setAllowMarketWhenGarageState(val);
     };
 
-    // Keep the event listener so we react to Garage mounting/unmounting.
     window.addEventListener('allowMarketInGarageChanged', handler);
-
-    // Also run once to sync if the flag was set after initial render.
     handler();
 
     return () => {
       window.removeEventListener('allowMarketInGarageChanged', handler);
     };
-    // include allowMarketInGarage so a parent prop change also syncs state
   }, [allowMarketInGarage]);
 
-  // Build incoming id set from common incoming arrays and transit-marked company entries
   const incomingIdSet = React.useMemo(() => {
     const set = new Set<string>();
     try {
@@ -159,7 +128,6 @@ const TrailerSection: React.FC<Props> = ({
         }
       }
 
-      // Look into company.trucks and company.trailers for items with deliveryEta/status
       const addTransitFrom = (arr: any[]) => {
         if (!Array.isArray(arr)) return;
         for (const it of arr) {
@@ -208,10 +176,6 @@ const TrailerSection: React.FC<Props> = ({
     ? trucksFromContext
     : [];
 
-  /**
-   * Collect trailer-like items that accidentally live in trucks[].
-   * Convert them to TrailerCardData shape and exclude incoming items.
-   */
   const trailersFromTrucks: TrailerCardData[] = trucks
     .filter((t) => isTrailer(t) && !isIncoming(t))
     .map((t) => {
@@ -231,7 +195,6 @@ const TrailerSection: React.FC<Props> = ({
       } as TrailerCardData;
     });
 
-  // Merge while avoiding id collisions; trailersProp/context take precedence; exclude incoming
   const merged = React.useMemo(() => {
     const out: TrailerCardData[] = [];
     const existingIds = new Set<string>();
@@ -239,7 +202,6 @@ const TrailerSection: React.FC<Props> = ({
     for (const t of trailers) {
       const id = String(t.id ?? '');
       if (!id) continue;
-      // Exclude if incoming according to derived set
       if (incomingIdSet.has(id)) continue;
       out.push(t);
       existingIds.add(id);
@@ -248,20 +210,11 @@ const TrailerSection: React.FC<Props> = ({
     for (const t of trailersFromTrucks) {
       const id = String(t.id ?? '');
       if (!id || existingIds.has(id)) continue;
-      if (incomingIdSet.has(id)) continue; // extra safety
+      if (incomingIdSet.has(id)) continue;
       out.push(t);
       existingIds.add(id);
     }
 
-    /**
-     * When we are on the Garage page we used to always remove market-like items.
-     * New behaviour:
-     * - If allowMarketWhenGarageState is truthy (prop or global + event) we will keep market-like items
-     *   and render them as market cards inside the Garage.
-     * - Otherwise we filter them out as before.
-     *
-     * The local state allowMarketWhenGarageState ensures we re-render when Garage toggles the flag.
-     */
     if (isGaragePage && !allowMarketWhenGarageState) {
       return out.filter(item => !looksLikeMarketEntry(item, renderOwnedAsMarket) && !looksLikeMarketEntry(item._source ?? {}, renderOwnedAsMarket));
     }
@@ -269,6 +222,10 @@ const TrailerSection: React.FC<Props> = ({
     return out;
   }, [trailers, trailersFromTrucks, incomingIdSet, isGaragePage, renderOwnedAsMarket, allowMarketWhenGarageState]);
 
+  /**
+   * handleSell
+   * @description Forward sell action to parent or log when absent.
+   */
   const handleSell = (id: string) => {
     if (typeof onSellTrailer === 'function') {
       onSellTrailer(id);
@@ -283,18 +240,21 @@ const TrailerSection: React.FC<Props> = ({
       onPurchaseTrailer();
       return;
     }
-    // fallback is intentionally a no-op; the caller or page header provides navigation
+    // fallback no-op
   };
 
   return (
     <section className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-      <SectionHeader
-        title="Trailer Fleet"
-        subtitle="Manage your trailers"
-        icon={<PackageIcon className="w-6 h-6 text-blue-400" />}
-        primaryLabel={showPrimaryButton ? 'Purchase Trailer' : undefined}
-        onPrimaryClick={showPrimaryButton ? handlePurchase : undefined}
-      />
+      {showHeader && (
+        <SectionHeader
+          title="Trailer Fleet"
+          subtitle="Manage your trailers"
+          icon={<PackageIcon className="w-6 h-6 text-blue-400" />}
+          primaryLabel={showPrimaryButton ? 'Purchase Trailer' : undefined}
+          onPrimaryClick={showPrimaryButton ? handlePurchase : undefined}
+          visible={showHeader}
+        />
+      )}
 
       <div className="space-y-3">
         {merged.length === 0 ? (
@@ -304,13 +264,9 @@ const TrailerSection: React.FC<Props> = ({
         ) : (
           <div className="grid grid-cols-1 gap-3">
             {merged.map((tr) => {
-              // only consider assignment from trucks that are not incoming
               const isAssigned = trucks.some(t => !isIncoming(t) && String(t.assignedTrailer) === String(tr.id));
 
-              // If this trailer looks like a market listing or has marketEntry/purchase metadata,
-              // render the market card instead — this also covers purchased items that record purchasePrice.
               if (looksLikeMarketEntry(tr, renderOwnedAsMarket) || looksLikeMarketEntry(tr._source ?? {}, renderOwnedAsMarket)) {
-                // Defensive mapping to the TruckCardMarket props used elsewhere in the app.
                 return (
                   <div key={tr.id} className="bg-slate-700 rounded-lg p-4 border border-slate-600" data-market="true">
                     <TruckCardMarket
@@ -326,13 +282,11 @@ const TrailerSection: React.FC<Props> = ({
                       cargoTypes={tr.marketEntry?.specifications?.cargoTypes ?? tr.specifications?.cargoTypes ?? []}
                       capacity={tr.marketEntry?.specifications?.capacity ?? tr.specifications?.capacity ?? tr.capacity}
                       gcw={tr.marketEntry?.gcw ?? null}
-                      // allow parent to hide specific market cards by passing hidden via existing props if needed
                     />
                   </div>
                 );
               }
 
-              // Default: render small TrailerCard
               return <TrailerCard key={tr.id} trailer={tr} isAssigned={isAssigned} onSell={handleSell} />;
             })}
           </div>

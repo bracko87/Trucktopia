@@ -1,0 +1,33 @@
+name: Normalize Hubs Cron
+
+# Run daily at 00:11 UTC and allow manual dispatch
+on:
+  schedule:
+    - cron: '11 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  normalize-hubs:
+    name: Call normalize-hubs function
+    runs-on: ubuntu-latest
+    steps:
+      - name: Curl normalize-hubs endpoint
+        env:
+          NORMALIZE_HUBS_URL: ${{ secrets.NORMALIZE_HUBS_URL }}
+          NORMALIZE_HUBS_SECRET: ${{ secrets.NORMALIZE_HUBS_SECRET }}
+        run: |
+          if [ -z "$NORMALIZE_HUBS_URL" ]; then
+            echo "ERROR: NORMALIZE_HUBS_URL secret is not set. Add it to repository secrets and point it to your function URL (e.g. https://your-site.netlify.app/.netlify/functions/normalize-hubs)."
+            exit 1
+          fi
+
+          # Call the function with POST and include the secret header so the function can
+          # perform authoritative writes when SUPABASE_WRITE is enabled on the server.
+          echo "Calling normalize-hubs at $NORMALIZE_HUBS_URL"
+          curl -sS -X POST "$NORMALIZE_HUBS_URL" \
+            -H "Content-Type: application/json" \
+            -H "X-Normalize-Hubs-Secret: $NORMALIZE_HUBS_SECRET" \
+            -d '{"trigger":"scheduled-cron","note":"GitHub Actions scheduled run at 00:11 UTC"}' \
+            --fail
+
+          echo "normalize-hubs invoked successfully."
