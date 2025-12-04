@@ -1,21 +1,25 @@
 /**
  * netlify/functions/migrate.js
  *
- * Migration function for sandbox usage.
+ * Robust migration relay for Supabase (PostgREST).
  *
  * Responsibilities:
- * - Normalize incoming payload shapes into canonical rows:
- *     { collection_name, payload: object, metadata: object }
- * - Support dry-run via query param (?dryRun=true) or header X-Dry-Run: true.
- * - When targeting known collections (users, companies, hubs), attempt direct upsert
- *   to the Supabase/PostgREST table using on_conflict=source_id.
- * - When not targeting known collections, or on errors, insert into the migration table
- *   (MIGRATION_TABLE). This preserves the previous fallback behaviour.
- * - Provide a clear health-check GET with a version so you can verify the deployed code.
+ * - Accept POST payloads in a variety of shapes and normalize them into rows.
+ * - Prefer upserting into target tables using `source_id` as the conflict key.
+ *   This avoids sending arbitrary non-UUID values into `id` columns (prevents 22P02).
+ * - When `source_id` is not present, derive it from common fields (email lowercased,
+ *   uuid id, or a legacy:id fallback).
+ * - If upsert fails (table missing or constraint mismatch), fallback to inserting
+ *   into the configured MIGRATION_TABLE (migration_items) with a replay_hash to
+ *   allow future deduplication.
+ * - Dry-run mode returns a clear "plan" of intended upserts without performing them.
  *
  * Notes:
- * - This file is self-contained and uses fetch available in the runtime.
- * - All functions below contain brief JSDoc comments as required.
+ * - This function uses the Supabase service_role key; ensure it is set as
+ *   SUPABASE_SERVICE_ROLE_KEY and SUPABASE_URL in environment.
+ * - To avoid duplicate fallback-inserts we compute a SHA256 replay_hash of the
+ *   serialized payload and skip insertion when an identical migration_items
+ *   row already exists for the same collection + hash.
  */
 
 /**
@@ -51,6 +55,34 @@ function asObject(v) {
 function stripTrailingSlash(url) {
   if (!url) return url;
   return url.replace(/\/$/, '');
+}
+
+/**
+ * @description Check whether a value looks like a UUID (v4 style hex).
+ * Very permissive — matches common UUID hex patterns.
+ * @param {any} v
+ * @returns {boolean}
+ */
+function looksLikeUuid(v) {
+  if (typeof v !== 'string') return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+}
+
+/**
+ * @description Compute a SHA256 hex hash for dedupe checks.
+ * Uses Node built-in crypto if available, otherwise falls back to null.
+ * @param {string} str
+ * @returns {string|null}
+ */
+function sha256Hex(str) {
+  try {
+    // Node.js crypto
+    // eslint-disable-next-line global-require
+    const crypto = require('crypto');
+    return crypto.createHash('sha256').update(str, 'utf8').digest('hex');
+  } catch (e) {
+    return null;
+  }
 }
 
 /**
@@ -152,40 +184,56 @@ function normalizeBodyToRows(body) {
 }
 
 /**
- * @description Perform a POST to Supabase/PostgREST (REST) endpoint.
- * @param {string} url
- * @param {object} headers
- * @param {any} body
- * @returns {Promise<{ok:boolean,status:number,body:any}>}
+ * @description Build an upsert plan for a row's items:
+ *  - ensure each item has a source_id (derived from email / uuid id / legacy)
+ *  - strip non-UUID id fields to avoid invalid UUID errors
+ * @param {any[]} items
+ * @returns {{plannedRows:any[], warnings:string[]}}
  */
-async function postToSupabase(url, headers, body) {
-  const fetchFn = (typeof fetch === 'function' ? fetch : (globalThis && globalThis.fetch));
-  if (!fetchFn) {
-    throw new Error('Fetch is not available in this runtime');
+function buildUpsertPlan(items) {
+  const plannedRows = [];
+  const warnings = [];
+
+  for (const it of items) {
+    const clone = Object.assign({}, it);
+    let source_id = null;
+
+    if (clone.source_id) {
+      source_id = String(clone.source_id);
+    } else if (clone.email) {
+      source_id = `email:${String(clone.email).toLowerCase()}`;
+    } else if (clone.id && looksLikeUuid(clone.id)) {
+      source_id = `id:${clone.id}`;
+    } else if (clone.id !== undefined && clone.id !== null) {
+      // Legacy non-UUID identifier: preserve as legacy source key to avoid forcing it into id.
+      source_id = `legacy:${String(clone.id)}`;
+    } else {
+      // Last resort: generate a time-based source id (not ideal but deterministic for this run)
+      source_id = `generated:${Date.now()}:${Math.floor(Math.random() * 100000)}`;
+    }
+
+    // Avoid sending a non-UUID into id column: remove id unless it's UUID
+    if (!looksLikeUuid(clone.id)) {
+      if (clone.id !== undefined) {
+        delete clone.id;
+        warnings.push(`Stripped non-UUID id for source_id=${source_id}`);
+      }
+    }
+
+    // Ensure source_id present on the object
+    clone.source_id = source_id;
+
+    plannedRows.push(clone);
   }
 
-  const resp = await fetchFn(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body)
-  });
-
-  const text = await resp.text();
-  let parsedResp;
-  try {
-    parsedResp = text ? JSON.parse(text) : text;
-  } catch (e) {
-    parsedResp = text;
-  }
-
-  return { ok: resp.ok, status: resp.status, body: parsedResp, rawStatus: resp.status };
+  return { plannedRows, warnings };
 }
 
 /**
- * @description Netlify function handler.
- * - GET: simple health-check with version
- * - OPTIONS: CORS preflight
- * - POST: normalize and insert/upsert rows (dry-run supported)
+ * @description Async handler for the Netlify function.
+ * - GET -> health check (version 3)
+ * - OPTIONS -> returns CORS headers
+ * - POST -> normalize, plan, (dry-run) or upsert/fallback insert
  *
  * @param {import('aws-lambda').APIGatewayEvent} event
  * @param {any} context
@@ -195,7 +243,7 @@ exports.handler = async function (event, context) {
     const headers = (event && (event.headers || {})) || {};
     const qp = (event && (event.queryStringParameters || {})) || {};
 
-    // Accept multiple header casings for dry-run
+    // Accept multiple header casings
     const dryRunHeader =
       headers['x-dry-run'] ?? headers['X-Dry-Run'] ?? headers['x-dryrun'] ?? headers['X-DryRun'];
 
@@ -259,32 +307,21 @@ exports.handler = async function (event, context) {
       normalizedRows[i].metadata = asObject(normalizedRows[i].metadata);
     }
 
-    // Build exact request body we'd send to Supabase/PostgREST
+    // Build exact requestBody we'd send to Supabase/PostgREST
     const requestBody = JSON.stringify(normalizedRows);
 
-    // If dry-run, return normalized rows and planned upsert targets
+    // Build a high level "plan" for dry-run: per collection plannedRows
+    const plan = [];
+    const allWarnings = [];
+    for (const row of normalizedRows) {
+      const items = Array.isArray(row.payload.items) ? row.payload.items : [row.payload];
+      const { plannedRows, warnings } = buildUpsertPlan(items);
+      plan.push({ collection: row.collection_name, plannedRows });
+      if (warnings && warnings.length) allWarnings.push(...warnings);
+    }
+
+    // Dry-run: return normalized rows and request body with plan
     if (dryRun) {
-      // Build an additional "plan" describing attempted upserts for known collections
-      const SUPABASE_URL = process.env.SUPABASE_URL || null;
-      const plan = [];
-
-      for (const row of normalizedRows) {
-        const col = String(row.collection_name || '').toLowerCase();
-        if (['users', 'companies', 'hubs'].includes(col)) {
-          const items = Array.isArray(row.payload.items) ? row.payload.items : [];
-          const planned = items.map((it) => {
-            const itemObj = typeof it === 'object' ? { ...it } : { value: it };
-            if (!itemObj.source_id) {
-              if (itemObj.email) itemObj.source_id = `email:${String(itemObj.email).toLowerCase()}`;
-            }
-            return itemObj;
-          });
-          plan.push({ collection: col, plannedRows: planned.slice(0, 20) }); // sample up to 20
-        } else {
-          plan.push({ collection: col, action: 'fallback->migration_items' });
-        }
-      }
-
       return {
         statusCode: 200,
         body: JSON.stringify({
@@ -293,18 +330,18 @@ exports.handler = async function (event, context) {
           normalizedRows,
           requestBody,
           plan,
+          warnings: allWarnings,
           note: 'DEBUG MODE: This function will NOT insert to Supabase. Deploy production version to perform inserts.'
         })
       };
     }
 
-    // Production path: attempt per-collection upserts for known collections, otherwise fallback to migration_items
+    // Production path: perform REST upserts/inserts into Supabase
     const SUPABASE_URL = process.env.SUPABASE_URL;
     const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const MIGRATION_TABLE = process.env.MIGRATION_TABLE || 'migration_items';
 
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      // Without Supabase credentials, fallback to inserting into MIGRATION_TABLE is pointless.
       return {
         statusCode: 500,
         body: JSON.stringify({
@@ -314,99 +351,127 @@ exports.handler = async function (event, context) {
       };
     }
 
-    const base = stripTrailingSlash(SUPABASE_URL);
+    const fetchFn = (typeof fetch === 'function' ? fetch : (globalThis && globalThis.fetch));
+    if (!fetchFn) {
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ ok: false, error: 'Fetch is not available in this runtime' })
+      };
+    }
+
     const results = {
       upserted: [],
       fallbackInserted: [],
+      skippedFallback: [],
       errors: []
     };
 
-    // Helper headers for Supabase REST
-    const supabaseHeaders = {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-      apikey: SUPABASE_SERVICE_ROLE_KEY,
-      Prefer: 'return=representation'
-    };
-
-    // Process each normalized row
+    // Iterate rows attempting upserts
     for (const row of normalizedRows) {
-      const col = String(row.collection_name || '').toLowerCase();
-      const items = Array.isArray(row.payload.items) ? row.payload.items : [];
+      const collection = String(row.collection_name || '').trim();
+      const items = Array.isArray(row.payload.items) ? row.payload.items : [row.payload];
+      const { plannedRows } = buildUpsertPlan(items);
 
-      if (['users', 'companies', 'hubs'].includes(col)) {
-        // Prepare rows for upsert: ensure objects and fallback source_id
-        const toUpsert = items
-          .map((it) => (typeof it === 'object' ? { ...it } : { value: it }))
-          .map((itemObj) => {
-            if (!itemObj.source_id) {
-              if (itemObj.email) {
-                itemObj.source_id = `email:${String(itemObj.email).toLowerCase()}`;
-              } else if (itemObj.id) {
-                // If payload contained an id but not source_id, preserve id as source_id prefix
-                itemObj.source_id = `id:${String(itemObj.id)}`;
-              }
-            }
-            return itemObj;
-          });
+      if (!collection) {
+        results.errors.push({ collection, status: 400, body: { message: 'Empty collection name' } });
+        continue;
+      }
 
-        if (toUpsert.length === 0) {
-          // nothing to upsert, skip to next row
+      // Attempt upsert into target collection using source_id as on_conflict key
+      try {
+        const targetUrl = `${stripTrailingSlash(SUPABASE_URL)}/rest/v1/${encodeURIComponent(collection)}?on_conflict=source_id`;
+        // Prefer header: resolution=merge-duplicates to instruct PostgREST to merge
+        const upsertResp = await fetchFn(targetUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            apikey: SUPABASE_SERVICE_ROLE_KEY,
+            Prefer: 'resolution=merge-duplicates,return=representation'
+          },
+          body: JSON.stringify(plannedRows)
+        });
+
+        const text = await upsertResp.text();
+        let parsedResp;
+        try {
+          parsedResp = text ? JSON.parse(text) : text;
+        } catch (e) {
+          parsedResp = text;
+        }
+
+        if (upsertResp.ok) {
+          results.upserted.push({ collection, count: Array.isArray(parsedResp) ? parsedResp.length : 1, rows: parsedResp });
           continue;
+        } else {
+          // Upsert failed - capture error and fall back
+          results.errors.push({ collection, status: upsertResp.status, body: parsedResp });
         }
+      } catch (err) {
+        results.errors.push({ collection, status: 500, body: String(err && err.message ? err.message : err) });
+      }
 
-        try {
-          // PostgREST upsert via on_conflict=source_id
-          const targetUrl = `${base}/rest/v1/${encodeURIComponent(col)}?on_conflict=source_id`;
-          const upsertResp = await postToSupabase(targetUrl, supabaseHeaders, toUpsert);
+      // Fallback path: insert into migration_items (dedupe by replay_hash)
+      try {
+        const replayHash = sha256Hex(JSON.stringify(row.payload)) || null;
 
-          if (!upsertResp.ok) {
-            // record error and fallback to migration table insertion for this normalized row
-            results.errors.push({
-              collection: col,
-              status: upsertResp.status,
-              body: upsertResp.body
-            });
-
-            // fallback: insert the normalized row into migration_items
-            const migrUrl = `${base}/rest/v1/${encodeURIComponent(MIGRATION_TABLE)}`;
-            const migrResp = await postToSupabase(migrUrl, supabaseHeaders, [row]);
-            results.fallbackInserted.push({
-              collection: col,
-              migrationResponse: { ok: migrResp.ok, status: migrResp.status, body: migrResp.body }
-            });
-          } else {
-            results.upserted.push({ collection: col, status: upsertResp.status, rows: upsertResp.body });
-          }
-        } catch (err) {
-          // On unexpected errors, fallback to migration_items to preserve payload
-          results.errors.push({ collection: col, error: String(err && err.message ? err.message : err) });
-          try {
-            const migrUrl = `${base}/rest/v1/${encodeURIComponent(MIGRATION_TABLE)}`;
-            const migrResp = await postToSupabase(migrUrl, supabaseHeaders, [row]);
-            results.fallbackInserted.push({
-              collection: col,
-              migrationResponse: { ok: migrResp.ok, status: migrResp.status, body: migrResp.body }
-            });
-          } catch (inner) {
-            results.errors.push({
-              collection: col,
-              migrationFallbackError: String(inner && inner.message ? inner.message : inner)
-            });
-          }
-        }
-      } else {
-        // Not a known collection: insert into migration table (previous default behaviour)
-        try {
-          const migrUrl = `${base}/rest/v1/${encodeURIComponent(MIGRATION_TABLE)}`;
-          const migrResp = await postToSupabase(migrUrl, supabaseHeaders, [row]);
-          results.fallbackInserted.push({
-            collection: col,
-            migrationResponse: { ok: migrResp.ok, status: migrResp.status, body: migrResp.body }
+        // If we computed a hash, check if migration_items already has a row with same collection + replay_hash
+        if (replayHash) {
+          const query = `${stripTrailingSlash(SUPABASE_URL)}/rest/v1/${encodeURIComponent(MIGRATION_TABLE)}?select=id&collection_name=eq.${encodeURIComponent(collection)}&metadata->>replay_hash=eq.${encodeURIComponent(replayHash)}&limit=1`;
+          const dupCheckResp = await fetchFn(query, {
+            method: 'GET',
+            headers: {
+              Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+              apikey: SUPABASE_SERVICE_ROLE_KEY
+            }
           });
-        } catch (err) {
-          results.errors.push({ collection: col, migrationFallbackError: String(err && err.message ? err.message : err) });
+          const dupText = await dupCheckResp.text();
+          let dupJson;
+          try {
+            dupJson = dupText ? JSON.parse(dupText) : dupText;
+          } catch (e) {
+            dupJson = dupText;
+          }
+
+          if (Array.isArray(dupJson) && dupJson.length > 0) {
+            results.skippedFallback.push({ collection, reason: 'duplicate_replay_hash', existing: dupJson[0] });
+            continue; // skip insertion
+          }
         }
+
+        // Insert a canonical row into migration_items with metadata.replay_hash
+        const insertUrl = `${stripTrailingSlash(SUPABASE_URL)}/rest/v1/${encodeURIComponent(MIGRATION_TABLE)}`;
+        const insertBody = [{
+          collection_name: collection,
+          payload: row.payload,
+          metadata: Object.assign({}, row.metadata || {}, replayHash ? { replay_hash: replayHash } : {})
+        }];
+        const insertResp = await fetchFn(insertUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            apikey: SUPABASE_SERVICE_ROLE_KEY,
+            Prefer: 'return=representation'
+          },
+          body: JSON.stringify(insertBody)
+        });
+
+        const insertText = await insertResp.text();
+        let insertJson;
+        try {
+          insertJson = insertText ? JSON.parse(insertText) : insertText;
+        } catch (e) {
+          insertJson = insertText;
+        }
+
+        if (insertResp.ok) {
+          results.fallbackInserted.push({ collection, migrationResponse: insertJson });
+        } else {
+          results.errors.push({ collection, status: insertResp.status, body: insertJson });
+        }
+      } catch (err) {
+        results.errors.push({ collection, status: 500, body: String(err && err.message ? err.message : err) });
       }
     }
 
@@ -414,7 +479,7 @@ exports.handler = async function (event, context) {
       statusCode: 200,
       body: JSON.stringify({
         ok: true,
-        inserted: results.upserted.reduce((acc, r) => acc + (Array.isArray(r.rows) ? r.rows.length : 0), 0) + results.fallbackInserted.length,
+        inserted: (results.upserted.reduce((s, r) => s + (r.count || 0), 0) + results.fallbackInserted.length),
         results,
         normalizedRows,
         requestBody
