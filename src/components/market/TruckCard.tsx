@@ -1,111 +1,63 @@
 /**
  * TruckCard.tsx
  *
- * Market truck card used by the Vehicle Market page.
+ * Visual card for a truck used in the Vehicle Market and other lists.
  *
  * Responsibilities:
- * - Render a single truck market entry with brand/model, price, condition, availability and actions.
- * - Ensure the availability label is consistently prefixed with "Available in:" for all trucks.
- * - Render cargo type badges so cargo information remains visible.
- * - Show GCW Category badge for big trucks (>= 13 t) directly below the availability line.
- * - Keep visual layout and behaviour unchanged. Hide the literal "New" tag from the inline info row
- *   while preserving percentage-based condition when < 100%.
+ * - Render a single truck with clear truck emblem and key information.
+ * - Display year and kilometers for used trucks only (keeps layout identical otherwise).
+ * - Expose an onClick callback for opening details / purchase modal.
+ *
+ * The component is intentionally small and focused so it can be reused across
+ * market and fleet views without altering layout or behaviour.
+ */
+
+/**
+ * @file Provides a compact TruckCard used by market and listing pages.
  */
 
 import React from 'react';
-import { Calendar, Package } from 'lucide-react';
+import { Truck, Calendar, Clock, DollarSign } from 'lucide-react';
 
 /**
- * TruckCardData
- * @description Minimal data shape expected by TruckCard. Allows extra fields.
+ * TruckCardProps
+ * @description Props accepted by TruckCard. year and kilometers are optional and
+ *              only rendered for used trucks.
  */
-export interface TruckCardData {
+export interface TruckCardProps {
   id: string;
   brand?: string;
   model?: string;
-  year?: number;
-  condition?: number; // percentage 0-100
-  capacity?: number | string;
-  tonnage?: number | string;
   price?: number | string;
+  condition?: number | null;
+  availability?: string;
+  tonnage?: number | string | null;
   leaseRate?: number | string | null;
-  status?: string;
-  truckCategory?: string;
-  cargoTypes?: string[];
-  specifications?: any;
-  availability?: string | null;
-  deliveryDays?: number | null;
-  gcw?: string | null;
-  [key: string]: any;
-}
-
-/**
- * Props
- * @description Component props for market TruckCard.
- */
-interface Props {
-  id?: string | number;
-  brand?: string;
-  model?: string;
-  price?: number | string;
-  condition?: number;
-  availability?: string | null;
-  tonnage?: number | null | string;
-  leaseRate?: number | string | null;
-  truckCategory?: string;
-  cargoTypes?: string[];
-  capacity?: number | null | string;
+  truckCategory?: string | null; // 'new' | 'used' etc.
+  cargoTypes?: string[] | null;
+  capacity?: number | null;
+  gcw?: number | string | null;
   onClick?: () => void;
-  /**
-   * explicit GCW hint (A/B/C or numeric). Optional — when provided it will be preferred
-   * for label display for big trucks.
-   */
-  gcw?: string | number | null;
-
-  /**
-   * hidden
-   * @description When true the card renders nothing (useful to hide a listing in a given view).
-   */
-  hidden?: boolean;
+  year?: number | null;
+  kilometers?: number | null;
+  marketSource?: string | null; // e.g. 'used-generator' to mark generator offers
 }
 
 /**
- * CargoTypeBadge
- * @description Small visual badge for a cargo type. Kept local and tiny to follow component principles.
+ * formatKm
+ * @description Nicely format kilometres with thousand separators and 'km' suffix.
  */
-const CargoTypeBadge: React.FC<{ label: string }> = ({ label }) => {
-  return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-700 text-slate-300">
-      <Package className="w-3 h-3 text-indigo-300" />
-      <span>{label}</span>
-    </span>
-  );
-};
-
-/**
- * parseTonnes
- * @description Parse a numeric tonne value from various possible inputs (number, numeric string,
- *              strings like "18 t" or "18t"). Returns NaN if parsing fails.
- * @param v any incoming value
- */
-function parseTonnes(v: any): number {
-  if (v === undefined || v === null) return NaN;
-  if (typeof v === 'number') return v;
-  const s = String(v).trim();
-  const m = s.match(/([\d.]+)/);
-  if (m) return Number(m[1]);
-  return NaN;
+function formatKm(km: number | null | undefined) {
+  if (km === null || km === undefined || Number.isNaN(Number(km))) return '—';
+  return `${Number(km).toLocaleString()} km`;
 }
 
 /**
  * TruckCard
- * @description Market truck card. Shows an "Available in:" prefix before the calendar + time label,
- *              renders cargo type badges, and for big trucks (>=13t) shows a GCW badge directly below availability.
- *
- * @param {Props} props Component props
- * @returns React.ReactElement
+ * @description Display basic truck information. Year & kilometres are shown only
+ *              when the truck is a used vehicle (truckCategory === 'used' or marketSource indicates used).
  */
-const TruckCard: React.FC<Props> = ({
+const TruckCard: React.FC<TruckCardProps> = ({
   brand,
   model,
   price,
@@ -116,139 +68,106 @@ const TruckCard: React.FC<Props> = ({
   truckCategory,
   cargoTypes,
   capacity,
-  onClick,
   gcw,
-  hidden = false,
+  onClick,
+  year,
+  kilometers,
+  marketSource,
 }) => {
-  // When hidden is true, render nothing. This is an explicit, non-destructive way
-  // to hide specific cards from any view that chooses to pass hidden={true}.
-  if (hidden) return null;
+  const title = `${brand ?? 'Unknown'} ${model ?? ''}`.trim();
+  const isUsed =
+    (truckCategory ?? '').toString().toLowerCase() === 'used' ||
+    (marketSource ?? '') === 'used-generator';
 
-  const title = brand ?? model ?? 'Truck';
-  const subtitle = model ?? brand ?? '';
-  const conditionIsNumber = typeof condition === 'number';
-  const conditionPercent = conditionIsNumber ? condition : undefined;
+  const conditionLabel =
+    typeof condition === 'number'
+      ? `${condition}%`
+      : condition === null || condition === undefined
+      ? '—'
+      : String(condition);
 
-  /**
-   * resolveAvailabilityText
-   * @description Determine the display text for availability from deliveryDays / availability.
-   */
-  const resolveAvailabilityText = (): string => {
-    if (typeof availability === 'string' && availability.trim() !== '') {
-      return availability;
-    }
-    return '—';
-  };
-
-  /**
-   * capacityTonnes
-   * @description Use capacity or tonnage hints to determine size in tonnes (number).
-   */
-  const capacityTonnes = (() => {
-    // Prefer numeric capacity field (could be number or string).
-    const candidates = [capacity, tonnage, (typeof (gcw as any) === 'number' ? gcw : undefined), undefined];
-    for (const c of candidates) {
-      const parsed = parseTonnes(c);
-      if (!Number.isNaN(parsed) && Number.isFinite(parsed) && parsed > 0) return parsed;
-    }
-    // Try nested specifications if present in props via (capacity/tonnage) keys
-    // (Note: optional — the parent may pass full truck object in other props)
-    return 0;
-  })();
-
-  /**
-   * isBigTruck
-   * @description Conservative detection: treat trucks with capacity/tonnage >= 13 as big trucks.
-   */
-  const isBigTruck = capacityTonnes >= 13;
-
-  /**
-   * renderGcwBadge
-   * @description Render the GCW badge for big trucks. Prefer explicit gcw (string/letter like 'A|B|C'),
-   *              otherwise show a numeric "GCW ≥ Nt" derived from capacityTonnes.
-   */
-  const renderGcwBadge = () => {
-    if (!isBigTruck) return null;
-    if (gcw) {
-      return (
-        <div className="mt-2">
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium text-amber-400 bg-amber-400/10">
-            {typeof gcw === 'string' && gcw.length <= 2 ? `GCW ${gcw}` : String(gcw)}
-          </span>
-        </div>
-      );
-    }
-    // Fallback numeric representation
-    return (
-      <div className="mt-2">
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium text-amber-400 bg-amber-400/10">
-          {capacityTonnes ? `GCW ≥ ${Math.floor(capacityTonnes)}t` : 'GCW ≥ 13t'}
-        </span>
-      </div>
-    );
-  };
+  const conditionColor =
+    typeof condition === 'number'
+      ? condition >= 80
+        ? 'text-green-400'
+        : condition >= 60
+        ? 'text-yellow-400'
+        : 'text-rose-400'
+      : 'text-slate-400';
 
   return (
     <div
       onClick={onClick}
-      role={onClick ? 'button' : undefined}
-      tabIndex={onClick ? 0 : undefined}
+      role="button"
+      tabIndex={0}
       className="bg-slate-700 rounded-lg p-3 hover:bg-slate-600 transition-all duration-200 cursor-pointer border border-slate-600 hover:border-blue-500/50"
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4 flex-1">
-          <div className={`w-2 h-12 rounded-full ${'text-blue-400 bg-blue-400/10'}`} />
-          <div>
+          <div className="w-2 h-12 rounded-full text-blue-400 bg-blue-400/10" />
+
+          <div className="flex-1">
             <div className="flex items-center space-x-2">
               <h3 className="font-medium text-white text-sm">
-                {title} {subtitle ? <span className="text-slate-400 font-normal"> {subtitle}</span> : null}
+                {title}
+                <span className="text-slate-400 font-normal"> {` ${model ? '' : ''}`}</span>
               </h3>
+
               <span className="inline-block px-3 py-0.5 rounded-full text-xs font-medium text-indigo-400 bg-indigo-400/10 ml-2">
-                {truckCategory ?? 'Truck'}
+                {isUsed ? 'Used' : 'Truck'}
               </span>
             </div>
 
-            {/* Availability / (numeric) condition row moved directly under title.
-                NOTE: the explicit "New" textual tag is intentionally hidden here.
-                If condition is a number and less than 100 we show "NN% condition", otherwise nothing. */}
             <div className="flex items-center space-x-3 text-xs text-slate-400 mt-3">
-              {conditionPercent !== undefined && conditionPercent < 100 ? (
-                <span className="text-yellow-400">{`${conditionPercent}% condition`}</span>
-              ) : null}
+              <span className={conditionColor + ' text-sm'}>{conditionLabel} condition</span>
 
-              {/* AVAILABILITY: prefixed with "Available in:" as requested */}
               <span className="flex items-center space-x-1 text-green-400 text-sm">
                 <span className="text-slate-300 text-sm mr-1">Available in:</span>
                 <Calendar className="w-3 h-3" />
-                <span className="text-slate-300 text-sm">{resolveAvailabilityText()}</span>
+                <span className="text-slate-300 text-sm">{availability ?? '—'}</span>
               </span>
+
+              {/* Year & Kilometres: included inline with condition & availability for used trucks */}
+              {isUsed && (
+                <>
+                  <span className="flex items-center gap-1 text-slate-300 text-sm">
+                    <Clock className="w-3 h-3 text-slate-400" />
+                    <span className="text-slate-300">{year ?? '—'}</span>
+                  </span>
+
+                  <span className="flex items-center gap-1 text-slate-300 text-sm">
+                    {/* small kilometers icon kept as an inline svg for compactness */}
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 12h3l3 8 4-16 3 8h4"></path>
+                    </svg>
+                    <span className="text-slate-300">{formatKm(kilometers ?? null)}</span>
+                  </span>
+                </>
+              )}
             </div>
 
-            {/* GCW Category (for big trucks only): inserted directly below the availability row */}
-            {renderGcwBadge()}
-
-            {/* Cargo type badges (restored) positioned AFTER the availability / GCW row */}
-            {cargoTypes && cargoTypes.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-2">
-                {cargoTypes.slice(0, 4).map((ct: string, idx: number) => (
-                  <CargoTypeBadge key={`${ct}-${idx}`} label={ct} />
+            <div className="mt-2 flex flex-wrap gap-2">
+              {Array.isArray(cargoTypes) &&
+                cargoTypes.slice(0, 5).map((c, idx) => (
+                  <span key={idx} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-700 text-slate-300">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 text-indigo-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"></path>
+                      <path d="M12 22V12"></path>
+                    </svg>
+                    <span>{c}</span>
+                  </span>
                 ))}
-              </div>
-            )}
+            </div>
+
+            {/* Note: Year & Kilometres rendering moved above to the same line as condition/availability for used trucks */}
           </div>
         </div>
 
         <div className="flex items-center space-x-4">
           <div className="text-right">
             <div className="text-xs text-slate-400">Purchase</div>
-            <div className="text-sm font-bold text-white">€{Number(price || 0).toLocaleString()}</div>
+            <div className="text-sm font-bold text-white">€{Number(price ?? 0).toLocaleString()}</div>
           </div>
-          {leaseRate && (
-            <div className="text-right">
-              <div className="text-xs text-slate-400">Lease</div>
-              <div className="text-sm font-bold text-green-400"> €{leaseRate}/mo</div>
-            </div>
-          )}
           <div className="w-2 h-2 bg-blue-400 rounded-full" />
         </div>
       </div>

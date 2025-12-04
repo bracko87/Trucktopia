@@ -7,9 +7,18 @@
  * - Provide processIncomingDeliveries(company) which moves delivered incoming items
  *   into the appropriate fleet arrays in an idempotent way.
  * - Provide a small helper for type detection when type is missing.
+ *
+ * NOTE:
+ * - Parsing of delivery ETA values is timezone-aware and uses the canonical
+ *   in-game timezone defined in src/utils/gameTime.ts (Europe/Berlin).
+ *   This ensures naive date strings are interpreted consistently as German local time.
+ * - This module prefers the central game clock (src/utils/gameClock) when available
+ *   so comparisons follow authoritative in-game time overrides/offsets.
  */
 
 import type { IncomingDelivery, ProcessResult } from '../types/incomingDelivery';
+import { parseGameDate, nowUtcMs as gameTimeNowUtcMs } from './gameTime';
+import { nowUtcMs as gameClockNowUtcMs } from './gameClock';
 
 /**
  * detectTypeFromSpec
@@ -44,6 +53,10 @@ function detectTypeFromSpec(spec?: Record<string, any>): 'truck' | 'trailer' | '
  * - If an item is already present in the target array (based on id or stable sku) the
  *   incoming record is removed without duplicating.
  *
+ * Time source:
+ * - Prefer the central game clock (gameClock.nowUtcMs) if available; otherwise fall back
+ *   to the legacy gameTime.nowUtcMs (system time interpretation).
+ *
  * @param company Generic company object expected to have trucks?: any[], trailers?: any[], incomingDeliveries?: IncomingDelivery[]
  * @returns ProcessResult containing updatedCompany and moved items list
  */
@@ -58,7 +71,14 @@ export function processIncomingDeliveries(company: any): ProcessResult {
   updatedCompany.trailers = Array.isArray(updatedCompany.trailers) ? [...updatedCompany.trailers] : [];
   updatedCompany.incomingDeliveries = Array.isArray(updatedCompany.incomingDeliveries) ? [...updatedCompany.incomingDeliveries] : [];
 
-  const now = Date.now();
+  // Prefer central game clock when available; fall back to gameTime implementation.
+  let now: number;
+  try {
+    now = typeof gameClockNowUtcMs === 'function' ? gameClockNowUtcMs() : gameTimeNowUtcMs();
+  } catch {
+    now = gameTimeNowUtcMs();
+  }
+
   const moved: Array<{ incomingId: string; target: 'trucks' | 'trailers' | 'unknown'; item?: any }> = [];
 
   // Process list - keep items that are not yet delivered
@@ -66,8 +86,10 @@ export function processIncomingDeliveries(company: any): ProcessResult {
 
   for (const incoming of updatedCompany.incomingDeliveries) {
     try {
-      const eta = new Date(incoming.deliveryEta).getTime();
-      if (!isNaN(eta) && eta <= now) {
+      // Parse ETA with timezone-aware parser. Handles epoch, ISO with tz, and naive strings interpreted as Europe/Berlin.
+      const eta = parseGameDate(incoming.deliveryEta);
+
+      if (eta !== null && !Number.isNaN(eta) && eta <= now) {
         // determine target
         let type = incoming.type ?? 'unknown';
         if (type === 'unknown' || !type) {
@@ -106,6 +128,8 @@ export function processIncomingDeliveries(company: any): ProcessResult {
     } catch (err) {
       // On errors keep item for later retry (defensive)
       remaining.push(incoming);
+      // Keep console.error for operational diagnostics - callers may monitor logs.
+      // eslint-disable-next-line no-console
       console.error('processIncomingDeliveries: error processing incoming', incoming, err);
     }
   }

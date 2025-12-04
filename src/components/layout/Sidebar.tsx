@@ -25,7 +25,8 @@ import {
   ChevronRight,
   LogOut,
   Shield,
-  Server
+  Server,
+  List
 } from 'lucide-react';
 import { GamePage } from '../../types/game';
 

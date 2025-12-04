@@ -1,16 +1,21 @@
 /**
  * src/pages/VehicleMarket.tsx
  *
- * Vehicle Market page with defensive specs resolution.
+ * Vehicle Market page with defensive specs resolution and client-side pagination.
  *
  * Purpose:
  * - Provide vehicle marketplace UI (trucks & trailers) with filters, tabs and purchase modal.
- * - Ensure classification is canonical by using the shared isTrailer heuristic rather than fragile `type` fields.
+ * - Ensure canonical classification using isTrailer() helper.
+ * - Implement client-side pagination with 10 items per page (trucks and trailers have independent paging).
+ *
+ * Visual / UX decisions:
+ * - Pager UI re-uses existing Tailwind classes used across the page for a consistent look.
+ * - Pagination state resets when filters/tabs change to provide predictable UX.
  *
  * Notes:
- * - Prefer canonical helpers from src/utils/vehicleTypeUtils for classification so UI and purchase flows remain consistent.
+ * - This file is a safe, self-contained replacement to ensure used/new detection and proper persistence
+ *   of used truck metadata (production year, kilometres, condition, price) from market -> modal -> garage.
  */
-
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useGame } from '../contexts/GameContext';
@@ -20,17 +25,16 @@ import {
   Calendar,
   Truck as TruckIcon,
   X,
-  ArrowRight,
 } from 'lucide-react';
 import { TRAILERS } from '../data/trailers';
 import TruckCard from '../components/market/TruckCard';
-import MarketTabs from '../components/market/MarketTabs';
 import { TRUCKS, TruckCategoryKey } from '../data/trucks';
-import SmallTruckSpecsBox from '../components/market/SmallTruckSpecsBox';
-import BigTruckSpecsBox from '../components/market/BigTruckSpecsBox';
 import VehicleSpecsSelector from '../components/market/VehicleSpecsSelector';
 import TrailerTechnicalSpecs from '../components/trailer/TrailerTechnicalSpecs';
 import { isTrailer } from '../utils/vehicleTypeUtils';
+import { getHubCapacityInfo } from '../engines/hubCapacityEngine';
+import ConfirmPurchaseHubInfo from '../components/market/ConfirmPurchaseHubInfo';
+import { readOffersFromStorage } from '../engines/UsedTruckGenerator';
 
 /**
  * randInt
@@ -96,7 +100,6 @@ function normalizeTechnicalFields(truck: any): any {
   const cloned = { ...(truck ?? {}) };
   if (!cloned.specifications) cloned.specifications = { ...(cloned.specifications ?? {}) };
 
-  // Candidate keys that may contain fuel consumption in different datasets
   const fuelCandidates = [
     'fuelConsumption',
     'fuel_consumption',
@@ -112,20 +115,16 @@ function normalizeTechnicalFields(truck: any): any {
     'fuelConsumptionL/100km',
   ];
 
-  // Find first existing, non-empty candidate (authoritative top-level or nested specs)
   let foundFuel: any = null;
   for (const key of fuelCandidates) {
-    // top-level
     if (cloned[key] !== undefined && cloned[key] !== null && String(cloned[key]).trim() !== '') {
       foundFuel = cloned[key];
       break;
     }
-    // nested specs
     if (cloned.specifications && cloned.specifications[key] !== undefined && cloned.specifications[key] !== null && String(cloned.specifications[key]).trim() !== '') {
       foundFuel = cloned.specifications[key];
       break;
     }
-    // try common dot-notation nested keys
     if (cloned.specifications) {
       const dk = key.replace(/\./g, '');
       if (cloned.specifications[dk] !== undefined && cloned.specifications[dk] !== null && String(cloned.specifications[dk]).trim() !== '') {
@@ -153,7 +152,6 @@ function unifyTrucksListLocal(): any[] {
   const medium = (TRUCKS.medium || []).map((m: any) => normalizeTechnicalFields({ ...m }));
   const big = (TRUCKS.big || []).map((b: any) => normalizeTechnicalFields({ ...b }));
 
-  // Ensure availability / deliveryDays for new small/medium trucks
   const mediumAndSmallNormalized = ensureSmallAndMediumNewTrucksAvailability([...small, ...medium]).map((t: any) =>
     normalizeTechnicalFields(t)
   );
@@ -189,11 +187,61 @@ function isBigFromTopLevel(item: any | null): boolean {
 
 /**
  * VehicleMarket
- * @description Main page component for the vehicle marketplace.
+ * @description Main page component for the vehicle marketplace with client-side pagination.
  */
 const VehicleMarket: React.FC = () => {
   const navigate = useNavigate();
   const { gameState, createCompany } = useGame();
+
+  /**
+   * isUsedVehicle
+   * @description Determine whether a vehicle should be treated as "used" for UI and purchase logic.
+   */
+  function isUsedVehicle(vehicle: any | null): boolean {
+    if (!vehicle) return false;
+    const category = (vehicle.category ?? '').toString().toLowerCase();
+    const truckCategory = (vehicle.truckCategory ?? '').toString().toLowerCase();
+    const marketSource = (vehicle.marketSource ?? '').toString().toLowerCase();
+
+    if (category === 'used' || truckCategory === 'used') return true;
+    if (marketSource === 'used-generator') return true;
+    if (vehicle.isUsed === true) return true;
+    return false;
+  }
+
+  /**
+   * getInGameYear
+   * @description Resolve the current in-game year from gameState; falls back to real-world year when unavailable.
+   */
+  function getInGameYear(): number {
+    let ts: number | null = null;
+    const candidates: any[] = [
+      gameState?.time?.now,
+      gameState?.time,
+      gameState?.gameTime?.now,
+      gameState?.now,
+      gameState?.currentTime,
+      gameState?.clock?.now,
+      gameState?.clock,
+    ];
+    for (const c of candidates) {
+      if (c === undefined || c === null) continue;
+      if (typeof c === 'number' && Number.isFinite(c)) {
+        ts = Number(c);
+        break;
+      }
+      if (typeof c === 'string' && !Number.isNaN(Date.parse(c))) {
+        ts = Date.parse(c);
+        break;
+      }
+      if (typeof c === 'object' && c !== null && typeof c.now === 'number' && Number.isFinite(c.now)) {
+        ts = Number(c.now);
+        break;
+      }
+    }
+    if (!ts) ts = Date.now();
+    return new Date(ts).getFullYear();
+  }
 
   const [activeTab, setActiveTab] = useState<'new-trucks' | 'used-trucks' | 'new-trailers' | 'used-trailers'>('new-trailers');
 
@@ -215,12 +263,45 @@ const VehicleMarket: React.FC = () => {
   const [activeTruckCategoryTab, setActiveTruckCategoryTab] = useState<TruckCategoryKey>('medium');
   const [showOnlyTrucks, setShowOnlyTrucks] = useState<boolean>(false);
 
+  // Pagination states (10 items per page)
+  const ITEMS_PER_PAGE = 10;
+  const [truckPage, setTruckPage] = useState<number>(1);
+  const [trailerPage, setTrailerPage] = useState<number>(1);
+
   const company = gameState?.company ?? null;
   const [searchParams] = useSearchParams();
 
+  // Used offers generated by the UsedTruckGenerator (persisted in localStorage)
+  const [usedOffers, setUsedOffers] = useState<any[]>([]);
+
   useEffect(() => {
-    // Load trailers dataset into local vehicles list (we still rely on isTrailer() to classify)
+    // Load trailers dataset into local vehicles list
     setVehicles((TRAILERS || []).map((v: any) => ({ ...v })));
+  }, []);
+
+  useEffect(() => {
+    // load generated used offers from storage initially
+    try {
+      const stored = readOffersFromStorage();
+      setUsedOffers(Array.isArray(stored) ? stored : []);
+    } catch {
+      setUsedOffers([]);
+    }
+
+    // Listen for generator event to refresh offers automatically
+    const handler = () => {
+      try {
+        const updated = readOffersFromStorage();
+        setUsedOffers(Array.isArray(updated) ? updated : []);
+      } catch {
+        // ignore
+      }
+    };
+    window.addEventListener('tm:used-offers-generated', handler as EventListener);
+
+    return () => {
+      window.removeEventListener('tm:used-offers-generated', handler as EventListener);
+    };
   }, []);
 
   const unifyTrucksList = (): any[] => unifyTrucksListLocal();
@@ -268,13 +349,34 @@ const VehicleMarket: React.FC = () => {
   /**
    * getFilteredTrucks
    * @description Return filtered trucks from the unified trucks list while ensuring canonical classification.
+   *              Includes generated used offers when viewing used-trucks tab.
    */
   const getFilteredTrucks = (): any[] => {
-    let list = unifyTrucksList().filter((t) => !isTrailer(t) && t.category === (activeTab === 'new-trucks' ? 'new' : 'used'));
+    // Compose base list based on activeTab.
+    let list: any[] = [];
+
+    try {
+      if (activeTab === 'used-trucks') {
+        // Start with generated used offers (so generator offers appear prominently)
+        list = Array.isArray(usedOffers) ? usedOffers.map((o: any) => ({ ...o })) : [];
+        // Append canonical used trucks as fallback
+        const canonicalUsed = unifyTrucksList().filter((t) => !isTrailer(t) && (t.category ?? '').toString().toLowerCase() === 'used');
+        list = [...list, ...canonicalUsed];
+      } else {
+        // For new trucks view, read canonical trucks with 'new' category
+        list = unifyTrucksList().filter((t) => !isTrailer(t) && t.category === (activeTab === 'new-trucks' ? 'new' : 'used'));
+      }
+    } catch (e) {
+      // In case of unexpected data shapes, fall back to empty list
+      // eslint-disable-next-line no-console
+      console.warn('VehicleMarket.getFilteredTrucks failed to build base list', e);
+      list = [];
+    }
 
     if (activeTruckCategoryTab) {
       list = list.filter((t) => {
-        const cat = (t.truckCategory || (t.tonnage > 12 ? 'Big' : t.tonnage >= 7.5 ? 'Medium' : 'Small')).toLowerCase();
+        const ton = Number(t.tonnage ?? t.specifications?.tonnage ?? t.specifications?.capacity ?? 0);
+        const cat = (t.truckCategory || (ton > 12 ? 'Big' : ton >= 7.5 ? 'Medium' : 'Small')).toLowerCase();
         return cat === activeTruckCategoryTab.toLowerCase();
       });
     }
@@ -323,7 +425,24 @@ const VehicleMarket: React.FC = () => {
     truckCategoryFilter,
     activeTruckCategoryTab,
     activeTab,
+    usedOffers, // ensure usedOffers updates re-evaluate the truck list
   ]);
+
+  // Reset pages when filters or tab change (so user always starts at page 1)
+  useEffect(() => {
+    setTruckPage(1);
+  }, [truckSearchTerm, truckPriceRange, truckSortBy, truckCategoryFilter, activeTruckCategoryTab, activeTab]);
+
+  useEffect(() => {
+    setTrailerPage(1);
+  }, [searchTerm, priceRange, sortBy, selectedClass, activeTab]);
+
+  // Compute paged arrays
+  const truckTotalPages = Math.max(1, Math.ceil(filteredTrucks.length / ITEMS_PER_PAGE));
+  const trailerTotalPages = Math.max(1, Math.ceil(filteredTrailers.length / ITEMS_PER_PAGE));
+
+  const pagedTrucks = filteredTrucks.slice((truckPage - 1) * ITEMS_PER_PAGE, truckPage * ITEMS_PER_PAGE);
+  const pagedTrailers = filteredTrailers.slice((trailerPage - 1) * ITEMS_PER_PAGE, trailerPage * ITEMS_PER_PAGE);
 
   if (!company) {
     return (
@@ -354,12 +473,7 @@ const VehicleMarket: React.FC = () => {
 
   /**
    * openItemDetails
-   * @description
-   * - Open modal with deep-cloned selected vehicle.
-   * - For truck-like items attempt authoritative lookup in the canonical TRUCKS DB (by id, then brand+model).
-   * - Inject authoritative technical fields (gcw, reliability, durability, maintenanceGroup, speed, fuelConsumption, enginePower,
-   *   fuelTankCapacity) into cloned.specifications, preferring authoritative values first, then top-level vehicle props, then existing nested specs.
-   * - Preserve prior deliveryDays availability logic.
+   * @description Open details modal for selected vehicle and attempt authoritative lookups for trucks.
    */
   const openItemDetails = (vehicle: any | null) => {
     setPurchaseError(null);
@@ -370,15 +484,14 @@ const VehicleMarket: React.FC = () => {
       return;
     }
 
-    // Attempt authoritative lookup only for items that are not trailers
+    // We try to find authoritative dataset for used trucks by id or brand/model
     let authoritative: any | null = null;
     try {
-      const looksLikeTruck = !isTrailer(vehicle) && (
-        ((vehicle.type || '').toString().toLowerCase() === 'truck') ||
-        Boolean(vehicle.truckCategory) ||
-        Boolean(vehicle.tonnage) ||
-        Boolean(vehicle.brand && vehicle.model)
-      );
+      const looksLikeTruck = !isTrailer(vehicle) &&
+        (((vehicle.type || '').toString().toLowerCase() === 'truck') ||
+          Boolean(vehicle.truckCategory) ||
+          Boolean(vehicle.tonnage) ||
+          Boolean(vehicle.brand && vehicle.model));
 
       if (looksLikeTruck) {
         const unified = unifyTrucksList();
@@ -398,31 +511,25 @@ const VehicleMarket: React.FC = () => {
       authoritative = null;
     }
 
-    // Use authoritative if found, otherwise fall back to the provided object
+    // If the market item came from a generator, or is a used offer, keep the exact object as authoritative
     const source = authoritative ?? vehicle;
-
-    // clone to avoid mutating shared data
+    // Clone to avoid mutating original objects
     const cloned = JSON.parse(JSON.stringify(source));
-
-    // Ensure we have a specs object to write into
     if (!cloned.specifications) cloned.specifications = {};
 
-    // Helper to resolve a field preferring (authoritative -> top-level vehicle -> nested specs)
-    const resolveField = (keyCandidates: string[] | string, vehicleKey?: string) => {
+    // Resolve some normalized fields to ensure modal displays consistent keys
+    const resolveField = (keyCandidates: string[] | string) => {
       const keys = Array.isArray(keyCandidates) ? keyCandidates : [keyCandidates];
-      // try authoritative first
       if (authoritative) {
         for (const k of keys) {
           if (authoritative[k] !== undefined && authoritative[k] !== null && authoritative[k] !== '') {
             return authoritative[k];
           }
-          // nested
           if (authoritative.specifications && authoritative.specifications[k] !== undefined && authoritative.specifications[k] !== null && authoritative.specifications[k] !== '') {
             return authoritative.specifications[k];
           }
         }
       }
-      // then top-level provided vehicle
       for (const k of keys) {
         if (vehicle && vehicle[k] !== undefined && vehicle[k] !== null && vehicle[k] !== '') {
           return vehicle[k];
@@ -431,7 +538,6 @@ const VehicleMarket: React.FC = () => {
           return vehicle.specifications[k];
         }
       }
-      // then existing nested specs
       for (const k of keys) {
         if (cloned.specifications && cloned.specifications[k] !== undefined && cloned.specifications[k] !== null && cloned.specifications[k] !== '') {
           return cloned.specifications[k];
@@ -440,33 +546,11 @@ const VehicleMarket: React.FC = () => {
       return null;
     };
 
-    // Inject authoritative technical fields if available
     const resolvedGcw = resolveField(['gcw', 'gcwCategory', 'grossCombinationWeight', 'maxGcW', 'max_gcw', 'gcw_t']);
     if (resolvedGcw !== null && resolvedGcw !== undefined) {
       cloned.specifications = { ...(cloned.specifications ?? {}), gcw: resolvedGcw };
     }
 
-    const resolvedReliability = resolveField(['reliability', 'reliabilityRating', 'reliability_category', 'reliabilityCategory']);
-    if (resolvedReliability !== null && resolvedReliability !== undefined) {
-      cloned.specifications = { ...(cloned.specifications ?? {}), reliability: resolvedReliability };
-    }
-
-    const resolvedDurability = resolveField(['durability', 'durabilityScore', 'durability_score']);
-    if (resolvedDurability !== null && resolvedDurability !== undefined) {
-      cloned.specifications = { ...(cloned.specifications ?? {}), durability: resolvedDurability };
-    }
-
-    const resolvedMaintenanceGroup = resolveField(['maintenanceGroup', 'maintenance_group', 'maintenance']);
-    if (resolvedMaintenanceGroup !== null && resolvedMaintenanceGroup !== undefined) {
-      cloned.specifications = { ...(cloned.specifications ?? {}), maintenanceGroup: resolvedMaintenanceGroup };
-    }
-
-    const resolvedSpeed = resolveField(['speed', 'maxSpeed', 'topSpeed', 'speed_kmh']);
-    if (resolvedSpeed !== null && resolvedSpeed !== undefined) {
-      cloned.specifications = { ...(cloned.specifications ?? {}), speed: resolvedSpeed };
-    }
-
-    // Expanded fuel consumption candidates to match dataset (top-level & nested)
     const resolvedFuelConsumption = resolveField([
       'fuelConsumption',
       'fuel_consumption',
@@ -490,7 +574,6 @@ const VehicleMarket: React.FC = () => {
       cloned.specifications = { ...(cloned.specifications ?? {}), enginePower: resolvedEngine };
     }
 
-    // NEW: Resolve fuel tank capacity (common keys and variants)
     const resolvedFuelTank = resolveField([
       'fuelTankCapacity',
       'fuelTank',
@@ -507,7 +590,7 @@ const VehicleMarket: React.FC = () => {
       cloned.specifications = { ...(cloned.specifications ?? {}), fuelTankCapacity: resolvedFuelTank };
     }
 
-    // For small/medium new trucks ensure deliveryDays are set (existing logic preserved)
+    // DeliveryDays resolution
     const ton = Number(cloned.tonnage ?? cloned.specifications?.tonnage ?? cloned.specifications?.capacity ?? 0);
     const cat = (cloned.truckCategory || '').toString().toLowerCase();
     const isNew = (cloned.category ?? '').toString().toLowerCase() === 'new';
@@ -531,6 +614,9 @@ const VehicleMarket: React.FC = () => {
         cloned.deliveryDays = parsed ?? 0;
       }
     }
+
+    // Attach the canonical market entry so purchase persists source info
+    cloned.marketEntry = JSON.parse(JSON.stringify(source));
 
     setSelectedVehicle(cloned);
     const hubs = getUserHubs();
@@ -558,7 +644,7 @@ const VehicleMarket: React.FC = () => {
   /**
    * performPurchase
    * @description Perform the in-memory purchase: deduct capital and add item to company.trucks or company.trailers
-   *              based on canonical isTrailer() heuristic.
+   *              based on canonical isTrailer() heuristic. Preserve used-truck metadata when purchasing used offers.
    */
   const performPurchase = async () => {
     setPurchaseError(null);
@@ -598,8 +684,26 @@ const VehicleMarket: React.FC = () => {
 
       const etaIso = deliveryDays > 0 ? new Date(Date.now() + deliveryDays * 24 * 60 * 60 * 1000).toISOString() : null;
 
-      // Use canonical heuristic to decide where to place the purchased item
       const purchasedIsTrailer = isTrailer(selectedVehicle);
+      const purchasedIsUsedTruck = isUsedVehicle(selectedVehicle);
+      const inGameYearForPurchase = getInGameYear();
+      const resolvedUsedYearForPurchase =
+        (selectedVehicle.year ??
+          selectedVehicle.productionYear ??
+          selectedVehicle.specifications?.year ??
+          selectedVehicle.specifications?.productionYear ??
+          inGameYearForPurchase) as number;
+
+      const rawKmForPurchase =
+        selectedVehicle.kilometers ??
+        selectedVehicle.km ??
+        selectedVehicle.mileage ??
+        selectedVehicle.specifications?.kilometers ??
+        selectedVehicle.specifications?.mileage ??
+        0;
+      const numericKmForPurchase = Number(rawKmForPurchase);
+      const resolvedMileageForPurchase =
+        purchasedIsUsedTruck && Number.isFinite(numericKmForPurchase) ? numericKmForPurchase : 0;
 
       if (!purchasedIsTrailer) {
         newCompany.trucks = Array.isArray(newCompany.trucks) ? [...newCompany.trucks] : [];
@@ -607,19 +711,26 @@ const VehicleMarket: React.FC = () => {
           id: selectedVehicle.id ?? `truck-${Date.now()}`,
           brand: selectedVehicle.brand ?? 'Unknown',
           model: selectedVehicle.model ?? '',
-          year: selectedVehicle.year ?? new Date().getFullYear(),
+          // New vs used: use in-game year for new, resolved used year for used offers
+          year: purchasedIsUsedTruck ? resolvedUsedYearForPurchase : inGameYearForPurchase,
+          // Keep whatever condition the offer had (used trucks can be < 100%)
           condition: typeof selectedVehicle.condition === 'number' ? selectedVehicle.condition : 100,
           capacity: selectedVehicle.specifications?.capacity ?? selectedVehicle.capacity ?? 0,
           tonnage: selectedVehicle.tonnage ?? null,
           purchasePrice: price,
-          mileage: 0,
+          // New vs used: new trucks start at 0 km, used trucks keep their advertised mileage
+          mileage: resolvedMileageForPurchase,
           status: deliveryDays > 0 ? 'in-transit' : 'available',
-          location: deliveryDays > 0 ? (chosenHub?.name ?? newCompany.hub?.city ?? 'Hub') : (newCompany.hub?.city || newCompany.hub?.name || 'Hub'),
+          location:
+            deliveryDays > 0
+              ? chosenHub?.name ?? newCompany.hub?.city ?? 'Hub'
+              : newCompany.hub?.city || newCompany.hub?.name || 'Hub',
           deliveryDays,
           deliveryEta: etaIso,
           deliveryHub: chosenHub ? { id: chosenHub.id, name: chosenHub.name } : null,
           specifications: selectedVehicle.specifications ?? undefined,
-          marketEntry: JSON.parse(JSON.stringify(selectedVehicle)),
+          // Keep full original market entry for debugging/analytics
+          marketEntry: JSON.parse(JSON.stringify(selectedVehicle.marketEntry ?? selectedVehicle)),
         };
         newCompany.trucks.push(truckEntry);
       } else {
@@ -638,7 +749,7 @@ const VehicleMarket: React.FC = () => {
           deliveryEta: etaIso,
           deliveryHub: chosenHub ? { id: chosenHub.id, name: chosenHub.name } : null,
           specifications: selectedVehicle.specifications ? JSON.parse(JSON.stringify(selectedVehicle.specifications)) : {},
-          marketEntry: JSON.parse(JSON.stringify(selectedVehicle)),
+          marketEntry: JSON.parse(JSON.stringify(selectedVehicle.marketEntry ?? selectedVehicle)),
         };
         newCompany.trailers.push(trailerEntry);
       }
@@ -688,6 +799,40 @@ const VehicleMarket: React.FC = () => {
   ];
 
   const hubsForSelect = getUserHubs();
+
+  /**
+   * effectiveHubRefForModal
+   * @description Resolve selectedDeliveryHubId into a hub object/reference for capacity checks.
+   */
+  const effectiveHubRefForModal = useMemo(() => {
+    if (!company) return null;
+    const sel = selectedDeliveryHubId ?? 'main';
+
+    if (!sel || sel === 'main') {
+      if (company.hub) return company.hub;
+      const hubsArr = Array.isArray(company.hubs) ? company.hubs : Array.isArray(company.infrastructure?.hubs) ? company.infrastructure.hubs : [];
+      if (hubsArr.length > 0) return hubsArr[0];
+      if (company.mainHubId) return { id: company.mainHubId, level: company.hub?.level ?? 1 };
+      return null;
+    }
+
+    const hubsArr = Array.isArray(company.hubs) ? company.hubs : Array.isArray(company.infrastructure?.hubs) ? company.infrastructure.hubs : [];
+    const found = hubsArr.find((h: any) => String(h?.id ?? h?.name ?? '') === String(sel));
+    if (found) return found;
+    return sel;
+  }, [company, selectedDeliveryHubId]);
+
+  /**
+   * hubInfoForModal
+   * @description Compute hub capacity info for selectedDeliveryHubId to display in confirm area.
+   */
+  const hubInfoForModal = useMemo(() => {
+    try {
+      return getHubCapacityInfo(company, effectiveHubRefForModal);
+    } catch {
+      return { hubId: null, hubName: null, level: 1, maxAllowed: 0, assignedCount: 0, isFull: false };
+    }
+  }, [company, effectiveHubRefForModal]);
 
   return (
     <div className="space-y-6">
@@ -929,31 +1074,129 @@ const VehicleMarket: React.FC = () => {
                 ))}
               </div>
 
-              {filteredTrucks.map((truck) => (
-                <TruckCard
-                  key={truck.id}
-                  id={truck.id}
-                  brand={truck.brand}
-                  model={truck.model}
-                  price={truck.price}
-                  condition={truck.condition}
-                  availability={truck.availability}
-                  tonnage={truck.tonnage}
-                  leaseRate={truck.leaseRate}
-                  truckCategory={truck.truckCategory}
-                  cargoTypes={truck.specifications?.cargoTypes}
-                  capacity={truck.specifications?.capacity}
-                  /** Pass authoritative GCW category (prefer nested specifications then top-level gcw) */
-                  gcw={truck.specifications?.gcw ?? truck.gcw ?? null}
-                  onClick={() => openItemDetails(truck)}
-                />
-              ))}
+              {pagedTrucks.map((truck) => {
+                // Derive production year and kilometers from various possible fields
+                const year =
+                  truck.productionYear ??
+                  truck.year ??
+                  truck.specifications?.productionYear ??
+                  truck.specifications?.year ??
+                  null;
+
+                const kilometers =
+                  truck.kilometers ??
+                  truck.mileage ??
+                  truck.specifications?.kilometers ??
+                  truck.specifications?.mileage ??
+                  null;
+
+                // Ensure each displayTruck has an explicit price field resolved from common variants
+                function resolvePrice(item: any): number | string | null {
+                  if (!item) return null;
+                  const candidates = [
+                    item.price,
+                    item.listingPrice,
+                    item.marketPrice,
+                    item.offerPrice,
+                    item.cost,
+                    item.purchasePrice,
+                    item.salePrice,
+                    item.amount,
+                    // nested places
+                    item.marketEntry?.price,
+                    item.marketEntry?.listingPrice,
+                    item.specifications?.price,
+                    item.specifications?.listingPrice,
+                  ];
+
+                  for (const c of candidates) {
+                    if (c !== undefined && c !== null && String(c).trim() !== '') return c;
+                  }
+                  return null;
+                }
+
+                const resolvedPrice = resolvePrice(truck);
+                const normalizedPrice =
+                  resolvedPrice !== null
+                    ? (typeof resolvedPrice === 'string' && /^\s*-?\d+(?:[.,]\d+)?\s*$/.test(resolvedPrice)
+                        ? Number(String(resolvedPrice).replace(/[,\\s]+/g, ''))
+                        : resolvedPrice)
+                    : truck.price ?? null;
+
+                const displayTruck = {
+                  ...(truck ?? {}),
+                  year: year ?? (truck.year ?? truck.productionYear ?? null),
+                  kilometers: kilometers ?? (truck.kilometers ?? truck.mileage ?? null),
+                  price: normalizedPrice,
+                };
+
+                // For used trucks missing availability, synthesize immediate..2 days when generated
+                const isUsed = isUsedVehicle(displayTruck);
+                const parsed = parseAvailabilityDays(displayTruck.availability ?? displayTruck.specifications?.availability ?? '');
+                if (isUsed && parsed === null) {
+                  const d = randInt(0, 2);
+                  displayTruck.deliveryDays = d;
+                  displayTruck.availability = d === 0 ? 'immediately' : `${d} day${d === 1 ? '' : 's'}`;
+                } else if (parsed !== null && (displayTruck.deliveryDays === undefined || displayTruck.deliveryDays === null)) {
+                  displayTruck.deliveryDays = parsed;
+                }
+
+                return (
+                  <TruckCard
+                    key={displayTruck.id ?? truck.id}
+                    id={displayTruck.id ?? truck.id}
+                    brand={displayTruck.brand ?? truck.brand}
+                    model={displayTruck.model ?? truck.model}
+                    price={displayTruck.price ?? truck.price}
+                    condition={displayTruck.condition ?? truck.condition}
+                    availability={displayTruck.availability ?? truck.availability}
+                    tonnage={displayTruck.tonnage ?? truck.tonnage}
+                    leaseRate={displayTruck.leaseRate ?? truck.leaseRate}
+                    truckCategory={displayTruck.truckCategory ?? truck.truckCategory}
+                    cargoTypes={displayTruck.specifications?.cargoTypes ?? truck.specifications?.cargoTypes}
+                    capacity={displayTruck.specifications?.capacity ?? truck.specifications?.capacity}
+                    gcw={displayTruck.specifications?.gcw ?? displayTruck.gcw ?? truck.specifications?.gcw ?? truck.gcw ?? null}
+                    year={displayTruck.year}
+                    kilometers={displayTruck.kilometers}
+                    marketSource={displayTruck.marketSource ?? truck.marketSource ?? null}
+                    onClick={() => openItemDetails(displayTruck)}
+                  />
+                );
+              })}
 
               {filteredTrucks.length === 0 && <div className="text-center py-8 text-slate-400">No trucks match the current filters.</div>}
+
+              {/* Truck pager */}
+              {filteredTrucks.length > ITEMS_PER_PAGE && (
+                <div className="mt-4 flex items-center justify-between">
+                  <div className="text-sm text-slate-300">
+                    Showing {Math.min((truckPage - 1) * ITEMS_PER_PAGE + 1, filteredTrucks.length)} - {Math.min(truckPage * ITEMS_PER_PAGE, filteredTrucks.length)} of {filteredTrucks.length}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setTruckPage((p) => Math.max(1, p - 1))}
+                      disabled={truckPage === 1}
+                      className="px-3 py-2 rounded-md bg-slate-800 text-slate-300 disabled:opacity-60"
+                    >
+                      Prev
+                    </button>
+                    <div className="text-sm text-slate-300">
+                      Page {truckPage} of {truckTotalPages}
+                    </div>
+                    <button
+                      onClick={() => setTruckPage((p) => Math.min(truckTotalPages, p + 1))}
+                      disabled={truckPage === truckTotalPages}
+                      className="px-3 py-2 rounded-md bg-slate-800 text-slate-300 disabled:opacity-60"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
           ) : (
             <>
-              {filteredTrailers.map((vehicle) => {
+              {pagedTrailers.map((vehicle) => {
                 const trailerFlag = isTrailer(vehicle);
                 return (
                   <div
@@ -990,7 +1233,6 @@ const VehicleMarket: React.FC = () => {
                             </span>
                           </div>
 
-                          {/* GCW category (from dataset) */}
                           <div className="mt-1 text-xs text-slate-400">
                             <span className="text-slate-400">GCW:</span>
                             <span className="ml-2 inline-block px-2 py-0.5 rounded text-xs font-medium bg-slate-700 text-slate-300">
@@ -1019,6 +1261,34 @@ const VehicleMarket: React.FC = () => {
               })}
 
               {filteredTrailers.length === 0 && <div className="text-center py-8 text-slate-400">No trailers match the current filters.</div>}
+
+              {/* Trailer pager */}
+              {filteredTrailers.length > ITEMS_PER_PAGE && (
+                <div className="mt-4 flex items-center justify-between">
+                  <div className="text-sm text-slate-300">
+                    Showing {Math.min((trailerPage - 1) * ITEMS_PER_PAGE + 1, filteredTrailers.length)} - {Math.min(trailerPage * ITEMS_PER_PAGE, filteredTrailers.length)} of {filteredTrailers.length}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setTrailerPage((p) => Math.max(1, p - 1))}
+                      disabled={trailerPage === 1}
+                      className="px-3 py-2 rounded-md bg-slate-800 text-slate-300 disabled:opacity-60"
+                    >
+                      Prev
+                    </button>
+                    <div className="text-sm text-slate-300">
+                      Page {trailerPage} of {trailerTotalPages}
+                    </div>
+                    <button
+                      onClick={() => setTrailerPage((p) => Math.min(trailerTotalPages, p + 1))}
+                      disabled={trailerPage === trailerTotalPages}
+                      className="px-3 py-2 rounded-md bg-slate-800 text-slate-300 disabled:opacity-60"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -1077,17 +1347,49 @@ const VehicleMarket: React.FC = () => {
                   <div className="text-sm text-slate-400">Condition</div>
                   <div className="text-lg font-bold text-green-400">{selectedVehicle.condition ?? 100}%</div>
                 </div>
+
+                {/* Production Year */}
+                <div>
+                  <div className="text-sm text-slate-400">Production Year</div>
+                  <div className="text-lg font-bold text-white">
+                    {(() => {
+                      const used = isUsedVehicle(selectedVehicle);
+                      if (!used) {
+                        return getInGameYear();
+                      }
+                      const year =
+                        selectedVehicle.year ??
+                        selectedVehicle.productionYear ??
+                        selectedVehicle.specifications?.year ??
+                        selectedVehicle.specifications?.productionYear ??
+                        null;
+                      return year ?? '—';
+                    })()}
+                  </div>
+                </div>
+
+                {/* Kilometres */}
+                <div>
+                  <div className="text-sm text-slate-400">Kilometres</div>
+                  <div className="text-lg font-bold text-white">
+                    {(() => {
+                      const used = isUsedVehicle(selectedVehicle);
+                      if (!used) return '0 km';
+                      const km =
+                        selectedVehicle.kilometers ??
+                        selectedVehicle.km ??
+                        selectedVehicle.mileage ??
+                        selectedVehicle.specifications?.kilometers ??
+                        selectedVehicle.specifications?.mileage ??
+                        null;
+                      if (km === null || km === undefined || Number.isNaN(Number(km))) return '—';
+                      return `${Number(km).toLocaleString()} km`;
+                    })()}
+                  </div>
+                </div>
               </div>
 
-              {/* Technical specifications area:
-                  For big trucks we ensure GCW was injected into selectedVehicle.specifications
-                  (from authoritative TRUCKS DB) so BigTruckSpecsBox displays GCW Category.
-                  We avoid showing SmallTruckSpecsBox for big trucks to replace Capacity with GCW. */}
               <div className="mb-4">
-                {/* Vehicle specs selector component: centralizes classification and rendering.
-                   For trailers we render a specialized, trailer-only specs component that shows:
-                   GCW, Capacity (max payload), Reliability, Durability and Maintenance Group.
-                   For trucks / other vehicle types we preserve the existing VehicleSpecsSelector. */}
                 {selectedVehicle?.type === 'trailer' || isTrailer(selectedVehicle) ? (
                   <TrailerTechnicalSpecs specs={selectedVehicle.specifications ?? selectedVehicle} />
                 ) : (
@@ -1167,7 +1469,7 @@ const VehicleMarket: React.FC = () => {
 
                   <div className="mb-3">
                     <label className="block text-sm text-slate-300 mb-2">Deliver to</label>
-                    <select value={selectedDeliveryHubId ?? ''} onChange={(e) => setSelectedDeliveryHubId(e.target.value)} className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white">
+                    <select value={selectedDeliveryHubId ?? 'main'} onChange={(e) => setSelectedDeliveryHubId(e.target.value)} className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white">
                       {hubsForSelect.length === 0 && <option value="">No hubs available (create a hub first)</option>}
                       {hubsForSelect.map((h) => (
                         <option key={h.id} value={h.id}>
@@ -1180,11 +1482,24 @@ const VehicleMarket: React.FC = () => {
                     </div>
                   </div>
 
+                  <div className="mb-3">
+                    <ConfirmPurchaseHubInfo
+                      hubName={hubInfoForModal.hubName ?? undefined}
+                      assignedCount={hubInfoForModal.assignedCount}
+                      maxAllowed={hubInfoForModal.maxAllowed}
+                      level={hubInfoForModal.level}
+                    />
+                  </div>
+
                   <div className="flex gap-3">
                     <button
                       onClick={() => {
                         if (hubsForSelect.length > 0 && !selectedDeliveryHubId) {
                           setPurchaseError('Please select a delivery hub.');
+                          return;
+                        }
+                        if (hubInfoForModal.assignedCount >= hubInfoForModal.maxAllowed) {
+                          setPurchaseError('Selected hub is at capacity. Choose a different hub or free up space.');
                           return;
                         }
                         performPurchase();

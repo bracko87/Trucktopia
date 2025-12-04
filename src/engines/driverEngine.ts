@@ -17,6 +17,8 @@
  * You can pass a different interval via options for testing.
  */
 
+import { nowUtcMs } from '../utils/gameClock';
+
 /**
  * Engine options
  */
@@ -172,7 +174,7 @@ export function startDriverEngine(options: DriverEngineOptions = {}) {
 
         // For each staff, determine assignment status
         (company.staff || []).forEach((s: any) => {
-          const now = Date.now();
+          const now = nowUtcMs();
 
           // Is driver assigned to an active job?
           // Consider assignment either as assignedDriver OR assignedCoDriver
@@ -206,7 +208,7 @@ export function startDriverEngine(options: DriverEngineOptions = {}) {
           // If happiness drops below threshold and not already asked, flag request
           if (s.happiness < WANT_LEAVE_THRESHOLD && !s.askedToLeave) {
             s.askedToLeave = true;
-            s.askDate = new Date().toISOString();
+            s.askDate = new Date(now).toISOString();
             usersChanged = true;
             if (debug) console.info(`[DriverEngine] ${s.name || s.id} asked to leave (happiness ${s.happiness})`);
           }
@@ -267,7 +269,7 @@ export function startDriverEngine(options: DriverEngineOptions = {}) {
 
         // same loop for admin company staff
         (company.staff || []).forEach((s: any) => {
-          const now = Date.now();
+          const now = nowUtcMs();
           // Admin company: consider both driver and co-driver assignments
           const assignedJob = (company.activeJobs || []).find((j: any) => {
             if (!j || !j.status) return false;
@@ -294,7 +296,7 @@ export function startDriverEngine(options: DriverEngineOptions = {}) {
           }
           if (s.happiness < WANT_LEAVE_THRESHOLD && !s.askedToLeave) {
             s.askedToLeave = true;
-            s.askDate = new Date().toISOString();
+            s.askDate = new Date(now).toISOString();
             adminChanged = true;
             if (debug) console.info('[DriverEngine] admin driver asked to leave', s.name || s.id);
           }

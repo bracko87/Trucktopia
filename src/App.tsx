@@ -30,8 +30,6 @@ import JobSanitizer from './components/JobSanitizer';
 import RemoveSpecs from './components/RemoveSpecs';
 import RemoveAnnouncement from './components/RemoveAnnouncement';
 
-// Dev runtime locator (temporary; logs DOM->React fiber mapping)
-import RuntimeSpecLocator from './components/Debug/RuntimeSpecLocator';
 import MarketRedirectListener from './components/MarketRedirectListener';
 
 // New: Trailer normalizer helper - moves misplaced trailers into company.trailers
@@ -40,9 +38,13 @@ import HideTrailerFleetHeader from './components/fleet/HideTrailerFleetHeader';
 import HideTrailerPackageIconBox from './components/fleet/HideTrailerPackageIconBox';
 import ForceHidePackageIconBox from './components/fleet/ForceHidePackageIconBox';
 import IncomingDeliveryFinalizer from './components/fleet/IncomingDeliveryFinalizer';
+import ForceInjectTruck from './components/admin/ForceInjectTruck';
 import ManifestSynchronizer from './components/ManifestSynchronizer';
 
-// New background synchronizer for hubs
+// Bootstrap: ensure canonical in-game time seeded before any background engines mount
+import GameClockBootstrap from './components/Boot/GameClockBootstrap';
+
+// New Infrastructure page
 import HubsSynchronizer from './components/infrastructure/HubsSynchronizer';
 import AdminForceMainHubReset from './components/admin/AdminForceMainHubReset';
 import GrantFundsToAllUsers from './components/admin/GrantFundsToAllUsers';
@@ -88,12 +90,42 @@ import Migration from './pages/Migration';
 
 // New Infrastructure page
 import Infrastructure from './pages/Infrastructure';
+import MigrationTasks from './pages/MigrationTasks';
+
+// New Engine: Used Truck Generator
+import UsedTruckGenerator from './engines/UsedTruckGenerator';
+
+// Company persistence sync — background helper to ensure company mutations persist to localStorage
+import CompanyPersistenceSync from './components/Boot/CompanyPersistenceSync';
 
 /**
  * App
  * @description Root application component: mounts providers, layout and routing.
  */
 function App() {
+  const [RawJsonReplacerComponent, setRawJsonReplacerComponent] = React.useState<React.ComponentType | null>(null);
+
+  /**
+   * Dynamically import RawJsonReplacer on the client. We do this to:
+   * - Avoid evaluating DOM/react-dom dependent modules during SSR or early runtime
+   * - Keep behaviour client-only and best-effort
+   */
+  React.useEffect(() => {
+    let mounted = true;
+    if (typeof window === 'undefined') return;
+    import('./components/RawJsonReplacer')
+      .then((mod) => {
+        if (!mounted) return;
+        if (mod && mod.default) setRawJsonReplacerComponent(() => mod.default);
+      })
+      .catch(() => {
+        // ignore load failures; replacer is best-effort
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   return (
     <GameProvider>
       <JobMarketProvider>
@@ -102,8 +134,12 @@ function App() {
             {/* Development-only helper: expose game state to window for debugging */}
             <ExposeGameState />
 
-            {/* Dev runtime DOM->React fiber locator (temporary) */}
-            <RuntimeSpecLocator />
+            {/* Dynamically load RawJsonReplacer on the client to avoid SSR/runtime issues.
+                This ensures the replacer only runs in browser contexts and prevents module
+                evaluation errors when react-dom/client is unavailable at module init. */}
+            {RawJsonReplacerComponent ? <RawJsonReplacerComponent /> : null}
+            <ExposeGameState />
+
 
             {/* Mount background helpers (UI-less) to run side-effects and normalization */}
             <MechanicSkillAssigner />
@@ -125,6 +161,12 @@ function App() {
 
             {/* HubsSynchronizer: normalize hubs into company state when found in other gameState locations */}
             <HubsSynchronizer />
+
+            {/* Mount the Used Truck Generator engine so it runs daily and provides offers */}
+            <UsedTruckGenerator />
+
+            {/* Company persistence sync: ensure in-memory company changes are persisted to localStorage */}
+            <CompanyPersistenceSync />
 
             <Routes>
               <Route path="/" element={<Home />} />

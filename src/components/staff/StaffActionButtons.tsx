@@ -681,7 +681,7 @@ const StaffActionButtons: React.FC<StaffActionButtonsProps> = ({
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <div className="text-xs text-slate-400">Current Salary</div>
-                  <div className="text-white font-medium">€{prevSalary.toLocaleString()}</div>
+                  <div className="text-white font-medium">${prevSalary.toLocaleString()}</div>
                 </div>
                 <div>
                   <div className="text-xs text-slate-400">Current Happiness</div>
@@ -707,7 +707,7 @@ const StaffActionButtons: React.FC<StaffActionButtonsProps> = ({
               </div>
 
               <div>
-                <div className="text-xs text-slate-400 mb-2">Or Enter Custom Salary (€)</div>
+                <div className="text-xs text-slate-400 mb-2">Or Enter Custom Salary ($)</div>
                 <input value={customAmount} onChange={(e) => setCustomAmount(e.target.value)} placeholder="e.g. 3500" className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm" />
                 <div className="text-xs text-slate-500 mt-1">Custom amount takes precedence over percent selection.</div>
               </div>
@@ -715,7 +715,7 @@ const StaffActionButtons: React.FC<StaffActionButtonsProps> = ({
               <div className="border-t border-slate-700 pt-3">
                 <div className="flex items-center justify-between text-sm text-slate-400 mb-2">
                   <div>New Salary</div>
-                  <div className="text-white font-medium">€{newSalary !== null ? newSalary.toLocaleString() : '-'}</div>
+                  <div className="text-white font-medium">${newSalary !== null ? newSalary.toLocaleString() : '-'}</div>
                 </div>
 
                 <div className="flex items-center justify-between text-sm text-slate-400">

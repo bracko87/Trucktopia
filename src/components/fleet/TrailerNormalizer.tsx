@@ -65,12 +65,42 @@ const TrailerNormalizer: React.FC = () => {
         if (!arr) continue;
 
         const newArr = arr.map((it: any) => {
+          if (!it || typeof it !== 'object') return it;
+
           // If canonical tag exists, respect it
           if (it?.vehicleKind === 'trailer' || it?.vehicleKind === 'truck') {
             return { ...it };
           }
 
-          // Use heuristics to decide
+          // Explicit source-driven decision (highest priority for marketplace flows)
+          const sourceFields = [
+            it.source,
+            it.listingSource,
+            it.listingType,
+            it.type,
+            it.origin,
+            it.category,
+            it.kind,
+            it.marketEntry?.source,
+            it.marketEntry?.category,
+            it.marketEntry?.type,
+            it._source?.origin,
+            it._source?.category
+          ];
+          const joined = sourceFields.filter(Boolean).map(String).join(' ').toLowerCase();
+
+          if (joined.includes('trailer') || joined.includes('used-trailers') || joined.includes('new-trailers') || joined.includes('used trailers') || joined.includes('new trailers')) {
+            didChange = true;
+            const trailerClass = it.trailerClass ?? extractTrailerClass(it) ?? undefined;
+            return { ...it, vehicleKind: 'trailer', ...(trailerClass ? { trailerClass } : {}) };
+          }
+
+          if (joined.includes('truck') || joined.includes('tractor') || joined.includes('used-trucks') || joined.includes('new-trucks') || joined.includes('used trucks') || joined.includes('new trucks')) {
+            didChange = true;
+            return { ...it, vehicleKind: 'truck' };
+          }
+
+          // Use heuristics to decide when explicit source is absent
           if (isTrailer(it)) {
             didChange = true;
             const trailerClass = it.trailerClass ?? extractTrailerClass(it) ?? undefined;
@@ -79,6 +109,7 @@ const TrailerNormalizer: React.FC = () => {
             didChange = true;
             return { ...it, vehicleKind: 'truck' };
           }
+
           return { ...it };
         });
 
@@ -125,34 +156,25 @@ const TrailerNormalizer: React.FC = () => {
         }
       }
 
-      // 3) Repair items in company.trailers that are clearly trucks -> move back to trucks
+      // 3) IMPORTANT: Protect trailers that already live in company.trailers.
+// Do NOT move items out of company.trailers based on heuristic signals.
+// Only move items that explicitly declare vehicleKind === 'truck' (an administrative/canonical override).
       const remainingTrailers: any[] = [];
       const trucksToAddFromTrailers: any[] = [];
 
       for (const tr of trailersArr) {
-        // If canonical tag says truck, move it back
+        // If canonical tag explicitly says truck, move it to trucks (explicit administrative override).
         if (tr?.vehicleKind === 'truck') {
           didChange = true;
           trucksToAddFromTrailers.push({ ...tr, type: 'truck', vehicleKind: 'truck' });
           continue;
         }
 
-        // If canonical trailer or heuristic trailer, keep
-        if (tr?.vehicleKind === 'trailer' || isTrailer(tr)) {
-          // ensure canonical trailer tag
-          if (!tr.vehicleKind) {
-            didChange = true;
-            remainingTrailers.push({ ...tr, vehicleKind: 'trailer' });
-          } else {
-            remainingTrailers.push({ ...tr });
-          }
-          continue;
-        }
-
-        // Heuristic says it's not a trailer -> move to trucks
-        if (!isTrailer(tr)) {
+        // Otherwise: preserve the item in trailers. Do NOT rely on heuristics to remove it.
+        // If the item lacks a canonical vehicleKind, set it to 'trailer' to reduce future ambiguity.
+        if (!tr.vehicleKind) {
           didChange = true;
-          trucksToAddFromTrailers.push({ ...tr, type: 'truck', vehicleKind: 'truck' });
+          remainingTrailers.push({ ...tr, vehicleKind: 'trailer' });
         } else {
           remainingTrailers.push({ ...tr });
         }

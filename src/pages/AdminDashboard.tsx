@@ -1,3 +1,4 @@
+
 /**
  * AdminDashboard.tsx
  *
@@ -26,13 +27,9 @@ import {
   Truck,
   BarChart3,
   AlertTriangle,
-  TrendingUp,
-  CheckCircle,
-  Clock,
-  Users,
-  Filter
 } from 'lucide-react';
 import RemoteStats from '../components/admin/RemoteStats';
+import UsedTruckGeneratorCard from '../components/admin/UsedTruckGeneratorCard';
 
 /**
  * UserStats
@@ -414,7 +411,11 @@ const AdminDashboard: React.FC = () => {
           </button>
         </div>
 
-        {/* NOTE: Quick Actions & System Health blocks intentionally removed to satisfy admin request. */}
+        {/* Used Truck Generator Card (moved here from Game Rules page) */}
+        <div>
+          <UsedTruckGeneratorCard />
+        </div>
+
       </div>
 
       {/* Recent Activity */}

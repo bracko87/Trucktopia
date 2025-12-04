@@ -25,6 +25,7 @@ import { SkillChipsList } from './SmallSkillCard';
 import PositionBlock from './RolePanels/PositionBlock';
 import StaffFireConfirmModal from './StaffFireConfirmModal';
 import { toast } from 'sonner';
+import { inGameNowISO } from '../../utils/inGameTime';
 
 /**
  * CompactStaff
@@ -74,6 +75,12 @@ function buildProgressKey(staffId: string, skill: string): string {
 }
 
 /**
+ * clamp
+ * @description Clamp a number into 0..100 range for percentage bars
+ */
+const clamp = (v: number, a = 0, b = 100) => Math.max(a, Math.min(b, v));
+
+/**
  * DriverCompactCard
  * @description Small card representing a staff member. Enhanced for the current-user
  * "Stop Driving" flow: when the logged-in user stops driving, the card is archived and
@@ -99,7 +106,7 @@ const DriverCompactCard: React.FC<DriverCompactCardProps> = ({
   /**
    * stoppedDriving
    * @description Whether this specific staff entry has been archived for the current company.
-   * When true (and this is the current user's driver) we render the Drive-as-User UI instead of the card.
+   * When true (and this is the current user's driver) we render the "Drive-as-User" UI instead of the card.
    */
   const [stoppedDriving, setStoppedDriving] = useState<boolean>(false);
 
@@ -274,10 +281,10 @@ const DriverCompactCard: React.FC<DriverCompactCardProps> = ({
       // Create archive array if missing
       clone.archivedStaff = Array.isArray(clone.archivedStaff) ? clone.archivedStaff : [];
 
-      // Shallow archive snapshot with metadata
+      // Shallow archive snapshot with metadata using in-game timestamp
       const archived = {
         ...staffObj,
-        archivedAt: new Date().toISOString(),
+        archivedAt: inGameNowISO(game.gameState),
         archivedReason: 'stoppedDriving',
         archivedBy: currentUser,
       };
@@ -544,7 +551,7 @@ const DriverCompactCard: React.FC<DriverCompactCardProps> = ({
 
         <div className="text-right min-w-[90px]">
           <div className="text-sm text-slate-400">Salary</div>
-          <div className="text-white font-medium">{typeof staff.salary === 'number' ? `€${(staff.salary as number).toLocaleString()}` : (staff.salary === 'FREE' ? 'FREE' : '-')}</div>
+          <div className="text-white font-medium">{typeof staff.salary === 'number' ? `$${(staff.salary as number).toLocaleString()}` : (staff.salary === 'FREE' ? 'FREE' : '-')}</div>
         </div>
       </div>
 
@@ -662,21 +669,10 @@ const DriverCompactCard: React.FC<DriverCompactCardProps> = ({
         monthlySalary={typeof staff.salary === 'number' ? staff.salary : 0}
         companyCapital={typeof game?.gameState?.company?.capital === 'number' ? game!.gameState!.company!.capital! : Number(game?.gameState?.company?.capital || 0)}
         onCancel={() => { setShowFireConfirm(false); setFireResultMessage(null); }}
-        onConfirm={() => { doConfirmFire(); }}
-        loading={fireProcessing}
-        resultMessage={fireResultMessage}
+        onConfirm={doConfirmFire}
       />
     </div>
   );
 };
-
-/**
- * clamp
- * Utility to clamp a number between 0 and 100 (presentational)
- */
-function clamp(v: number) {
-  const n = Number.isFinite(Number(v)) ? Number(v) : 0;
-  return Math.max(0, Math.min(100, Math.round(n)));
-}
 
 export default DriverCompactCard;

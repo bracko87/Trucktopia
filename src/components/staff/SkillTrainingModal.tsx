@@ -8,21 +8,21 @@
  * dispatcher -> dispatcher skills, manager -> manager skills).
  *
  * Enhancement:
+ * - Uses in-game time for scheduling training start/end times when a game clock is available.
  * - Adds a fixed Close button anchored to the bottom-right corner of the viewport
  *   that is shown when the modal is in a "grayed out" state (disabled or starting).
- *   This ensures the user can always dismiss the modal even when the footer buttons
- *   are not visible or are disabled.
  *
  * Visual/layout:
  * - Keeps existing layout and Tailwind classes to avoid visual regressions.
  */
-
+ 
 import React, { useEffect, useMemo, useState } from 'react';
 import { Play, X } from 'lucide-react';
 import { useGame } from '../../contexts/GameContext';
 import { getSkillsByCategory } from '../../utils/skillsDatabase';
 import { readSkillProgress, writeSkillProgress } from '../../utils/skillPersistence';
-
+import { getInGameDate, addGameDays, inGameNowISO } from '../../utils/inGameTime';
+ 
 /**
  * parseStoredProgress
  * @description Backwards-compatible wrapper used by older code paths that expected
@@ -118,7 +118,7 @@ const writePersistedProgress = (staffId: string, skill: string, pct: number) => 
 
 /**
  * costForGain
- * Determine cost (EUR) for requested gain and current percent.
+ * Determine cost (EUR originally) for requested gain and current percent.
  * baseByGain = { 3:1000, 4:2000, 5:3000 }
  * cost = base + (5000 - base) * (currentPct / 100)  // clamped 1000..5000
  * @param currentPct
@@ -150,9 +150,7 @@ const mapGainToDays = (gain: number) => {
  * Modal used to view skills and start training for a staff member.
  * Key behavior: the "All Skills" list is strictly the canonical skills for the staff.role.
  *
- * Additional enhancement: a floating bottom-right Close button is rendered when the modal
- * is in a "grayed out" state (Start disabled or currently starting). This ensures the modal
- * can always be dismissed.
+ * Additional enhancement: scheduling uses in-game time when available.
  */
 const SkillTrainingModal: React.FC<SkillTrainingModalProps> = ({ staffId, onClose }) => {
   const game = useGame();
@@ -382,9 +380,10 @@ const SkillTrainingModal: React.FC<SkillTrainingModalProps> = ({ staffId, onClos
       const idx = (comp.staff || []).findIndex((s: any) => s.id === staffId);
       if (idx === -1) throw new Error('Staff not found in local company');
 
-      const start = new Date();
-      const end = new Date();
-      end.setDate(end.getDate() + plannedDays);
+      // Use in-game time for start/end when available
+      const start = getInGameDate(gameState);
+      const end = addGameDays(start, plannedDays, gameState);
+
       const trainingEntry: any = {
         skill: selectedSkill,
         startDate: start.toISOString(),
@@ -529,7 +528,7 @@ const SkillTrainingModal: React.FC<SkillTrainingModalProps> = ({ staffId, onClos
                       className={`flex-1 px-3 py-2 rounded text-sm ${selectedGain === g ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 text-slate-200'}`}
                       aria-pressed={selectedGain === g}
                     >
-                      +{g}% <div className="text-xs text-slate-300 mt-1">€{costG.toLocaleString()} · {days}d</div>
+                      +{g}% <div className="text-xs text-slate-300 mt-1">${costG.toLocaleString()} · {days}d</div>
                     </button>
                   );
                 })}
@@ -543,7 +542,7 @@ const SkillTrainingModal: React.FC<SkillTrainingModalProps> = ({ staffId, onClos
 
             <div className="flex items-center justify-between mt-2 text-xs text-slate-400">
               <div>Cost</div>
-              <div className="text-white font-medium">€{predictedCost.toLocaleString()}</div>
+              <div className="text-white font-medium">${predictedCost.toLocaleString()}</div>
             </div>
 
             <div className="text-xs text-slate-500 mt-2">Duration will be assigned automatically ({predictedDays} days). You will be notified of the exact duration after scheduling.</div>
@@ -588,10 +587,7 @@ const SkillTrainingModal: React.FC<SkillTrainingModalProps> = ({ staffId, onClos
         Current staff status: <span className="text-white ml-1">{sStatus}</span>
       </div>
 
-      {/* Floating bottom-right Close button:
-        - Visible only when the modal is in a "grayed out" state (Start disabled or currently starting).
-        - Fixed position so it's always reachable even if the modal footer is off-screen or visually dimmed.
-      */}
+      {/* Floating bottom-right Close button: */}
       {isGrayedOut && (
         <button
           onClick={() => onClose()}

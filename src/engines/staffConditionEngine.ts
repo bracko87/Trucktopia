@@ -17,6 +17,8 @@
  * - This file uses only browser localStorage and does not depend on any external package.
  */
 
+import { nowUtcMs } from '../utils/gameClock';
+
 /**
  * Engine options
  * @property tickIntervalMs tick interval in ms (simulated day). Default 60000.
@@ -175,7 +177,7 @@ export function startStaffConditionEngine(options: StaffConditionEngineOptions =
             return;
           }
 
-          const now = Date.now();
+          const now = nowUtcMs();
           const onVacation = s.onVacationUntil ? (new Date(s.onVacationUntil).getTime() > now) : false;
 
           // Apply decay only when not on vacation
@@ -237,9 +239,9 @@ export function startStaffConditionEngine(options: StaffConditionEngineOptions =
             const alreadyOnVacation = s.onVacationUntil ? (new Date(s.onVacationUntil).getTime() > now) : false;
             if (!alreadyOnVacation) {
               const days = 7 + Math.floor(Math.random() * 24); // 7..30
-              const until = new Date();
-              until.setDate(until.getDate() + days);
-              s.onVacationUntil = until.toISOString();
+              const untilMs = now + days * 24 * 60 * 60 * 1000;
+              const untilIso = new Date(untilMs).toISOString();
+              s.onVacationUntil = untilIso;
               // During this absence fit will recover via normal vacation recovery above
               usersChanged = true;
               if (debug) console.warn(`[StaffCondEngine] ${s.name} (${s.id}) sent to sick leave for ${days} days due to low fit (${s.fit})`);
@@ -288,7 +290,7 @@ export function startStaffConditionEngine(options: StaffConditionEngineOptions =
             return;
           }
 
-          const now = Date.now();
+          const now = nowUtcMs();
           const onVacation = s.onVacationUntil ? (new Date(s.onVacationUntil).getTime() > now) : false;
 
           if (!onVacation) {
@@ -300,7 +302,7 @@ export function startStaffConditionEngine(options: StaffConditionEngineOptions =
             if (nextHap !== prevHap) { s.happiness = nextHap; adminChanged = true; }
           } else {
             const prevFit = typeof s.fit === 'number' ? s.fit : 100;
-            const nextFit = Math.min(100, Number((prevFit + FIT_RECOVERY_VACATION).toFixed(2)));
+            const nextFit = Math.min(100, Number((prevFit + FIT_RECOVERY_VACATION).toFixed(22)));
             if (nextFit !== prevFit) { s.fit = nextFit; adminChanged = true; }
           }
 
@@ -342,7 +344,8 @@ export function startStaffConditionEngine(options: StaffConditionEngineOptions =
             const alreadyOnVacation = s.onVacationUntil ? (new Date(s.onVacationUntil).getTime() > now) : false;
             if (!alreadyOnVacation) {
               const days = 7 + Math.floor(Math.random() * 24); // 7..30
-              const until = new Date(); until.setDate(until.getDate() + days);
+              const untilMs = now + days * 24 * 60 * 60 * 1000;
+              const until = new Date(untilMs);
               s.onVacationUntil = until.toISOString();
               adminChanged = true;
               if (debug) console.warn(`[StaffCondEngine] admin ${s.name} (${s.id}) sent to sick leave for ${days} days due to low fit (${s.fit})`);

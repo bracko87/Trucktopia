@@ -11,8 +11,11 @@
  *   paddings (p-6) so paragraph spacing stays identical.
  *
  * Notes:
- * - Only layout wrappers (outer padding) are adjusted to achieve the full-bleed
- *   effect for the card area. Inner card paddings remain unchanged.
+ * - This page now mounts a non-visual helper (HubsDowngradeFix) which ensures
+ *   the Downgrade button always performs a safe fallback downgrade when the
+ *   page/button flow does not execute the expected logic. Mounting it here
+ *   scopes the helper to the Infrastructure area and keeps its behaviour
+ *   active when the page is open.
  */
 
 import React, { useMemo, useState } from 'react';
@@ -20,6 +23,7 @@ import { MapPin, Home } from 'lucide-react';
 import { useGame } from '../contexts/GameContext';
 import HubsPanel from '../components/infrastructure/HubsPanel';
 import FacilitiesPanel from '../components/infrastructure/FacilitiesPanel';
+import HubsDowngradeFix from '../components/infrastructure/HubsDowngradeFix';
 
 /**
  * formatNumber
@@ -150,7 +154,7 @@ const Infrastructure: React.FC = () => {
       <div className="flex flex-col h-full min-h-0">
         {/* Header - note: removed horizontal outer padding so header can align full-bleed */}
         <div className="w-full pt-0 mb-6">
-          <div className="w-full px-6"> {/* Keep px-6 only for header text alignment to the card content */}
+          <div className="w-full px-6">{/* Keep px-6 only for header text alignment to the card content */}
             <InfrastructureHeader hubsCount={hubsCount} facilitiesCount={facilitiesCount} />
           </div>
         </div>
@@ -160,6 +164,11 @@ const Infrastructure: React.FC = () => {
               Card itself is full-bleed within the page because outer main uses p-0. */}
           <section className="flex-1 bg-slate-800 rounded-none md:rounded-xl p-6 border border-slate-700 overflow-auto w-full">
             <div className="space-y-6">
+              {/* Non-visual helper: ensure Downgrade fallbacks work even when parent handlers are not wired.
+                  Mounting HubsDowngradeFix here ensures the fallback downgrade mutation runs when the
+                  Downgrade button title is clicked inside HubDetailsModal. */}
+              <HubsDowngradeFix />
+
               {/* Tabs — use the exact Staff Management tab visual language (blue active, slate inactive)
                   and make them pill-shaped (rounded-full). */}
               <div className="border-b border-slate-700">

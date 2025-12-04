@@ -21,9 +21,12 @@ import TrailerCard, { TrailerCardData } from './TrailerCard';
 import { Package as PackageIcon } from 'lucide-react';
 import { useGame } from '../../contexts/GameContext';
 import { isTrailer, extractTrailerClass, isIncoming } from '../../utils/vehicleTypeUtils';
-import TruckCardMarket from '../market/TruckCard';
 import { useLocation } from 'react-router';
 
+/**
+ * Props
+ * @description Props accepted by TrailerSection.
+ */
 interface Props {
   trailers?: TrailerCardData[] | null;
   trucks?: { id: string; assignedTrailer?: string | null; [key: string]: any }[] | null;
@@ -49,6 +52,40 @@ function looksLikeMarketEntry(t: any, renderOwnedAsMarket = true): boolean {
   if (String(t.isListing ?? '').toLowerCase() === 'true') return true;
   if (renderOwnedAsMarket && (t.purchasePrice !== undefined || t.marketEntry !== undefined || t.listing === true)) return true;
   return false;
+}
+
+/**
+ * normalizeMarketToTrailer
+ * @description Build a trailer-shaped object suitable for TrailerCard out of a market-style entry.
+ *              Keeps fields defensive and tries to surface marketEntry.specifications and other common aliases.
+ */
+function normalizeMarketToTrailer(t: any): TrailerCardData {
+  const market = t?.marketEntry ?? t;
+  const id = String(t?.id ?? t?.vehicleId ?? market?.id ?? `market-${Math.random().toString(36).slice(2, 9)}`);
+
+  return {
+    id,
+    brand: t?.brand ?? market?.brand ?? market?.manufacturer ?? t?.manufacturer ?? t?._source?.brand ?? t?._source?.manufacturer ?? undefined,
+    model: t?.model ?? market?.model ?? t?.title ?? t?.name ?? undefined,
+    trailerClass: t?.trailerClass ?? market?.trailerClass ?? extractTrailerClass(t) ?? undefined,
+    capacity: market?.specifications?.capacity ?? t?.capacity ?? t?.tonnage ?? market?.capacity ?? undefined,
+    tonnage: market?.specifications?.tonnage ?? t?.tonnage ?? undefined,
+    year: t?.year ?? market?.year ?? undefined,
+    condition: t?.condition ?? market?.condition ?? undefined,
+    status: t?.status ?? market?.status ?? undefined,
+    deliveryHub: t?.deliveryHub ?? market?.deliveryHub ?? null,
+    deliveryEta: t?.deliveryEta ?? market?.deliveryEta ?? market?.availability ?? null,
+    kilometers: t?.kilometers ?? market?.kilometers ?? undefined,
+    gcw: market?.gcw ?? t?.gcw ?? undefined,
+    nickname: t?.nickname ?? null,
+    insured: Boolean(t?.insured ?? false),
+    specifications: {
+      ...(t?.specifications ?? {}),
+      ...(market?.specifications ?? {}),
+    },
+    marketEntry: market,
+    _source: t,
+  } as TrailerCardData;
 }
 
 /**
@@ -106,6 +143,10 @@ const TrailerSection: React.FC<Props> = ({
     };
   }, [allowMarketInGarage]);
 
+  /**
+   * incomingIdSet
+   * @description Build a set of trailer ids that are incoming / in transit so they are excluded.
+   */
   const incomingIdSet = React.useMemo(() => {
     const set = new Set<string>();
     try {
@@ -266,23 +307,13 @@ const TrailerSection: React.FC<Props> = ({
             {merged.map((tr) => {
               const isAssigned = trucks.some(t => !isIncoming(t) && String(t.assignedTrailer) === String(tr.id));
 
+              // If the item looks like a market listing we ensure we render with TrailerCard
+              // and map market fields into the trailer shape so the modal receives normalized specs.
               if (looksLikeMarketEntry(tr, renderOwnedAsMarket) || looksLikeMarketEntry(tr._source ?? {}, renderOwnedAsMarket)) {
+                const marketTrailer = normalizeMarketToTrailer(tr);
                 return (
-                  <div key={tr.id} className="bg-slate-700 rounded-lg p-4 border border-slate-600" data-market="true">
-                    <TruckCardMarket
-                      id={tr.id}
-                      brand={tr.brand}
-                      model={tr.model}
-                      price={(tr.marketEntry?.price ?? tr.purchasePrice ?? tr.price ?? 0) as any}
-                      condition={tr.condition as any}
-                      availability={tr.marketEntry?.availability ?? (tr.deliveryEta ?? tr.deliveryDays ?? undefined) as any}
-                      tonnage={tr.marketEntry?.tonnage ?? tr.tonnage ?? tr.capacity}
-                      leaseRate={tr.marketEntry?.leaseRate ?? null}
-                      truckCategory={tr.marketEntry?.truckCategory ?? tr.marketEntry?.category}
-                      cargoTypes={tr.marketEntry?.specifications?.cargoTypes ?? tr.specifications?.cargoTypes ?? []}
-                      capacity={tr.marketEntry?.specifications?.capacity ?? tr.specifications?.capacity ?? tr.capacity}
-                      gcw={tr.marketEntry?.gcw ?? null}
-                    />
+                  <div key={marketTrailer.id} className="bg-slate-700 rounded-lg p-4 border border-slate-600" data-market="true">
+                    <TrailerCard trailer={marketTrailer} isAssigned={isAssigned} onSell={handleSell} />
                   </div>
                 );
               }

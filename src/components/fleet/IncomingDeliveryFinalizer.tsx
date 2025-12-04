@@ -1,23 +1,21 @@
 /**
  * IncomingDeliveryFinalizer.tsx
  *
- * File-level:
  * Background helper that:
  *  - processes incoming deliveries on mount and on an interval,
  *  - intercepts button clicks for friendly confirmation flows (replacing native confirm/alert),
- *  - shows a polished modal confirmation and dispatches toasts for job-accept flows.
+ *  - shows a polished modal confirmation and dispatches toasts for job-accept flows,
+ *  - attempts to persist updated company state using several persistence method name fallbacks.
  *
  * Responsibilities:
  *  - Run a one-time delivery finalization scan on mount and every 60s afterwards.
- *  - Intercept buttons that explicitly opt-in via data-friendly-confirm="true" OR buttons whose text
- *    matches common accept patterns (e.g. "Accept Full Load", "Accept Job", "Accept Offer", "Accept").
- *  - Display a styled, accessible modal rather than allowing native browser confirm/alert popups.
- *  - On user confirm: replay the original click while temporarily replacing native dialogs with
- *    friendly toast dispatches so no white native popups are shown.
+ *  - Persist updatedCompany using the first available persistence method on GameContext:
+ *      createCompany, saveCompany, updateCompany (in that order).
+ *  - If none are available, emit an 'applyCompanyUpdate' event so other parts can persist.
  *
  * Notes:
  *  - This component intentionally mounts UI (Toaster + Modal) but is safe to keep hidden most of the time.
- *  - Avoids global permanent monkeypatches of window.confirm/alert — replaces them only briefly during replay.
+ *  - It prefers the canonical game clock via processIncomingDeliveries implementation (utils).
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -41,7 +39,7 @@ function safeDispatchToast(detail: { title?: string; message: string; variant?: 
   try {
     window.dispatchEvent(new CustomEvent('app:toast', { detail }));
   } catch {
-    // noop in SSR / restricted env
+    // noop in restricted env
   }
 }
 
@@ -88,12 +86,55 @@ function findNearbyJobTitle(btn: HTMLElement | null): string | null {
 }
 
 /**
+ * tryPersistCompany
+ * @description Try to persist updatedCompany by checking common persistence method names on context.
+ *              Order of attempts: createCompany, saveCompany, updateCompany.
+ *              If none are present, emit a global event 'applyCompanyUpdate' with the payload.
+ *              Returns an object describing success and method used (if any).
+ * @param ctx Game context object (may contain persistence functions)
+ * @param updatedCompany Modified company object to persist
+ */
+async function tryPersistCompany(ctx: any, updatedCompany: any): Promise<{ persisted: boolean; method?: string; error?: any }> {
+  const methodNames = ['createCompany', 'saveCompany', 'updateCompany'];
+  for (const name of methodNames) {
+    try {
+      const fn = ctx?.[name];
+      if (typeof fn === 'function') {
+        const res = fn(updatedCompany);
+        if (res && typeof res.then === 'function') {
+          await res;
+        }
+        return { persisted: true, method: name };
+      }
+    } catch (err) {
+      // If the chosen persistence method throws, continue to next as fallback,
+      // but record the error to report if all fallbacks fail.
+      // eslint-disable-next-line no-console
+      console.warn(`[IncomingDeliveryFinalizer] persistence method ${name} failed`, err);
+      return { persisted: false, method: name, error: err };
+    }
+  }
+
+  // Fallback: dispatch an event so other parts of the app can persist the company
+  try {
+    window.dispatchEvent(new CustomEvent('applyCompanyUpdate', { detail: { updatedCompany } }));
+    return { persisted: false, method: 'event:applyCompanyUpdate' };
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[IncomingDeliveryFinalizer] applyCompanyUpdate dispatch failed', err);
+    return { persisted: false, error: err };
+  }
+}
+
+/**
  * IncomingDeliveryFinalizer
  * @description Component mounted globally to process incoming deliveries and replace native confirm flows
- *              with a friendly UI modal + toast notifications.
+ *              with a friendly UI modal + toast notifications. Will attempt to persist updated company
+ *              by calling available persistence functions on GameContext in order and will emit events.
  */
 const IncomingDeliveryFinalizer: React.FC = () => {
-  const { gameState } = useGame();
+  const gameCtx = useGame() as any;
+  const { gameState } = gameCtx ?? {};
   const intervalRef = useRef<number | null>(null);
   const [confirmState, setConfirmState] = useState<FriendlyConfirmState>({ open: false, message: '', targetElement: null });
 
@@ -101,22 +142,61 @@ const IncomingDeliveryFinalizer: React.FC = () => {
     /**
      * runOnce
      * @description Run one processing scan and emit events/toasts when items moved.
+     *              Attempts to persist updatedCompany using context fallback logic.
      */
-    const runOnce = () => {
+    const runOnce = async () => {
       try {
         if (typeof window === 'undefined' || typeof document === 'undefined') return;
 
         if (!gameState || !gameState.company) {
+          // If no company present in local state, signal other parts of the app to attempt processing.
           window.dispatchEvent(new CustomEvent('requestProcessIncomingDeliveries'));
           return;
         }
 
         const { updatedCompany, moved } = processIncomingDeliveries(gameState.company);
 
+        // Diagnostic logging - show parsed ETA vs current game time and moved items
+        try {
+          console.debug('[IncomingDeliveryFinalizer] runOnce: now=', Date.now(), 'movedCount=', moved?.length ?? 0);
+          if (moved && moved.length > 0) {
+            console.debug('[IncomingDeliveryFinalizer] moved items:', moved);
+          }
+        } catch {
+          // noop
+        }
+
         if (moved && moved.length > 0) {
-          window.dispatchEvent(new CustomEvent('incomingDeliveriesProcessed', { detail: { updatedCompany, moved } }));
-          window.dispatchEvent(new CustomEvent('incomingDeliveriesMoved', { detail: { moved } }));
-          safeDispatchToast({ title: 'Deliveries Processed', message: `${moved.length} incoming delivery(ies) finalized.`, variant: 'success' });
+          // Dispatch events for listeners
+          try {
+            window.dispatchEvent(new CustomEvent('incomingDeliveriesProcessed', { detail: { updatedCompany, moved } }));
+            window.dispatchEvent(new CustomEvent('incomingDeliveriesMoved', { detail: { moved } }));
+          } catch {
+            // ignore dispatch errors
+          }
+
+          // Attempt to persist update via multiple possible context methods
+          const persistResult = await tryPersistCompany(gameCtx, updatedCompany);
+
+          if (persistResult.persisted) {
+            safeDispatchToast({ title: 'Deliveries Processed', message: `${moved.length} incoming delivery(ies) finalized and saved.`, variant: 'success' });
+          } else {
+            // If method indicated (but returned error), show informative toast; otherwise event fallback used.
+            if (persistResult.method && persistResult.method !== 'event:applyCompanyUpdate') {
+              safeDispatchToast({ title: 'Deliveries Processed', message: `${moved.length} finalized but persistence via ${persistResult.method} failed.`, variant: 'info' });
+            } else if (persistResult.method === 'event:applyCompanyUpdate') {
+              safeDispatchToast({ title: 'Deliveries Processed', message: `${moved.length} finalized. Persist handler requested via event.`, variant: 'neutral' });
+            } else {
+              safeDispatchToast({ title: 'Deliveries Processed', message: `${moved.length} finalized (persistence failed).`, variant: 'info' });
+            }
+          }
+
+          // Emit a stronger event with persistence info
+          try {
+            window.dispatchEvent(new CustomEvent('incomingDeliveriesProcessedPersisted', { detail: { updatedCompany, moved, persisted: persistResult.persisted, method: persistResult.method } }));
+          } catch {
+            // noop
+          }
         }
       } catch (err) {
         // resilient - don't break mount
@@ -133,8 +213,13 @@ const IncomingDeliveryFinalizer: React.FC = () => {
     }
 
     // Run immediately and set interval (60s)
-    runOnce();
-    intervalRef.current = window.setInterval(runOnce, 60000) as unknown as number;
+    (async () => {
+      await runOnce();
+    })();
+
+    intervalRef.current = window.setInterval(() => {
+      void runOnce();
+    }, 60000) as unknown as number;
 
     return () => {
       if (intervalRef.current) {
@@ -148,17 +233,7 @@ const IncomingDeliveryFinalizer: React.FC = () => {
   /**
    * handleDocumentClick
    * @description Capture clicks and show friendly modal for matched buttons.
-   *
-   * Rules:
-   *  - Intercept when:
-   *      1) button has data-friendly-confirm="true"
-   *      2) OR button text matches accept-like flows:
-   *         /Accept Full Load|Accept Job|Accept Offer|Accept/i
-   *
-   * Interception:
-   *  - prevent default + stop propagation
-   *  - show modal; on confirm replay the click with a one-time bypass dataset and
-   *    temporarily replace window.alert/confirm/prompt so native popups don't appear.
+   *              Intercepts explicit data-friendly-confirm="true" or heuristic accept-like button labels.
    */
   useEffect(() => {
     const onClick = (ev: MouseEvent) => {
@@ -170,7 +245,6 @@ const IncomingDeliveryFinalizer: React.FC = () => {
 
         // Allow explicit replay bypass
         if (button.dataset && button.dataset.friendlyConfirmBypass === '1') {
-          // cleanup bypass attribute and allow normal flow
           delete button.dataset.friendlyConfirmBypass;
           return;
         }
@@ -178,12 +252,10 @@ const IncomingDeliveryFinalizer: React.FC = () => {
         const explicit = String(button.dataset?.friendlyConfirm ?? '').toLowerCase() === 'true';
         const label = (button.innerText || '').trim();
 
-        // Heuristic accept text matching
         const textMatch = /\b(accept full load|accept job|accept offer|accept)\b/i.test(label);
 
         if (!explicit && !textMatch) return;
 
-        // Prevent native behavior and show friendly modal
         ev.preventDefault();
         ev.stopPropagation();
 
@@ -206,10 +278,7 @@ const IncomingDeliveryFinalizer: React.FC = () => {
   /**
    * handleConfirmResult
    * @description Called when user confirms or cancels the friendly modal.
-   * When confirmed:
-   *  - tries to resolve a nearby job/item name for better notifications
-   *  - dispatches friendly toasts
-   *  - temporarily overrides native dialogs and replays the click with bypass
+   * When confirmed: replay the original click with a one-time bypass and temporarily override native dialogs.
    */
   const handleConfirmResult = (confirmed: boolean) => {
     const target = confirmState.targetElement;
@@ -221,7 +290,6 @@ const IncomingDeliveryFinalizer: React.FC = () => {
     try {
       const resolvedName = findNearbyJobTitle(target);
 
-      // Immediate notification for job-accept-like flows
       if (/\baccept\b/i.test(target.innerText || '')) {
         if (resolvedName) {
           safeDispatchToast({ title: 'Job accepted', message: resolvedName, variant: 'neutral' });
@@ -230,7 +298,6 @@ const IncomingDeliveryFinalizer: React.FC = () => {
         }
       }
 
-      // Temporarily override native dialogs so legacy handlers don't show white popups.
       const glob: any = (typeof window !== 'undefined' ? window : (globalThis as any));
       const originals: Partial<Record<string, any>> = {
         alert: typeof glob.alert === 'function' ? glob.alert : undefined,
@@ -238,7 +305,6 @@ const IncomingDeliveryFinalizer: React.FC = () => {
         prompt: typeof glob.prompt === 'function' ? glob.prompt : undefined,
       };
 
-      // Replacement alert that forwards to in-app toast (captures legacy alert messages)
       const replacementAlert = (msg?: any) => {
         try {
           const text = typeof msg === 'string' ? msg : JSON.stringify(msg ?? '');
@@ -249,28 +315,19 @@ const IncomingDeliveryFinalizer: React.FC = () => {
         return undefined;
       };
 
-      // Replacement confirm always returns true (we already asked the user)
       const replacementConfirm = (_msg?: any) => true;
       const replacementPrompt = (_msg?: any) => null;
 
-      try {
-        glob.alert = replacementAlert;
-      } catch { /* ignore */ }
-      try {
-        glob.confirm = replacementConfirm;
-      } catch { /* ignore */ }
-      try {
-        glob.prompt = replacementPrompt;
-      } catch { /* ignore */ }
+      try { glob.alert = replacementAlert; } catch { /* ignore */ }
+      try { glob.confirm = replacementConfirm; } catch { /* ignore */ }
+      try { glob.prompt = replacementPrompt; } catch { /* ignore */ }
 
-      // Mark one-time bypass, then replay the original click so existing handlers run.
       try {
         target.dataset.friendlyConfirmBypass = '1';
         setTimeout(() => {
           try {
             target.click();
           } catch (err) {
-            // fallback event dispatch if click() throws
             try {
               target.dispatchEvent(new CustomEvent('friendlyConfirm:confirmed', { bubbles: true }));
             } catch { /* ignore */ }
@@ -280,18 +337,16 @@ const IncomingDeliveryFinalizer: React.FC = () => {
         // ignore replay errors
       }
 
-      // Restore native dialogs after a short grace period
       setTimeout(() => {
         try { if (originals.alert !== undefined) glob.alert = originals.alert; } catch { /* ignore */ }
         try { if (originals.confirm !== undefined) glob.confirm = originals.confirm; } catch { /* ignore */ }
         try { if (originals.prompt !== undefined) glob.prompt = originals.prompt; } catch { /* ignore */ }
       }, 1500);
 
-      // Follow-up success toast for job acceptance flows
       if (/\baccept\b/i.test(target.innerText || '')) {
         setTimeout(() => {
           const title = 'Success';
-          const message = resolvedName ? `Job accepted successfully! You can track "${resolvedName}" in "My Jobs".` : `Job accepted successfully! You can track it in "My Jobs".`;
+          const message = resolvedName ? `Job accepted successfully! You can track \"${resolvedName}\" in \"My Jobs\".` : `Job accepted successfully! You can track it in \"My Jobs\".`;
           safeDispatchToast({ title, message, variant: 'success' });
         }, 700);
       }

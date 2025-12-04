@@ -40,6 +40,7 @@ interface HubData {
   title?: string;
   city?: string;
   capacity?: number;
+  level?: number;
   active?: boolean;
   description?: string;
   [key: string]: any;
@@ -61,11 +62,12 @@ interface HubCardProps {
  *
  * - h-full + flex column ensures the card fills its grid cell vertically.
  * - justify-between keeps title at top and meta/actions pinned to bottom.
- */
-/**
- * HubCard
- * @description Visual, full-height card for a hub. Shows a "Main" badge when hub.isMain===true
- *              so users can quickly identify their primary hub.
+ *
+ * Important change:
+ * - The capacity shown is derived from the authoritative hub level definition
+ *   via getHubLevel(level).vehicleLimit (and staff limit via officeSpots).
+ *   This prevents stale or placeholder capacity values (e.g. "100 trucks")
+ *   from appearing and guarantees the UI shows true limits for the hub level.
  */
 const HubCard: React.FC<HubCardProps> = ({ hub, onSelect }) => {
   const title =
@@ -74,14 +76,14 @@ const HubCard: React.FC<HubCardProps> = ({ hub, onSelect }) => {
     (hub.city ? `${hub.city} Hub` : `Hub ${hub.id ?? ''}`) ||
     'Hub';
 
-  const subtitleParts: string[] = [];
-  if (typeof hub.capacity === 'number') subtitleParts.push(`Capacity: ${hub.capacity} trucks`);
-  if (typeof hub.active === 'boolean') subtitleParts.push(`Active: ${hub.active ? 'Yes' : 'No'}`);
-  const subtitle = subtitleParts.length ? subtitleParts.join(' • ') : (typeof hub.description === 'string' ? hub.description : undefined);
-
-  // Derive displayed level if present on hub
   const level = typeof hub.level === 'number' ? hub.level : 1;
   const levelInfo = getHubLevel(level);
+
+  // Compose subtitle using authoritative hub level info (vehicleLimit & officeSpots)
+  const subtitleParts: string[] = [];
+  if (typeof levelInfo?.vehicleLimit === 'number') subtitleParts.push(`Capacity: ${levelInfo.vehicleLimit} vehicles`);
+  if (typeof levelInfo?.officeSpots === 'number') subtitleParts.push(`Staff spots: ${levelInfo.officeSpots}`);
+  const subtitle = subtitleParts.length ? subtitleParts.join(' • ') : (typeof hub.description === 'string' ? hub.description : undefined);
 
   return (
     <button

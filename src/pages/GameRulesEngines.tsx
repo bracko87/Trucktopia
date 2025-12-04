@@ -1,3 +1,4 @@
+
 /**
  * GameRulesEngines.tsx
  *
@@ -6,21 +7,17 @@
  * Responsibilities:
  * - Import the manifest from src/data/game-rules-engines.ts and render it read-only.
  * - Provide search and status filters and an option to export the manifest as JSON.
- * - Do not modify any manifest entries or runtime behavior.
+ *
+ * Note: The used-offers regeneration control was intentionally moved to the Admin Dashboard
+ * to keep the Game Rules page read-only and focused on manifest inspection.
+ */
+
+/**
+ * @file Provides the Game Rules & Engines admin page (read-only manifest view).
  */
 
 import React, { useMemo, useState } from 'react';
 import defaultManifest, { GameRule, EngineEntry, CronJob } from '../data/game-rules-engines';
-
-/**
- * Ensure the page reads the canonical default export.
- * Some modules / dev workflows prefer default imports; normalize to `manifest`.
- */
-const manifest = defaultManifest as {
-  gameRules: GameRule[];
-  engines: EngineEntry[];
-  cronJobs: CronJob[];
-};
 import RuleCard from '../components/admin/RuleCard';
 import EngineCard from '../components/admin/EngineCard';
 import CronCard from '../components/admin/CronCard';
@@ -28,15 +25,19 @@ import { Search, DownloadCloud } from 'lucide-react';
 import ManifestTotals from '../components/admin/ManifestTotals';
 
 /**
- * status list typing
+ * Ensure the page reads the canonical default export.
  */
+const manifest = defaultManifest as {
+  gameRules: GameRule[];
+  engines: EngineEntry[];
+  cronJobs: CronJob[];
+};
+
 type StatusFilter = 'all' | 'active' | 'proposed' | 'deprecated';
 
 /**
  * downloadManifest
  * @description Trigger a JSON download of the manifest for offline use or migration.
- * @param obj manifest object
- * @returns void
  */
 const downloadManifest = (obj: any) => {
   const dataStr = JSON.stringify(obj, null, 2);
@@ -67,10 +68,8 @@ const GameRulesEnginesPage: React.FC = () => {
    * applyFilters
    * @description Filter and search a generic list by id/name/description and status.
    */
-  const applyFilters = <T extends { id?: string; name?: string; description?: string; status?: string }>(
-    items: T[]
-  ) => {
-    return items.filter(item => {
+  const applyFilters = <T extends { id?: string; name?: string; description?: string; status?: string }>(items: T[]) => {
+    return items.filter((item) => {
       if (statusFilter !== 'all' && item.status !== statusFilter) return false;
       if (!query) return true;
       const q = query.toLowerCase();
@@ -102,7 +101,7 @@ const GameRulesEnginesPage: React.FC = () => {
             <Search className="w-4 h-4 text-slate-400" />
             <input
               value={query}
-              onChange={e => setQuery(e.target.value)}
+              onChange={(e) => setQuery(e.target.value)}
               placeholder="Search id, name or description..."
               className="bg-transparent outline-none text-sm text-white placeholder:text-slate-500"
             />
@@ -111,7 +110,7 @@ const GameRulesEnginesPage: React.FC = () => {
           <div className="flex items-center space-x-2">
             <select
               value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value as StatusFilter)}
+              onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
               className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white"
             >
               <option value="all">All statuses</option>
@@ -131,7 +130,7 @@ const GameRulesEnginesPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Totals (sourced from canonical manifest) */}
+      {/* Totals */}
       <ManifestTotals />
 
       {/* Lists */}
@@ -139,40 +138,26 @@ const GameRulesEnginesPage: React.FC = () => {
         <div>
           <h2 className="text-lg font-semibold text-white mb-3">Game Rules ({filteredRules.length})</h2>
           <div className="space-y-3">
-            {filteredRules.length === 0 ? (
-              <div className="text-slate-400">No rules match your filters.</div>
-            ) : (
-              filteredRules.map(r => <RuleCard key={r.id} rule={r} />)
-            )}
+            {filteredRules.length === 0 ? <div className="text-slate-400">No rules match your filters.</div> : filteredRules.map((r) => <RuleCard key={r.id} rule={r} />)}
           </div>
         </div>
 
         <div>
           <h2 className="text-lg font-semibold text-white mb-3">Engines ({filteredEngines.length})</h2>
           <div className="space-y-3">
-            {filteredEngines.length === 0 ? (
-              <div className="text-slate-400">No engines match your filters.</div>
-            ) : (
-              filteredEngines.map(e => <EngineCard key={e.id} engine={e} />)
-            )}
+            {filteredEngines.length === 0 ? <div className="text-slate-400">No engines match your filters.</div> : filteredEngines.map((e) => <EngineCard key={e.id} engine={e} />)}
           </div>
         </div>
 
         <div>
           <h2 className="text-lg font-semibold text-white mb-3">Cron Jobs ({filteredCrons.length})</h2>
           <div className="space-y-3">
-            {filteredCrons.length === 0 ? (
-              <div className="text-slate-400">No cron jobs match your filters.</div>
-            ) : (
-              filteredCrons.map(c => <CronCard key={c.id} cron={c} />)
-            )}
+            {filteredCrons.length === 0 ? <div className="text-slate-400">No cron jobs match your filters.</div> : filteredCrons.map((c) => <CronCard key={c.id} cron={c} />)}
           </div>
         </div>
       </div>
 
-      <div className="text-sm text-slate-500">
-        Note: This page is read-only. No changes to rules, engines or cron jobs are performed by this UI.
-      </div>
+      <div className="text-sm text-slate-500">Note: This page is read-only. No changes to rules, engines or cron jobs are performed by this UI.</div>
     </div>
   );
 };

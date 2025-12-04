@@ -75,7 +75,7 @@ interface AdministrationPosition {
  */
 const StaffManagement: React.FC = () => {
   const navigate = useNavigate();
-  const { gameState, createCompany } = useGame();
+  const { gameState, createCompany, fireStaff } = useGame();
   const [activeTab, setActiveTab] = useState<'drivers' | 'mechanics' | 'dispatchers' | 'administration'>('drivers');
 
   /**

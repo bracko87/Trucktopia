@@ -228,6 +228,36 @@ export const manifest: {
       codePaths: ['src/data/game-rules-engines.ts', 'src/pages/GameRulesEngines.tsx'],
       notes: 'Enforces documentation + UI visibility for engine/rule changes.',
       metadata: { enforcement: true }
+    },
+    {
+      id: 'GR-012',
+      name: 'Hub Capacity UI & Enforcement',
+      description:
+        'UI integration and client-side enforcement of hub capacity in purchase flows. Shows live assigned / max vehicles for chosen hub in purchase modals and blocks confirmation when hub capacity is reached.',
+      category: 'UI / Infrastructure',
+      status: 'active',
+      version: '1.0.0',
+      lastModified: new Date().toISOString().split('T')[0],
+      author: 'System',
+      codePaths: ['src/components/market/PurchaseButton.tsx', 'src/pages/VehicleMarket.tsx', 'src/engines/hubCapacityEngine.ts'],
+      notes: 'Client-side enforcement to provide fast feedback. Server-side validation recommended for multi-user deployments.',
+      metadata: { ui: true, enforcement: 'client-side' }
+    },
+
+    // New: Used Truck Generator Game Rule (canonical)
+    {
+      id: 'GR-013',
+      name: 'Used Truck Generator',
+      description:
+        'Generates a daily pool of used truck offers by sampling canonical truck models and synthesising condition, mileage and production year. Offers are persisted to localStorage and refreshed daily at 00:35 game time.',
+      category: 'Market',
+      status: 'active',
+      version: '1.0.0',
+      lastModified: new Date().toISOString().split('T')[0],
+      author: 'System',
+      codePaths: ['src/engines/UsedTruckGenerator.tsx', 'src/pages/VehicleMarket.tsx'],
+      notes: 'Generates ~300 used truck offers per day. Price is calculated from new price, condition, age and kilometers.',
+      metadata: { persistenceKey: 'tm_used_truck_offers' }
     }
   ],
   engines: [
@@ -491,7 +521,6 @@ export const manifest: {
       notes: 'Mounted in App to process incoming deliveries and emit incomingDeliveriesMoved events for UI animations.',
       metadata: {}
     },
-    // Server-side Hubs Normalizer Service (for authoritative, multi-user setups)
     {
       id: 'E-019',
       name: 'Hubs Normalizer Service (Server)',
@@ -505,6 +534,51 @@ export const manifest: {
       lastModified: new Date().toISOString().split('T')[0],
       author: 'System',
       notes: 'Implemented as a Netlify serverless function. Configurable via SUPABASE_URL, SUPABASE_KEY and SUPABASE_WRITE env vars.',
+      metadata: {}
+    },
+    {
+      id: 'E-020',
+      name: 'Hub Capacity UI & Enforcement',
+      description:
+        'UI integration and client-side enforcement for hub capacity in purchase flows. Provides live assigned / max vehicle counts for selected hub, prevents purchases when capacity is reached, and updates hub occupancy when deliveries are cancelled or sold so capacity is freed appropriately.',
+      path: 'src/components/market/PurchaseButton.tsx',
+      tags: ['ui', 'hub', 'capacity', 'enforcement'],
+      mountStatus: 'mounted',
+      status: 'active',
+      version: '1.1.0',
+      lastModified: new Date().toISOString().split('T')[0],
+      author: 'System',
+      notes: 'Integration entry documenting the UI changes in PurchaseButton, VehicleMarket and PurchasedDeliveriesBox. The engine listens for purchase, cancel and sell events and reduces assigned counts when deliveries are cancelled or sold. Recommended: add server-side validation to prevent race conditions for multi-user environments.',
+      metadata: { uiIntegration: true, codePaths: ['src/components/market/PurchaseButton.tsx', 'src/pages/VehicleMarket.tsx', 'src/components/fleet/PurchasedDeliveriesBox.tsx', 'src/engines/hubCapacityEngine.ts'], adjustOnCancel: true }
+    },
+    {
+      id: 'E-021',
+      name: 'Job/Data Sanitizers & Cleaners (shadow)',
+      description: 'Placeholder for additional sanitizers if needed.',
+      path: null,
+      tags: ['migration', 'sanitization'],
+      mountStatus: 'not-mounted',
+      status: 'proposed',
+      version: '0.0.1',
+      lastModified: new Date().toISOString().split('T')[0],
+      author: 'System',
+      notes: 'Reserved slot.',
+      metadata: {}
+    },
+
+    // New engine: Used Truck Generator (canonical)
+    {
+      id: 'E-022',
+      name: 'Used Truck Generator Engine',
+      description: 'Background engine that produces and refreshes used truck listings once per day.',
+      path: 'src/engines/UsedTruckGenerator.tsx',
+      tags: ['market', 'used', 'generator'],
+      mountStatus: 'mounted',
+      status: 'active',
+      version: '1.0.0',
+      lastModified: new Date().toISOString(),
+      author: 'System',
+      notes: 'Mounted in App to ensure daily regeneration and localStorage persistence.',
       metadata: {}
     }
   ],
@@ -617,7 +691,6 @@ export const manifest: {
       notes: 'Recorded for auditing.',
       metadata: {}
     },
-    // New server-side cron for hubs normalization (callable via external scheduler)
     {
       id: 'C-009',
       name: 'Hubs Normalizer Cron (Server)',
@@ -631,6 +704,21 @@ export const manifest: {
       author: 'System',
       notes: 'Run by external scheduler (Netlify Scheduler, AWS EventBridge, Cron job). Requires SUPABASE_URL and SUPABASE_KEY env vars. To enable writes set SUPABASE_WRITE=true and supply NORMALIZE_HUBS_SECRET.',
       metadata: { recommendedFrequency: 'daily' }
+    },
+
+    // New Cron: Used Truck Generator daily trigger at 00:35 game-time
+    {
+      id: 'C-014',
+      name: 'Used Truck Generator Cron',
+      description: 'Daily generation of used truck offers at 00:35 game time (client-side fallback to real 00:35).',
+      path: 'src/engines/UsedTruckGenerator.tsx',
+      schedule: '00:35 (game-time)',
+      trigger: 'daily',
+      status: 'active',
+      lastModified: new Date().toISOString().split('T')[0],
+      author: 'System',
+      notes: 'Client-side cron: engine mounts and checks game time or wall clock to generate offers.',
+      metadata: {}
     }
   ]
 };
