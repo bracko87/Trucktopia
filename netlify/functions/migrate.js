@@ -1,17 +1,19 @@
 /**
  * netlify/functions/migrate.js
  *
- * Debugging Netlify function for migration payload normalization.
+ * Production-ready Netlify function to import migration payloads into Supabase.
  *
  * Responsibilities:
- * - Parse incoming event.body and normalize several accepted shapes into rows:
- *     { collection_name: string, payload: object, metadata: object }
- * - Guarantee payload and metadata are plain objects (never undefined).
- * - Return the exact JSON string that WOULD be sent to Supabase as "requestBody"
- *   so we can inspect why Supabase's jsonb fields end up empty.
+ * - Normalize a variety of incoming payload shapes into canonical rows:
+ *     { collection_name, payload: object, metadata: object }
+ * - Honor dry-run via query param (?dryRun=true) or header X-Dry-Run: true.
+ * - When not in dry-run, POST normalized rows to Supabase REST (table from MIGRATION_TABLE env).
+ * - Validate required environment variables (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY).
+ * - Optionally require ADMIN_TOKEN header to authorize callers (if ADMIN_TOKEN env is set).
  *
- * NOTE: This debug version intentionally does NOT perform any insert to Supabase.
- * Deploy this temporarily, run your dry-run request and paste the response here.
+ * Notes:
+ * - This function avoids unsafe regular expressions. Uses /\/$/ to strip trailing slash.
+ * - Responses always include normalizedRows and requestBody for auditability.
  */
 
 /**
@@ -39,6 +41,17 @@ function asObject(v) {
 }
 
 /**
+ * @description Remove trailing slash from a URL.
+ * Uses a safe regex with no flags.
+ * @param {string} url
+ * @returns {string}
+ */
+function stripTrailingSlash(url) {
+  if (!url) return url;
+  return url.replace(/\/$/, '');
+}
+
+/**
  * @description Build a canonical row for preview/insertion.
  * Ensures payload is an object (wraps arrays into { items: [...] }).
  * @param {string} collectionName
@@ -62,7 +75,7 @@ function makeRow(collectionName, payload, metadata) {
  * Accepts:
  * - top-level array -> becomes payload.items
  * - { collections: { name: [...] } } -> multiple rows
- * - { collection_name || collection_key || collection_key, items|payload|... }
+ * - { collection_name || collection_key, items|payload|... }
  * - fallback: treat whole body as single payload
  *
  * @param {any} body
@@ -137,42 +150,75 @@ function normalizeBodyToRows(body) {
 }
 
 /**
- * @description Remove trailing slash from a URL (safe regex - no flags).
- * @param {string} url
- * @returns {string}
- */
-function stripTrailingSlash(url) {
-  if (!url) return url;
-  return url.replace(/\/$/, '');
-}
-
-/**
- * @description Netlify function handler (debug-only).
- * This function does NOT insert into Supabase. It returns:
- *  - ok: true
- *  - dryRun: true
- *  - normalizedRows: array
- *  - requestBody: string (JSON.stringify(normalizedRows)) - exact body that would be sent
+ * @description Netlify function handler for migration.
+ * - GET: health check
+ * - POST: normalized insert (dry-run or real)
  *
  * @param {import('aws-lambda').APIGatewayEvent} event
  * @param {any} context
  */
 exports.handler = async function (event, context) {
   try {
-    const headers = event.headers || {};
-    const qp = event.queryStringParameters || {};
+    const headers = (event && (event.headers || {})) || {};
+    const qp = (event && (event.queryStringParameters || {})) || {};
+
+    // Accept multiple header casings
     const dryRunHeader =
       headers['x-dry-run'] ?? headers['X-Dry-Run'] ?? headers['x-dryrun'] ?? headers['X-DryRun'];
+
     const dryRun =
       String(dryRunHeader || '').toLowerCase() === 'true' ||
-      String(qp.dryRun || qp.dryrun || '').toLowerCase() === 'true';
+      String(qp.dryRun || qp.dryrun || '').toLowerCase() === 'true' ||
+      // Support env-driven dry-run override for safety (set MIGRATION_DRY_RUN=true)
+      String(process.env.MIGRATION_DRY_RUN || '').toLowerCase() === 'true';
+
+    // Accept simple health-check GET
+    if (event.httpMethod === 'GET') {
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ ok: true, service: 'migrate', version: 1 })
+      };
+    }
+
+    // OPTIONS preflight (useful for browser testing)
+    if (event.httpMethod === 'OPTIONS') {
+      return {
+        statusCode: 204,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-Dry-Run'
+        },
+        body: ''
+      };
+    }
+
+    if (event.httpMethod !== 'POST') {
+      return {
+        statusCode: 405,
+        body: JSON.stringify({ ok: false, error: 'Method not allowed' })
+      };
+    }
+
+    // Optional admin token check: if ADMIN_TOKEN is set in env, enforce it.
+    const ADMIN_TOKEN = process.env.ADMIN_TOKEN;
+    const authHeader = (headers.authorization || headers.Authorization || '') || '';
+    if (ADMIN_TOKEN) {
+      const expected = `Bearer ${ADMIN_TOKEN}`;
+      if (authHeader !== expected) {
+        return {
+          statusCode: 401,
+          body: JSON.stringify({ ok: false, error: 'Unauthorized' })
+        };
+      }
+    }
 
     // Parse body safely; Netlify supplies event.body as string
     const rawBody = event.body;
-    const body = safeJsonParse(rawBody) ?? {};
+    const parsed = safeJsonParse(rawBody) ?? {};
 
     // Normalize incoming shapes
-    const normalizedRows = normalizeBodyToRows(body);
+    const normalizedRows = normalizeBodyToRows(parsed);
 
     // Ensure payload and metadata are plain objects in every row
     for (let i = 0; i < normalizedRows.length; i++) {
@@ -183,16 +229,85 @@ exports.handler = async function (event, context) {
     // Build exact request body we'd send to Supabase/PostgREST
     const requestBody = JSON.stringify(normalizedRows);
 
-    // Debug response (never insert in this debug handler)
+    // Dry-run: return normalized rows and request body without inserting
+    if (dryRun) {
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          ok: true,
+          dryRun: true,
+          normalizedRows,
+          requestBody,
+          note: 'DEBUG MODE: This function will NOT insert to Supabase. Deploy production version to perform inserts.'
+        })
+      };
+    }
+
+    // Production path: perform REST insert into Supabase
+    const SUPABASE_URL = process.env.SUPABASE_URL;
+    const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const MIGRATION_TABLE = process.env.MIGRATION_TABLE || 'migration_items';
+
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          ok: false,
+          error: 'Missing required environment variables: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY'
+        })
+      };
+    }
+
+    const insertUrl = `${stripTrailingSlash(SUPABASE_URL)}/rest/v1/${encodeURIComponent(MIGRATION_TABLE)}`;
+
+    // Perform the POST
+    const fetchFn = (typeof fetch === 'function' ? fetch : (globalThis && globalThis.fetch));
+    if (!fetchFn) {
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ ok: false, error: 'Fetch is not available in this runtime' })
+      };
+    }
+
+    const resp = await fetchFn(insertUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Prefer: 'return=representation'
+      },
+      body: requestBody
+    });
+
+    const text = await resp.text();
+    let parsedResp;
+    try {
+      parsedResp = text ? JSON.parse(text) : text;
+    } catch (e) {
+      parsedResp = text;
+    }
+
+    if (!resp.ok) {
+      return {
+        statusCode: 502,
+        body: JSON.stringify({
+          ok: false,
+          error: 'Supabase REST insert failed',
+          status: resp.status,
+          body: parsedResp
+        })
+      };
+    }
+
     return {
       statusCode: 200,
       body: JSON.stringify({
         ok: true,
-        dryRun: true,
+        inserted: Array.isArray(parsedResp) ? parsedResp.length : 1,
+        rows: parsedResp,
         normalizedRows,
-        requestBody,
-        note:
-          'DEBUG MODE: This function will NOT insert to Supabase. Deploy production version to perform inserts.'
+        requestBody
       })
     };
   } catch (err) {
