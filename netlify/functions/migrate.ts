@@ -1,18 +1,20 @@
 /**
- * netlify/functions/migrate.ts
+ * migrate.ts
  *
  * Netlify Function: migrate
  *
  * Purpose:
  * - Accepts a migration payload and inserts rows into a Supabase table via the Supabase REST API.
  * - Be tolerant of multiple incoming payload shapes:
- *   1) object-map: { collections: { collectionName: [ ...items ] } }
- *   2) array form: { collections: [ { name: 'collectionName', items: [...] }, ... ] }
- *   3) rest-like: { collections: [ { collection_name: 'collectionName', payload: [...] } ] }
- *   4) single flat object: { collection_name: 'name', payload: [...] } or { collection_key: 'key', payload: [...] }
- *   5) unnamed array payloads: { collections: [ ... ] } or body is an array
+ *   1) single flat object: { collection_name|collection_key, payload|items|collections, metadata? }
+ *   2) object-map: { collections: { collectionName: [ ...items ] } }
+ *   3) array form: { collections: [ { name, items|payload }, ... ] }
+ *   4) bare array body -> treated as unnamed_collection
+ *   5) top-level items (items: [ ... ]) combined with collection_name/collection_key
  *
- * - Provides a POST-based health check using the header `x-health-check: true`.
+ * - Provides a POST-based health check using header `x-health-check: true`.
+ * - Logs the normalized rows to Netlify logs for debugging.
+ * - Returns the Supabase response and the normalized rows (for easier client-side inspection).
  *
  * Notes:
  * - Required environment variables:
@@ -21,26 +23,26 @@
  *   ADMIN_TOKEN
  *   MIGRATION_TABLE (optional, defaults to "migrated_collections")
  *
- * - This file logs normalized rows to Netlify logs to ease debugging during sandbox use.
+ * - This file attempts to be defensive & forgiving about payload shapes to reduce 400 errors.
  */
 
 /**
  * Imports
- * Use node-fetch which is commonly available in Node environments used by Netlify functions.
+ * node-fetch is used for environments where global fetch is not available.
  */
 import fetch from "node-fetch";
 
 /**
  * normalizeCollections
- * @description Convert various "collections" shapes into an array of rows acceptable for insertion.
+ * @description Convert object-map or array entries into rows for insertion.
  * @param collections any incoming collections data
- * @param metadata any metadata to attach to rows
+ * @param metadata metadata object to attach to rows
  * @returns Array of rows in shape: { collection_name, payload, metadata }
  */
 const normalizeCollections = (collections: any, metadata: any) => {
   const rows: Array<Record<string, any>> = [];
 
-  // Case: object map (preferred)
+  // object map: { name: [items] }
   if (collections && typeof collections === "object" && !Array.isArray(collections)) {
     for (const [collectionName, items] of Object.entries(collections)) {
       rows.push({
@@ -52,11 +54,11 @@ const normalizeCollections = (collections: any, metadata: any) => {
     return rows;
   }
 
-  // Case: array variants
+  // array style
   if (Array.isArray(collections)) {
     for (const entry of collections) {
       if (!entry || typeof entry !== "object") {
-        // If entry itself is a primitive or array, treat as unnamed collection
+        // primitive or array entry -> unnamed collection
         if (Array.isArray(entry)) {
           rows.push({
             collection_name: "unnamed_collection",
@@ -67,27 +69,27 @@ const normalizeCollections = (collections: any, metadata: any) => {
         continue;
       }
 
-      // Rest-like: { collection_name, payload }
-      if (entry.collection_name && ("payload" in entry || "items" in entry)) {
+      // rest-like: { collection_name, payload/items }
+      if ((entry.collection_name || entry.collection_key) && ("payload" in entry || "items" in entry)) {
         rows.push({
-          collection_name: entry.collection_name,
+          collection_name: entry.collection_name ?? entry.collection_key,
           payload: entry.payload ?? entry.items,
           metadata,
         });
         continue;
       }
 
-      // Array style: { name, items }
-      if (entry.name && ("items" in entry || "payload" in entry)) {
+      // array style: { name, items|payload }
+      if ((entry.name || entry.collection_name) && ("items" in entry || "payload" in entry)) {
         rows.push({
-          collection_name: entry.name,
+          collection_name: entry.name ?? entry.collection_name,
           payload: entry.items ?? entry.payload,
           metadata,
         });
         continue;
       }
 
-      // Fallback: if entry has a single key where value is an array:
+      // fallback: if entry has a single key whose value is array
       const keys = Object.keys(entry);
       if (keys.length === 1 && Array.isArray((entry as any)[keys[0]])) {
         rows.push({
@@ -98,49 +100,40 @@ const normalizeCollections = (collections: any, metadata: any) => {
         continue;
       }
 
-      // If entry looks like a collection item object but not wrapped, treat the whole entry as payload
-      // and try to derive a name
-      if (!entry.collection_name && !entry.name) {
-        rows.push({
-          collection_name: "unnamed_collection",
-          payload: entry,
-          metadata,
-        });
-        continue;
-      }
+      // otherwise treat entry as payload for unnamed collection
+      rows.push({
+        collection_name: "unnamed_collection",
+        payload: entry,
+        metadata,
+      });
     }
-
     return rows;
   }
 
-  // Unknown shape -> empty rows
   return rows;
 };
 
 /**
  * normalizeAnyPayload
- * @description Accepts the parsed request body and attempts to normalize it into the rows[] format.
- * Handles:
- * - top-level body.collection_name / collection_key as single collection
- * - body.collections as object map or array (delegates to normalizeCollections)
- * - body as an array -> single unnamed collection
- * - fallback conservative behaviour (returns [] if nothing recognized)
+ * @description Normalize various payload shapes into rows[] suitable for insertion.
+ * Supports top-level items (items: []) as well as payload wrapper shapes.
  * @param body parsed request body
  * @returns Array of { collection_name, payload, metadata }
  */
 const normalizeAnyPayload = (body: any) => {
   const metadata = body?.metadata ?? {};
 
-  // 1) If body contains a top-level collection_name or collection_key -> single flat object expected by older code
+  // 1) If body contains top-level collection_name or collection_key -> single flat object expected by older code
   if (body && typeof body === "object" && (body.collection_name || body.collection_key)) {
     const collectionName = (body.collection_name || body.collection_key) as string;
-    // payload may be under payload, items, collections, or the body itself (conservative)
-    const payload =
+
+    // Accept many payload containers: payload, items, collections, or even top-level arrays
+    let payload =
       body.payload ??
       body.items ??
       body.collections ??
       (() => {
-        // If there are other keys, try to remove collection_name/collection_key and metadata, use the rest as payload
+        // Remove known keys and if remaining single key contains array, return it
         const copy = { ...body };
         delete copy.collection_name;
         delete copy.collection_key;
@@ -148,13 +141,20 @@ const normalizeAnyPayload = (body: any) => {
         delete copy.payload;
         delete copy.items;
         delete copy.collections;
-        // If copy has a single key that is an array, use that array
+
         const keys = Object.keys(copy);
         if (keys.length === 1 && Array.isArray((copy as any)[keys[0]])) {
           return (copy as any)[keys[0]];
         }
+
+        // If there are no other keys and body is itself an array-like (rare), fallback
         return copy;
       })();
+
+    // If payload is an object with items property (e.g. payload: { items: [...] }) unwrap it
+    if (payload && typeof payload === "object" && "items" in payload && Array.isArray(payload.items)) {
+      payload = payload.items;
+    }
 
     return [
       {
@@ -165,12 +165,24 @@ const normalizeAnyPayload = (body: any) => {
     ];
   }
 
-  // 2) If body.collections exists: pass to normalizeCollections
+  // 2) If body.collections exists -> delegate
   if ("collections" in (body || {})) {
     return normalizeCollections(body.collections, metadata);
   }
 
-  // 3) If body is an array itself, treat as unnamed collection payload
+  // 3) If body has top-level 'items' and also 'name' or 'collection_name' -> map directly
+  if (body && typeof body === "object" && Array.isArray(body.items) && (body.name || body.collection_name || body.collection_key)) {
+    const collectionName = body.name ?? body.collection_name ?? body.collection_key ?? "unnamed_collection";
+    return [
+      {
+        collection_name: collectionName,
+        payload: body.items,
+        metadata,
+      },
+    ];
+  }
+
+  // 4) If body itself is an array -> unnamed collection
   if (Array.isArray(body)) {
     return [
       {
@@ -181,7 +193,7 @@ const normalizeAnyPayload = (body: any) => {
     ];
   }
 
-  // 4) If body has a top-level single key whose value is array, map to collection
+  // 5) If body is object with a single array-valued key -> treat as collection
   if (body && typeof body === "object") {
     const keys = Object.keys(body || {});
     if (keys.length === 1 && Array.isArray((body as any)[keys[0]])) {
@@ -219,13 +231,12 @@ export const handler = async (event: any, context: any) => {
         statusCode: 500,
         body: JSON.stringify({
           ok: false,
-          error:
-            "Missing required environment variables: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, ADMIN_TOKEN",
+          error: "Missing required environment variables: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, ADMIN_TOKEN",
         }),
       };
     }
 
-    // Handle CORS preflight
+    // CORS headers
     const corsHeaders = {
       "Content-Type": "application/json",
       "Access-Control-Allow-Origin": "*",
@@ -241,7 +252,7 @@ export const handler = async (event: any, context: any) => {
       };
     }
 
-    // Provide a POST-based health-check to avoid GET restriction by Netlify method policy
+    // POST health-check via header
     const xHealth = (event.headers && (event.headers["x-health-check"] || event.headers["X-Health-Check"])) || "";
     if (event.httpMethod === "POST" && String(xHealth).toLowerCase() === "true") {
       return {
@@ -264,7 +275,6 @@ export const handler = async (event: any, context: any) => {
     const authHeader = (event.headers && (event.headers.authorization || event.headers.Authorization)) || "";
     const expected = `Bearer ${ADMIN_TOKEN}`;
     if (authHeader !== expected) {
-      // Provide small hint to use the admin token (do not leak token)
       return {
         statusCode: 401,
         headers: corsHeaders,
@@ -287,7 +297,8 @@ export const handler = async (event: any, context: any) => {
     // Normalize incoming payload into rows[]
     const rows = normalizeAnyPayload(bodyJson);
 
-    // Log the normalized rows for debugging (Netlify function logs)
+    // Log the incoming raw and normalized rows for debugging
+    console.log("Incoming raw body:", typeof event.body === "string" ? event.body : JSON.stringify(event.body));
     console.log("Normalized rows:", JSON.stringify(rows, null, 2));
 
     if (!rows || rows.length === 0) {
@@ -297,7 +308,7 @@ export const handler = async (event: any, context: any) => {
         body: JSON.stringify({
           ok: false,
           error:
-            "No collections to migrate or unrecognized collections shape. Supported shapes: object map, array of {name,items|payload}, single flat object with collection_name or collection_key, or bare array payload.",
+            "No collections to migrate or unrecognized collections shape. Supported shapes: single flat object with collection_name/collection_key and payload|items, object map { collections: { name: [...] } }, array of collections [ { name, items } ], or bare array payload.",
         }),
       };
     }
@@ -325,6 +336,7 @@ export const handler = async (event: any, context: any) => {
     }
 
     if (!resp.ok) {
+      console.error("Supabase insert failed:", resp.status, parsed);
       return {
         statusCode: 502,
         headers: corsHeaders,
@@ -337,6 +349,7 @@ export const handler = async (event: any, context: any) => {
       };
     }
 
+    // Return inserted rows and also echo the normalized rows used for insertion to help clients debug
     return {
       statusCode: 200,
       headers: corsHeaders,
@@ -344,6 +357,7 @@ export const handler = async (event: any, context: any) => {
         ok: true,
         inserted: Array.isArray(parsed) ? parsed.length : rows.length,
         rows: parsed,
+        normalizedRows: rows,
       }),
     };
   } catch (err: any) {
