@@ -4,106 +4,91 @@
  * Netlify Function: migrate
  *
  * Purpose:
- * - Accepts a migration payload and inserts rows into a Supabase table via the Supabase REST API.
- * - Be tolerant of multiple incoming payload shapes:
- *   1) single flat object: { collection_name|collection_key, payload|items|collections, metadata? }
- *   2) object-map: { collections: { collectionName: [ ...items ] } }
- *   3) array form: { collections: [ { name, items|payload }, ... ] }
- *   4) bare array body -> treated as unnamed_collection
- *   5) top-level items (items: [ ... ]) combined with collection_name/collection_key
- *
- * - Provides a POST-based health check using header `x-health-check: true`.
- * - Logs the normalized rows to Netlify logs for debugging.
- * - Returns the Supabase response and the normalized rows (for easier client-side inspection).
+ * - Accept migration payloads in a tolerant manner and insert rows into a Supabase table.
+ * - Normalize a variety of incoming payload shapes into canonical rows suitable for insertion:
+ *   { collection_name: string, payload: object, metadata: object }
+ * - Provide a dry-run mode so clients can preview normalized rows without inserting them.
  *
  * Notes:
- * - Required environment variables:
- *   SUPABASE_URL
- *   SUPABASE_SERVICE_ROLE_KEY
- *   ADMIN_TOKEN
- *   MIGRATION_TABLE (optional, defaults to "migrated_collections")
+ * - Required env vars: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, ADMIN_TOKEN
+ * - Optional env var: MIGRATION_TABLE (defaults to "migrated_collections")
  *
- * - This file attempts to be defensive & forgiving about payload shapes to reduce 400 errors.
+ * The normalization strives to:
+ * - Wrap arrays into payload.items when necessary
+ * - Accept top-level `items`, `payload`, `collections`, or raw array bodies
+ * - Return informative errors and the normalized rows to help client debugging
  */
 
-/**
- * Imports
- * node-fetch is used for environments where global fetch is not available.
- */
 import fetch from "node-fetch";
 
 /**
  * normalizeCollections
- * @description Convert object-map or array entries into rows for insertion.
+ * @description Convert object-map or array entries into normalized rows for insertion.
+ * Ensures payload is an object (wrap arrays into { items: [...] } when necessary).
  * @param collections any incoming collections data
  * @param metadata metadata object to attach to rows
- * @returns Array of rows in shape: { collection_name, payload, metadata }
+ * @returns Array of rows: { collection_name, payload, metadata }
  */
 const normalizeCollections = (collections: any, metadata: any) => {
   const rows: Array<Record<string, any>> = [];
 
-  // object map: { name: [items] }
+  // object map: { name: [items] } or { name: { items: [...] } }
   if (collections && typeof collections === "object" && !Array.isArray(collections)) {
     for (const [collectionName, items] of Object.entries(collections)) {
+      const payload = ensurePayloadIsObjectWithItems(items);
       rows.push({
         collection_name: collectionName,
-        payload: items,
+        payload,
         metadata,
       });
     }
     return rows;
   }
 
-  // array style
+  // array style: collections is an array of collection entries
   if (Array.isArray(collections)) {
     for (const entry of collections) {
       if (!entry || typeof entry !== "object") {
-        // primitive or array entry -> unnamed collection
+        // primitive or array entry -> unnamed collection (wrap array into payload.items)
         if (Array.isArray(entry)) {
           rows.push({
             collection_name: "unnamed_collection",
-            payload: entry,
+            payload: { items: entry },
             metadata,
           });
         }
         continue;
       }
 
-      // rest-like: { collection_name, payload/items }
-      if ((entry.collection_name || entry.collection_key) && ("payload" in entry || "items" in entry)) {
+      // shape: { collection_name | collection_key , payload | items }
+      const name = entry.collection_name ?? entry.collection_key ?? entry.name ?? null;
+      const rawPayload = "payload" in entry ? entry.payload : ("items" in entry ? entry.items : null);
+
+      // If we have explicit name + payload/items -> use them
+      if (name && rawPayload !== null) {
         rows.push({
-          collection_name: entry.collection_name ?? entry.collection_key,
-          payload: entry.payload ?? entry.items,
+          collection_name: name,
+          payload: ensurePayloadIsObjectWithItems(rawPayload),
           metadata,
         });
         continue;
       }
 
-      // array style: { name, items|payload }
-      if ((entry.name || entry.collection_name) && ("items" in entry || "payload" in entry)) {
-        rows.push({
-          collection_name: entry.name ?? entry.collection_name,
-          payload: entry.items ?? entry.payload,
-          metadata,
-        });
-        continue;
-      }
-
-      // fallback: if entry has a single key whose value is array
+      // fallback: if entry has single key with array value -> treat as collection
       const keys = Object.keys(entry);
       if (keys.length === 1 && Array.isArray((entry as any)[keys[0]])) {
         rows.push({
           collection_name: keys[0],
-          payload: (entry as any)[keys[0]],
+          payload: { items: (entry as any)[keys[0]] },
           metadata,
         });
         continue;
       }
 
-      // otherwise treat entry as payload for unnamed collection
+      // Otherwise treat entry as unnamed collection; ensure payload is object
       rows.push({
-        collection_name: "unnamed_collection",
-        payload: entry,
+        collection_name: name ?? "unnamed_collection",
+        payload: ensurePayloadIsObjectWithItems(entry),
         metadata,
       });
     }
@@ -114,21 +99,59 @@ const normalizeCollections = (collections: any, metadata: any) => {
 };
 
 /**
+ * ensurePayloadIsObjectWithItems
+ * @description Normalize a value so that payload is always an object.
+ * If value is an array -> return { items: value }
+ * If value is an object -> if it already looks like a payload (has keys) return as-is,
+ *                       but if it is an object-of-items shaped like { id1: {...}, id2: {...} } convert to array -> { items: [ ... ] }
+ * For primitives, wrap into { items: [value] }
+ * @param value any incoming payload shape
+ */
+const ensurePayloadIsObjectWithItems = (value: any): any => {
+  if (Array.isArray(value)) {
+    // Already an array of items -> wrap into object so DB payload is an object
+    return { items: value };
+  }
+
+  if (value && typeof value === "object") {
+    // If object appears to be map-of-items (all values are objects) -> convert to array
+    const vals = Object.values(value);
+    if (vals.length > 0 && vals.every((v) => typeof v === "object" && !Array.isArray(v))) {
+      return { items: vals };
+    }
+    // If object already has an "items" key that is an array, keep it
+    if ("items" in value && Array.isArray(value.items)) {
+      return value;
+    }
+    // Otherwise return the object as payload (keeps arbitrary metadata inside payload)
+    return value;
+  }
+
+  // Primitive -> wrap
+  return { items: [value] };
+};
+
+/**
  * normalizeAnyPayload
- * @description Normalize various payload shapes into rows[] suitable for insertion.
- * Supports top-level items (items: []) as well as payload wrapper shapes.
+ * @description Normalize various payload shapes into canonical rows[] suitable for insertion.
+ * Supported shapes:
+ *  - { collection_name|collection_key, payload|items }
+ *  - { collections: { name: [ ...items ] } }
+ *  - array -> treated as unnamed collection -> payload: { items: [...] }
+ *  - single object where a single key maps to an array -> treated as collection
+ *  - top-level items: -> wrapped into payload { items: [...] }
  * @param body parsed request body
  * @returns Array of { collection_name, payload, metadata }
  */
-const normalizeAnyPayload = (body: any) => {
+const normalizeAnyPayload = (body: any): Array<Record<string, any>> => {
   const metadata = body?.metadata ?? {};
 
-  // 1) If body contains top-level collection_name or collection_key -> single flat object expected by older code
+  // 1) If body contains top-level collection_name or collection_key -> single flat object expected
   if (body && typeof body === "object" && (body.collection_name || body.collection_key)) {
     const collectionName = (body.collection_name || body.collection_key) as string;
 
-    // Accept many payload containers: payload, items, collections, or even top-level arrays
-    let payload =
+    // Accept many payload containers: payload, items, collections, or top-level arrays
+    let payloadCandidate =
       body.payload ??
       body.items ??
       body.collections ??
@@ -147,19 +170,25 @@ const normalizeAnyPayload = (body: any) => {
           return (copy as any)[keys[0]];
         }
 
-        // If there are no other keys and body is itself an array-like (rare), fallback
         return copy;
       })();
 
-    // If payload is an object with items property (e.g. payload: { items: [...] }) unwrap it
-    if (payload && typeof payload === "object" && "items" in payload && Array.isArray(payload.items)) {
-      payload = payload.items;
+    // If payloadCandidate is object with items -> unwrap if necessary
+    if (payloadCandidate && typeof payloadCandidate === "object" && "items" in payloadCandidate && Array.isArray(payloadCandidate.items)) {
+      return [
+        {
+          collection_name: collectionName,
+          payload: ensurePayloadIsObjectWithItems(payloadCandidate),
+          metadata,
+        },
+      ];
     }
 
+    // Else ensure payload is object (wrap arrays)
     return [
       {
         collection_name: collectionName,
-        payload,
+        payload: ensurePayloadIsObjectWithItems(payloadCandidate),
         metadata,
       },
     ];
@@ -170,24 +199,24 @@ const normalizeAnyPayload = (body: any) => {
     return normalizeCollections(body.collections, metadata);
   }
 
-  // 3) If body has top-level 'items' and also 'name' or 'collection_name' -> map directly
-  if (body && typeof body === "object" && Array.isArray(body.items) && (body.name || body.collection_name || body.collection_key)) {
+  // 3) If body has top-level 'items' -> treat as unnamed or named collection if name present
+  if (body && typeof body === "object" && Array.isArray(body.items)) {
     const collectionName = body.name ?? body.collection_name ?? body.collection_key ?? "unnamed_collection";
     return [
       {
         collection_name: collectionName,
-        payload: body.items,
+        payload: { items: body.items },
         metadata,
       },
     ];
   }
 
-  // 4) If body itself is an array -> unnamed collection
+  // 4) If body itself is an array -> unnamed collection, wrap into payload.items
   if (Array.isArray(body)) {
     return [
       {
         collection_name: "unnamed_collection",
-        payload: body,
+        payload: { items: body },
         metadata,
       },
     ];
@@ -200,11 +229,23 @@ const normalizeAnyPayload = (body: any) => {
       return [
         {
           collection_name: keys[0],
-          payload: (body as any)[keys[0]],
+          payload: { items: (body as any)[keys[0]] },
           metadata,
         },
       ];
     }
+  }
+
+  // 6) If body is top-level with a single key that looks like a payload (object), treat it as unnamed_collection
+  if (body && typeof body === "object") {
+    // fallback: treat the entire body as payload object
+    return [
+      {
+        collection_name: "unnamed_collection",
+        payload: ensurePayloadIsObjectWithItems(body),
+        metadata,
+      },
+    ];
   }
 
   // Nothing recognized
@@ -213,10 +254,9 @@ const normalizeAnyPayload = (body: any) => {
 
 /**
  * handler
- * @description Netlify function entry point. Validates env, auth, input and inserts
- * normalized rows into Supabase via REST. Supports POST health-check header x-health-check.
- * @param event Netlify event object
- * @param context Netlify context object
+ * @description Netlify Function entrypoint: validates env, auth, input and inserts
+ * normalized rows into Supabase via REST. Supports POST health-check header x-health-check
+ * and a dry-run mode (x-dry-run: true or query param dryRun=true).
  */
 export const handler = async (event: any, context: any) => {
   try {
@@ -241,7 +281,7 @@ export const handler = async (event: any, context: any) => {
       "Content-Type": "application/json",
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, X-Health-Check",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, X-Health-Check, X-Dry-Run",
     };
 
     if (event.httpMethod === "OPTIONS") {
@@ -294,6 +334,11 @@ export const handler = async (event: any, context: any) => {
       };
     }
 
+    // Determine dry-run header or query param
+    const queryParams = (event.queryStringParameters || {}) as Record<string, string>;
+    const xDryRunHeader = (event.headers && (event.headers["x-dry-run"] || event.headers["X-Dry-Run"])) || "";
+    const dryRun = String(xDryRunHeader).toLowerCase() === "true" || String(queryParams.dryRun || queryParams.dry_run || "").toLowerCase() === "true";
+
     // Normalize incoming payload into rows[]
     const rows = normalizeAnyPayload(bodyJson);
 
@@ -308,7 +353,22 @@ export const handler = async (event: any, context: any) => {
         body: JSON.stringify({
           ok: false,
           error:
-            "No collections to migrate or unrecognized collections shape. Supported shapes: single flat object with collection_name/collection_key and payload|items, object map { collections: { name: [...] } }, array of collections [ { name, items } ], or bare array payload.",
+            "No collections to migrate or unrecognized collections shape. Supported shapes: single object with collection_name|collection_key and payload|items, { collections: { name: [...] } }, array payload, or top-level items. See normalizedRows for attempted normalization.",
+          normalizedRows: rows,
+        }),
+      };
+    }
+
+    // If dry-run requested: return normalized rows without inserting
+    if (dryRun) {
+      return {
+        statusCode: 200,
+        headers: corsHeaders,
+        body: JSON.stringify({
+          ok: true,
+          dryRun: true,
+          message: "Normalized rows (dry-run) — no insert performed",
+          normalizedRows: rows,
         }),
       };
     }
@@ -345,6 +405,7 @@ export const handler = async (event: any, context: any) => {
           error: "Supabase REST insert failed",
           status: resp.status,
           body: parsed,
+          normalizedRows: rows,
         }),
       };
     }
