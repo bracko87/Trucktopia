@@ -1,23 +1,21 @@
 /**
  * netlify/functions/migrate.js
  *
- * Netlify Function to accept migration payloads and insert them into Supabase
- * (or run a dry-run to preview normalized rows).
+ * Debugging Netlify function for migration payload normalization.
  *
  * Responsibilities:
- * - Normalizes a variety of incoming shapes into rows of:
+ * - Parse incoming event.body and normalize several accepted shapes into rows:
  *     { collection_name: string, payload: object, metadata: object }
- * - Respects dry-run mode (query param dryRun=true OR header X-Dry-Run: true)
- * - When not dry-run, inserts rows into the Supabase REST table configured by
- *   MIGRATION_TABLE env var (defaults to 'migrated_collections').
+ * - Guarantee payload and metadata are plain objects (never undefined).
+ * - Return the exact JSON string that WOULD be sent to Supabase as "requestBody"
+ *   so we can inspect why Supabase's jsonb fields end up empty.
  *
- * Notes:
- * - Avoids any invalid regular expression flags.
- * - Returns normalizedRows in all responses to aid debugging.
+ * NOTE: This debug version intentionally does NOT perform any insert to Supabase.
+ * Deploy this temporarily, run your dry-run request and paste the response here.
  */
 
 /**
- * @description Safe JSON parse
+ * @description Safe JSON parse. Returns null on parse error.
  * @param {string|undefined|null} str
  * @returns {any|null}
  */
@@ -41,7 +39,8 @@ function asObject(v) {
 }
 
 /**
- * @description Build a canonical row for insertion/preview.
+ * @description Build a canonical row for preview/insertion.
+ * Ensures payload is an object (wraps arrays into { items: [...] }).
  * @param {string} collectionName
  * @param {any} payload
  * @param {any} metadata
@@ -49,7 +48,6 @@ function asObject(v) {
  */
 function makeRow(collectionName, payload, metadata) {
   const p = payload == null ? {} : payload;
-  // If payload is an array, wrap it into payload.items
   const payloadObj = Array.isArray(p) ? { items: p } : (typeof p === 'object' ? p : { value: p });
   const metaObj = asObject(metadata);
   return {
@@ -62,10 +60,10 @@ function makeRow(collectionName, payload, metadata) {
 /**
  * @description Normalize different incoming shapes into canonical rows.
  * Accepts:
- * - { collections: { name: [...] , ... }, metadata? }
- * - top-level array -> single row with collection_name "unnamed_collection"
- * - { collection_name / collection_key, payload|items|... }
- * - single object with items -> moved into payload.items
+ * - top-level array -> becomes payload.items
+ * - { collections: { name: [...] } } -> multiple rows
+ * - { collection_name || collection_key || collection_key, items|payload|... }
+ * - fallback: treat whole body as single payload
  *
  * @param {any} body
  * @returns {Array}
@@ -73,44 +71,42 @@ function makeRow(collectionName, payload, metadata) {
 function normalizeBodyToRows(body) {
   const rows = [];
 
-  // If client posted an array at top-level: wrap into payload.items
+  // Top-level array -> unnamed_collection payload.items
   if (Array.isArray(body)) {
     rows.push(makeRow('unnamed_collection', { items: body }, {}));
     return rows;
   }
 
   if (!body || typeof body !== 'object') {
-    // Unknown shape: return a single row using raw body as payload
     rows.push(makeRow('unnamed_collection', { items: [body] }, {}));
     return rows;
   }
 
-  // If collections envelope is present
+  // collections envelope
   if (body.collections && typeof body.collections === 'object') {
     const globalMetadata = asObject(body.metadata);
     for (const key of Object.keys(body.collections)) {
       const value = body.collections[key];
-      // value might be array or object
       const payload = Array.isArray(value) ? { items: value } : value;
       rows.push(makeRow(key, payload, globalMetadata));
     }
     return rows;
   }
 
-  // If explicit collection_name(s) provided
-  const collectionName = body.collection_name ?? body.collectionKey ?? body.collection_key ?? body.collection ?? null;
+  // explicit collection name / key detection
+  const collectionName =
+    body.collection_name ?? body.collectionKey ?? body.collection_key ?? body.collection ?? null;
+
   if (collectionName) {
-    // If body.items exists move into payload.items
     if (body.items && Array.isArray(body.items)) {
       rows.push(makeRow(collectionName, { items: body.items }, body.metadata ?? {}));
       return rows;
     }
-    // If payload present
     if (body.payload) {
       rows.push(makeRow(collectionName, body.payload, body.metadata ?? {}));
       return rows;
     }
-    // If body itself has keys other than collection_name and metadata, treat as payload
+    // treat other keys as payload
     const cloned = { ...body };
     delete cloned.collection_name;
     delete cloned.collectionKey;
@@ -119,7 +115,6 @@ function normalizeBodyToRows(body) {
     delete cloned.metadata;
     delete cloned.items;
     delete cloned.payload;
-    // If leftover keys are empty, fallback to items if present earlier; otherwise wrap leftover
     if (Object.keys(cloned).length === 0 && body.items && Array.isArray(body.items)) {
       rows.push(makeRow(collectionName, { items: body.items }, body.metadata ?? {}));
     } else if (Object.keys(cloned).length === 0 && body.payload) {
@@ -130,32 +125,35 @@ function normalizeBodyToRows(body) {
     return rows;
   }
 
-  // If body has top-level items and no collection name -> unnamed_collection
+  // top-level items -> unnamed
   if (body.items && Array.isArray(body.items)) {
     rows.push(makeRow('unnamed_collection', { items: body.items }, body.metadata ?? {}));
     return rows;
   }
 
-  // Last fallback: treat the whole body as a single payload
+  // fallback: whole body as payload
   rows.push(makeRow('unnamed_collection', body, body.metadata ?? {}));
   return rows;
 }
 
 /**
- * @description Helper to remove trailing slash from a URL (no invalid flags)
+ * @description Remove trailing slash from a URL (safe regex - no flags).
  * @param {string} url
  * @returns {string}
  */
 function stripTrailingSlash(url) {
   if (!url) return url;
-  // safe regex - no flags
   return url.replace(/\/$/, '');
 }
 
-const fetch = globalThis.fetch || require('node-fetch');
-
 /**
- * @description Netlify function handler
+ * @description Netlify function handler (debug-only).
+ * This function does NOT insert into Supabase. It returns:
+ *  - ok: true
+ *  - dryRun: true
+ *  - normalizedRows: array
+ *  - requestBody: string (JSON.stringify(normalizedRows)) - exact body that would be sent
+ *
  * @param {import('aws-lambda').APIGatewayEvent} event
  * @param {any} context
  */
@@ -163,8 +161,11 @@ exports.handler = async function (event, context) {
   try {
     const headers = event.headers || {};
     const qp = event.queryStringParameters || {};
-    const dryRunHeader = headers['x-dry-run'] ?? headers['X-Dry-Run'] ?? headers['x-dryrun'] ?? headers['X-DryRun'];
-    const dryRun = (String(dryRunHeader || '').toLowerCase() === 'true') || (String(qp.dryRun || qp.dryrun || '').toLowerCase() === 'true');
+    const dryRunHeader =
+      headers['x-dry-run'] ?? headers['X-Dry-Run'] ?? headers['x-dryrun'] ?? headers['X-DryRun'];
+    const dryRun =
+      String(dryRunHeader || '').toLowerCase() === 'true' ||
+      String(qp.dryRun || qp.dryrun || '').toLowerCase() === 'true';
 
     // Parse body safely; Netlify supplies event.body as string
     const rawBody = event.body;
@@ -173,80 +174,28 @@ exports.handler = async function (event, context) {
     // Normalize incoming shapes
     const normalizedRows = normalizeBodyToRows(body);
 
-    // If dry-run -> return normalizedRows and do not insert
-    if (dryRun) {
-      return {
-        statusCode: 200,
-        body: JSON.stringify({
-          ok: true,
-          dryRun: true,
-          normalizedRows
-        })
-      };
+    // Ensure payload and metadata are plain objects in every row
+    for (let i = 0; i < normalizedRows.length; i++) {
+      normalizedRows[i].payload = asObject(normalizedRows[i].payload);
+      normalizedRows[i].metadata = asObject(normalizedRows[i].metadata);
     }
 
-    // Not dry-run -> perform Supabase insert
-    const SUPABASE_URL = process.env.SUPABASE_URL;
-    const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const MIGRATION_TABLE = process.env.MIGRATION_TABLE || 'migrated_collections';
+    // Build exact request body we'd send to Supabase/PostgREST
+    const requestBody = JSON.stringify(normalizedRows);
 
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      return {
-        statusCode: 500,
-        body: JSON.stringify({
-          ok: false,
-          error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment',
-          normalizedRows
-        })
-      };
-    }
-
-    const endpoint = `${stripTrailingSlash(SUPABASE_URL)}/rest/v1/${encodeURIComponent(MIGRATION_TABLE)}`;
-
-    // PostgREST expects array for bulk insert; send normalizedRows as body
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        apikey: SUPABASE_SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-        Prefer: 'return=representation'
-      },
-      body: JSON.stringify(normalizedRows)
-    });
-
-    const text = await res.text();
-    let parsed;
-    try {
-      parsed = text ? JSON.parse(text) : null;
-    } catch (e) {
-      parsed = text;
-    }
-
-    if (!res.ok) {
-      return {
-        statusCode: res.status || 500,
-        body: JSON.stringify({
-          ok: false,
-          status: res.status,
-          statusText: res.statusText,
-          error: parsed,
-          normalizedRows
-        })
-      };
-    }
-
-    // Success — return inserted rows (PostgREST returns an array)
+    // Debug response (never insert in this debug handler)
     return {
       statusCode: 200,
       body: JSON.stringify({
         ok: true,
-        inserted: parsed,
-        normalizedRows
+        dryRun: true,
+        normalizedRows,
+        requestBody,
+        note:
+          'DEBUG MODE: This function will NOT insert to Supabase. Deploy production version to perform inserts.'
       })
     };
   } catch (err) {
-    // Ensure we never throw a syntax error at top-level again
     return {
       statusCode: 500,
       body: JSON.stringify({
