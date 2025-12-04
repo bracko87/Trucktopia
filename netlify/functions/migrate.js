@@ -1,43 +1,28 @@
 /**
  * netlify/functions/migrate.js
  *
- * Lightweight Netlify Function that normalizes a variety of migration payload
- * shapes and inserts them into Supabase REST (public.migrated_collections).
+ * Netlify Function to accept migration payloads and insert them into Supabase
+ * (or run a dry-run to preview normalized rows).
+ *
+ * Responsibilities:
+ * - Normalizes a variety of incoming shapes into rows of:
+ *     { collection_name: string, payload: object, metadata: object }
+ * - Respects dry-run mode (query param dryRun=true OR header X-Dry-Run: true)
+ * - When not dry-run, inserts rows into the Supabase REST table configured by
+ *   MIGRATION_TABLE env var (defaults to 'migrated_collections').
  *
  * Notes:
- * - Supports dry-run (header X-Dry-Run: true OR ?dryRun=true) — returns normalizedRows and never inserts.
- * - Normalizes common shapes:
- *   - body = array            -> payload.items = body
- *   - body.items present      -> payload.items = body.items
- *   - body.payload (array)    -> payload.items = body.payload
- *   - body.collections object -> each key => row (payload.items = value)
- *   - single object with collection_name/collection_key + payload/items -> normalized
- * - Inserts rows in batch (array) when not dry-run.
- *
- * JSDoc comments kept compact; logs and responses include normalizedRows to aid debugging.
+ * - Avoids any invalid regular expression flags.
+ * - Returns normalizedRows in all responses to aid debugging.
  */
 
 /**
- * getCorsHeaders
- * @description Provide consistent CORS headers for responses
- * @returns {Record<string,string>}
- */
-function getCorsHeaders() {
-  return {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, apikey, X-Dry-Run',
-    'Access-Control-Max-Age': '600'
-  };
-}
-
-/**
- * parseJsonSafe
- * @description Safely parse JSON, returning null on failure
- * @param {string} str
+ * @description Safe JSON parse
+ * @param {string|undefined|null} str
  * @returns {any|null}
  */
-function parseJsonSafe(str) {
+function safeJsonParse(str) {
+  if (!str) return null;
   try {
     return JSON.parse(str);
   } catch (err) {
@@ -46,241 +31,229 @@ function parseJsonSafe(str) {
 }
 
 /**
- * normalizeBodyToRows
- * @description Convert many possible incoming shapes into an array of normalized rows
- * Each row will have: { collection_name: string, payload: object, metadata: object|null }
+ * @description Ensure a value is a plain object. Returns {} when invalid.
+ * @param {any} v
+ * @returns {object}
+ */
+function asObject(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
+  return v;
+}
+
+/**
+ * @description Build a canonical row for insertion/preview.
+ * @param {string} collectionName
+ * @param {any} payload
+ * @param {any} metadata
+ * @returns {{collection_name: string, payload: object, metadata: object}}
+ */
+function makeRow(collectionName, payload, metadata) {
+  const p = payload == null ? {} : payload;
+  // If payload is an array, wrap it into payload.items
+  const payloadObj = Array.isArray(p) ? { items: p } : (typeof p === 'object' ? p : { value: p });
+  const metaObj = asObject(metadata);
+  return {
+    collection_name: String(collectionName || 'unnamed_collection'),
+    payload: payloadObj,
+    metadata: metaObj
+  };
+}
+
+/**
+ * @description Normalize different incoming shapes into canonical rows.
+ * Accepts:
+ * - { collections: { name: [...] , ... }, metadata? }
+ * - top-level array -> single row with collection_name "unnamed_collection"
+ * - { collection_name / collection_key, payload|items|... }
+ * - single object with items -> moved into payload.items
+ *
  * @param {any} body
- * @returns {Array<object>}
+ * @returns {Array}
  */
 function normalizeBodyToRows(body) {
   const rows = [];
 
-  // Helper to ensure payload is an object. If array, wrap under { items: array }
-  const ensurePayloadObject = (maybePayload) => {
-    if (maybePayload === null || maybePayload === undefined) return { items: [] };
-    if (Array.isArray(maybePayload)) return { items: maybePayload };
-    if (typeof maybePayload === 'object') return maybePayload;
-    // Primitive -> wrap
-    return { items: [maybePayload] };
-  };
-
-  // If top-level is an array -> create a single unnamed collection row
+  // If client posted an array at top-level: wrap into payload.items
   if (Array.isArray(body)) {
-    rows.push({
-      collection_name: 'unnamed_collection',
-      payload: { items: body },
-      metadata: null
-    });
+    rows.push(makeRow('unnamed_collection', { items: body }, {}));
     return rows;
   }
 
-  // If collections envelope present: { collections: { name: [...] } }
-  if (body && typeof body === 'object' && body.collections && typeof body.collections === 'object' && !Array.isArray(body.collections)) {
-    const meta = body.metadata ?? null;
-    for (const [collectionKey, collectionData] of Object.entries(body.collections)) {
-      rows.push({
-        collection_name: String(collectionKey),
-        payload: ensurePayloadObject(collectionData),
-        metadata: meta
-      });
+  if (!body || typeof body !== 'object') {
+    // Unknown shape: return a single row using raw body as payload
+    rows.push(makeRow('unnamed_collection', { items: [body] }, {}));
+    return rows;
+  }
+
+  // If collections envelope is present
+  if (body.collections && typeof body.collections === 'object') {
+    const globalMetadata = asObject(body.metadata);
+    for (const key of Object.keys(body.collections)) {
+      const value = body.collections[key];
+      // value might be array or object
+      const payload = Array.isArray(value) ? { items: value } : value;
+      rows.push(makeRow(key, payload, globalMetadata));
     }
     return rows;
   }
 
-  // If body has explicit collection_key or collection_name -> single row
-  const collectionName = (body && (body.collection_name || body.collection_key)) ? (body.collection_name || body.collection_key) : null;
-
-  // If body.payload is present
-  if (body && body.payload !== undefined) {
-    rows.push({
-      collection_name: collectionName || (body.collection_key ?? 'unnamed_collection'),
-      payload: ensurePayloadObject(body.payload),
-      metadata: body.metadata ?? null
-    });
+  // If explicit collection_name(s) provided
+  const collectionName = body.collection_name ?? body.collectionKey ?? body.collection_key ?? body.collection ?? null;
+  if (collectionName) {
+    // If body.items exists move into payload.items
+    if (body.items && Array.isArray(body.items)) {
+      rows.push(makeRow(collectionName, { items: body.items }, body.metadata ?? {}));
+      return rows;
+    }
+    // If payload present
+    if (body.payload) {
+      rows.push(makeRow(collectionName, body.payload, body.metadata ?? {}));
+      return rows;
+    }
+    // If body itself has keys other than collection_name and metadata, treat as payload
+    const cloned = { ...body };
+    delete cloned.collection_name;
+    delete cloned.collectionKey;
+    delete cloned.collection_key;
+    delete cloned.collection;
+    delete cloned.metadata;
+    delete cloned.items;
+    delete cloned.payload;
+    // If leftover keys are empty, fallback to items if present earlier; otherwise wrap leftover
+    if (Object.keys(cloned).length === 0 && body.items && Array.isArray(body.items)) {
+      rows.push(makeRow(collectionName, { items: body.items }, body.metadata ?? {}));
+    } else if (Object.keys(cloned).length === 0 && body.payload) {
+      rows.push(makeRow(collectionName, body.payload, body.metadata ?? {}));
+    } else {
+      rows.push(makeRow(collectionName, cloned, body.metadata ?? {}));
+    }
     return rows;
   }
 
-  // If body.items present (top-level) -> move into payload.items
-  if (body && body.items !== undefined) {
-    rows.push({
-      collection_name: collectionName || (body.collection_key ?? 'unnamed_collection'),
-      payload: ensurePayloadObject(body.items),
-      metadata: body.metadata ?? null
-    });
+  // If body has top-level items and no collection name -> unnamed_collection
+  if (body.items && Array.isArray(body.items)) {
+    rows.push(makeRow('unnamed_collection', { items: body.items }, body.metadata ?? {}));
     return rows;
   }
 
-  // If body has single collection-like shape { collection_key, data } or { data }
-  if (body && (body.data !== undefined)) {
-    rows.push({
-      collection_name: collectionName || (body.collection_key ?? 'unnamed_collection'),
-      payload: ensurePayloadObject(body.data),
-      metadata: body.metadata ?? null
-    });
-    return rows;
-  }
-
-  // Fallback: treat whole object as a single payload.items entry
-  if (body && typeof body === 'object') {
-    rows.push({
-      collection_name: collectionName || (body.collection_key ?? 'unnamed_collection'),
-      payload: ensurePayloadObject([body]),
-      metadata: body.metadata ?? null
-    });
-    return rows;
-  }
-
-  // Nothing matched: return empty array
+  // Last fallback: treat the whole body as a single payload
+  rows.push(makeRow('unnamed_collection', body, body.metadata ?? {}));
   return rows;
 }
 
 /**
- * handler
- * @description Netlify function handler — normalizes payloads and performs optional insert
- * @param {import('http').IncomingMessage} event
- * @param {import('http').ServerResponse} context
+ * @description Helper to remove trailing slash from a URL (no invalid flags)
+ * @param {string} url
+ * @returns {string}
  */
-exports.handler = async function (event) {
-  const corsHeaders = getCorsHeaders();
+function stripTrailingSlash(url) {
+  if (!url) return url;
+  // safe regex - no flags
+  return url.replace(/\/$/, '');
+}
 
-  // Handle preflight
-  if (event.httpMethod === 'OPTIONS') {
-    return {
-      statusCode: 204,
-      headers: corsHeaders,
-      body: ''
-    };
-  }
+const fetch = globalThis.fetch || require('node-fetch');
 
-  // Only POST accepted
-  if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      headers: corsHeaders,
-      body: JSON.stringify({ error: 'Method Not Allowed' })
-    };
-  }
-
-  // Detect dry-run
-  const queryParams = (event.queryStringParameters || {});
-  const headers = Object.keys(event.headers || {}).reduce((acc, k) => {
-    acc[k.toLowerCase()] = event.headers[k];
-    return acc;
-  }, {});
-  const dryRun = (queryParams.dryRun === 'true' || headers['x-dry-run'] === 'true' || headers['x-dry-run'] === '1');
-
-  // Parse body (Netlify provides event.body as string)
-  if (!event.body) {
-    return {
-      statusCode: 400,
-      headers: corsHeaders,
-      body: JSON.stringify({ error: 'Missing request body', normalizedRows: [] })
-    };
-  }
-
-  const parsed = parseJsonSafe(event.body);
-  if (parsed === null) {
-    return {
-      statusCode: 400,
-      headers: corsHeaders,
-      body: JSON.stringify({ error: 'Invalid JSON body', normalizedRows: [] })
-    };
-  }
-
-  const normalizedRows = normalizeBodyToRows(parsed);
-
-  // If no rows created, return helpful error
-  if (!normalizedRows || normalizedRows.length === 0) {
-    return {
-      statusCode: 400,
-      headers: corsHeaders,
-      body: JSON.stringify({ error: 'Could not derive rows from payload', normalizedRows: [] })
-    };
-  }
-
-  // Dry-run: return normalized rows and skip any DB calls
-  if (dryRun) {
-    return {
-      statusCode: 200,
-      headers: corsHeaders,
-      body: JSON.stringify({
-        ok: true,
-        dryRun: true,
-        normalizedRows
-      })
-    };
-  }
-
-  // Real run: ensure Supabase env vars
-  const SUPABASE_URL = process.env.SUPABASE_URL;
-  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const MIGRATION_TABLE = process.env.MIGRATION_TABLE || 'migrated_collections';
-
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    return {
-      statusCode: 500,
-      headers: corsHeaders,
-      body: JSON.stringify({ error: 'Supabase credentials not configured', normalizedRows })
-    };
-  }
-
-  // Build endpoint and headers
-  const endpoint = `${SUPABASE_URL.replace(/\\/$/, '')}/rest/v1/${encodeURIComponent(MIGRATION_TABLE)}`;
-  const fetchHeaders = {
-    'Content-Type': 'application/json',
-    apikey: SUPABASE_SERVICE_ROLE_KEY,
-    Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-    Prefer: 'return=representation'
-  };
-
+/**
+ * @description Netlify function handler
+ * @param {import('aws-lambda').APIGatewayEvent} event
+ * @param {any} context
+ */
+exports.handler = async function (event, context) {
   try {
-    // Insert in batch (array of rows)
-    const fetchFn = (typeof fetch !== 'undefined') ? fetch : (global && global.fetch);
-    if (!fetchFn) {
+    const headers = event.headers || {};
+    const qp = event.queryStringParameters || {};
+    const dryRunHeader = headers['x-dry-run'] ?? headers['X-Dry-Run'] ?? headers['x-dryrun'] ?? headers['X-DryRun'];
+    const dryRun = (String(dryRunHeader || '').toLowerCase() === 'true') || (String(qp.dryRun || qp.dryrun || '').toLowerCase() === 'true');
+
+    // Parse body safely; Netlify supplies event.body as string
+    const rawBody = event.body;
+    const body = safeJsonParse(rawBody) ?? {};
+
+    // Normalize incoming shapes
+    const normalizedRows = normalizeBodyToRows(body);
+
+    // If dry-run -> return normalizedRows and do not insert
+    if (dryRun) {
       return {
-        statusCode: 500,
-        headers: corsHeaders,
-        body: JSON.stringify({ error: 'Fetch API not available in runtime', normalizedRows })
+        statusCode: 200,
+        body: JSON.stringify({
+          ok: true,
+          dryRun: true,
+          normalizedRows
+        })
       };
     }
 
-    const res = await fetchFn(endpoint, {
+    // Not dry-run -> perform Supabase insert
+    const SUPABASE_URL = process.env.SUPABASE_URL;
+    const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const MIGRATION_TABLE = process.env.MIGRATION_TABLE || 'migrated_collections';
+
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          ok: false,
+          error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment',
+          normalizedRows
+        })
+      };
+    }
+
+    const endpoint = `${stripTrailingSlash(SUPABASE_URL)}/rest/v1/${encodeURIComponent(MIGRATION_TABLE)}`;
+
+    // PostgREST expects array for bulk insert; send normalizedRows as body
+    const res = await fetch(endpoint, {
       method: 'POST',
-      headers: fetchHeaders,
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        Prefer: 'return=representation'
+      },
       body: JSON.stringify(normalizedRows)
     });
 
     const text = await res.text();
-    let parsedRes;
+    let parsed;
     try {
-      parsedRes = text ? JSON.parse(text) : null;
-    } catch (err) {
-      parsedRes = text;
+      parsed = text ? JSON.parse(text) : null;
+    } catch (e) {
+      parsed = text;
     }
 
     if (!res.ok) {
       return {
         statusCode: res.status || 500,
-        headers: corsHeaders,
-        body: JSON.stringify({ error: 'Insert failed', detail: parsedRes, normalizedRows })
+        body: JSON.stringify({
+          ok: false,
+          status: res.status,
+          statusText: res.statusText,
+          error: parsed,
+          normalizedRows
+        })
       };
     }
 
-    // Success: return inserted rows and normalizedRows for traceability
+    // Success — return inserted rows (PostgREST returns an array)
     return {
       statusCode: 200,
-      headers: corsHeaders,
       body: JSON.stringify({
         ok: true,
-        inserted: parsedRes,
+        inserted: parsed,
         normalizedRows
       })
     };
   } catch (err) {
+    // Ensure we never throw a syntax error at top-level again
     return {
       statusCode: 500,
-      headers: corsHeaders,
-      body: JSON.stringify({ error: 'Internal error', detail: String(err), normalizedRows })
+      body: JSON.stringify({
+        ok: false,
+        error: String(err && err.message ? err.message : err),
+        stack: err && err.stack ? String(err.stack) : undefined
+      })
     };
   }
 };
