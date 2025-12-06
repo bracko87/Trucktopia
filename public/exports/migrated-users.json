@@ -1,0 +1,23 @@
+{
+  "producedAt": "2025-12-05T00:00:00.000Z",
+  "users": [
+    {
+      "id": "user-1",
+      "email": "alice@example.com",
+      "name": "Alice Johnson",
+      "needsPasswordReset": false
+    },
+    {
+      "id": "user-2",
+      "email": "bob@example.com",
+      "name": "Bob Smith",
+      "needsPasswordReset": true
+    },
+    {
+      "id": "user-3",
+      "email": "charlie@example.com",
+      "name": "Charlie Vega",
+      "needsPasswordReset": false
+    }
+  ]
+}

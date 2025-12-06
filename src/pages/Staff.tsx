@@ -5,12 +5,13 @@
  * - Lists Drivers, Mechanics, Dispatchers and Administration positions
  * - Provides Quick Navigation that includes Hire Staff and Company Benefits
  *
- * Modifications:
- * - Company Benefits flow uses a confirmation modal (CompanyBenefitsModal) and does NOT use
- *   any browser-native confirm/alert dialogs in the benefit confirmation flow.
- * - Staff Bonus enforces a 3-month (90 days) cooldown and the timestamp is persisted to company.benefits.staffBonusLast.
- * - Staff Family Day enforces a 6-month (180 days) cooldown and is persisted to company.benefits.familyDayLast.
- * - Benefit totals and bonuses are shown only in the modal and Confirm is the final step.
+ * Enhancements:
+ * - Shows hub-derived admin slots (based on infrastructure/hub level).
+ * - Blocks entry to the hiring flow (Job Center) when admin slots are already filled.
+ *
+ * Note:
+ * - Blocking applies to hiring more manager/dispatcher roles (administration slots).
+ * - The UI keeps the same layout and styling, only small badges/notifications are added.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -34,6 +35,7 @@ import {
 } from 'lucide-react';
 import DriverCompactCard, { CompactStaff } from '../components/staff/DriverCompactCard';
 import CompanyBenefitsModal from '../components/staff/CompanyBenefitsModal';
+import { getCompanyLimits } from '../utils/hubUtils';
 
 /**
  * StaffMember
@@ -179,8 +181,6 @@ const StaffManagement: React.FC = () => {
   /**
    * resolveSavedAssignments
    * @description Validate and apply saved admin assignments from localStorage.
-   *              Reject assignments where the staff is missing or role mismatch (e.g., dispatcher).
-   * @param companyEmail company email (storage key)
    */
   const resolveSavedAssignments = (companyEmail: string | undefined) => {
     if (!companyEmail) return;
@@ -197,10 +197,10 @@ const StaffManagement: React.FC = () => {
 
           // Prefer resolution by id
           const staffId = saved.assignedStaff.id;
-          const match = company?.staff?.find(s => s.id === staffId);
+          const match = company?.staff?.find((s: any) => s.id === staffId);
 
           // fallback to name match (case-insensitive)
-          const fallback = company?.staff?.find(s => s.name.toLowerCase() === String(saved.assignedStaff.name || '').toLowerCase());
+          const fallback = company?.staff?.find((s: any) => s.name.toLowerCase() === String(saved.assignedStaff.name || '').toLowerCase());
 
           const resolved = match || fallback || undefined;
           if (!resolved) {
@@ -210,7 +210,9 @@ const StaffManagement: React.FC = () => {
 
           // Validate role
           if (pos.requiredRole && pos.requiredRole.length > 0 && !pos.requiredRole.includes(resolved.role)) {
-            console.warn(`[Staff] Saved assignment rejected for position ${pos.id}: ${resolved.name} has role \"${resolved.role}\" which is not allowed for ${pos.title}.`);
+            console.warn(
+              `[Staff] Saved assignment rejected for position ${pos.id}: ${resolved.name} has role "${resolved.role}" which is not allowed for ${pos.title}.`
+            );
             return pos;
           }
 
@@ -225,8 +227,6 @@ const StaffManagement: React.FC = () => {
   /**
    * saveAdministrationPositions
    * @description Persist minimal assignment data to localStorage (id + name + role).
-   * @param email company email storage key
-   * @param positions positions to save
    */
   const saveAdministrationPositions = (email: string | undefined, positions: AdministrationPosition[]) => {
     if (!email) return;
@@ -286,7 +286,7 @@ const StaffManagement: React.FC = () => {
       return;
     }
 
-    if (company.staff?.some(s => s.isOwner)) {
+    if (company.staff?.some((s: any) => s.isOwner)) {
       setNotification({ type: 'error', message: 'You are already working as a driver in your company!' });
       return;
     }
@@ -309,39 +309,40 @@ const StaffManagement: React.FC = () => {
 
   /**
    * removeStaff
-   * @description Remove a staff member and clean assignments referencing them
-   * @param staffId id to remove
+   * @description Remove a staff member from the company.
    */
   const removeStaff = (staffId: string) => {
     if (!company) return;
-    const staffToRemove = company.staff?.find(s => s.id === staffId);
+    const staffToRemove = company.staff?.find((s: any) => s.id === staffId);
     if (!staffToRemove) return;
 
-    // Use in-app confirmation modal style: simple browser confirm exists currently in other flows.
-    // Note: Benefit confirmation flow uses the dedicated modal — no native confirm there.
+    // In-UI confirmation (keeps existing UX)
     if (staffToRemove.isOwner) {
       if (!confirm('Are you sure you want to remove yourself from driver position?')) return;
     } else {
       if (!confirm(`Are you sure you want to remove ${staffToRemove.name} from your staff?`)) return;
     }
 
-    const updatedCompany = { ...company, staff: (company.staff || []).filter(s => s.id !== staffId) };
-    createCompany(updatedCompany);
+    try {
+      fireStaff(staffId);
 
-    // Unassign from any admin positions
-    setAdministrationPositions(prev => {
-      const updated = prev.map(p => (p.assignedStaff?.id === staffId ? { ...p, assignedStaff: undefined } : p));
-      saveAdministrationPositions(company.email, updated);
-      return updated;
-    });
+      // Unassign from any admin positions in the UI immediately so the UI reflects the change.
+      setAdministrationPositions(prev => {
+        const updated = prev.map(p => (p.assignedStaff?.id === staffId ? { ...p, assignedStaff: undefined } : p));
+        saveAdministrationPositions(company.email, updated);
+        return updated;
+      });
 
-    setNotification({ type: 'success', message: `${staffToRemove.isOwner ? 'You have been removed' : staffToRemove.name + ' has been removed'} from the staff.` });
+      setNotification({ type: 'success', message: `${staffToRemove.isOwner ? 'You have been removed' : staffToRemove.name + ' has been removed'} from the staff.` });
+    } catch (err) {
+      console.error('[Staff][removeStaff] failed to remove staff', err);
+      setNotification({ type: 'error', message: 'Failed to remove staff. See console for details.' });
+    }
   };
 
   /**
    * isStaffAssignedToAnyPosition
    * @description Return true if staff id is assigned to any admin position
-   * @param staffId staff id
    */
   const isStaffAssignedToAnyPosition = (staffId: string) => {
     return administrationPositions.some(p => p.assignedStaff?.id === staffId);
@@ -350,15 +351,13 @@ const StaffManagement: React.FC = () => {
   /**
    * handleAssignFromSelect
    * @description Assign a staff member to a position after validating role/availability/assignment
-   * @param positionId id of position
-   * @param staffId id of selected staff
    */
   const handleAssignFromSelect = (positionId: string, staffId: string) => {
     if (!company) return;
     const position = administrationPositions.find(p => p.id === positionId);
     if (!position) return;
 
-    const staff = (company.staff || []).find(s => s.id === staffId);
+    const staff = (company.staff || []).find((s: any) => s.id === staffId);
     if (!staff) {
       setNotification({ type: 'error', message: 'Selected staff is no longer in your company.' });
       return;
@@ -392,7 +391,6 @@ const StaffManagement: React.FC = () => {
   /**
    * unassignPosition
    * @description Remove assignment from position id and persist
-   * @param positionId id
    */
   const unassignPosition = (positionId: string) => {
     if (!company) return;
@@ -426,7 +424,6 @@ const StaffManagement: React.FC = () => {
   /**
    * computeDisabledReason
    * @description Compute if benefit is currently blocked (insufficient funds / cooldown / no employees)
-   *              Returns null when allowed, otherwise human readable reason string.
    */
   const computeDisabledReason = (key: 'staff_bonus' | 'family_day' | '', employees: number) => {
     if (!company) return 'No company found.';
@@ -472,7 +469,6 @@ const StaffManagement: React.FC = () => {
   /**
    * applyBenefit
    * @description Actually apply the benefit changes to company state and persist timestamps.
-   *              No browser-native dialogs are used here. Parent ensures validation via computeDisabledReason.
    */
   const applyBenefit = (benefitKey: 'staff_bonus' | 'family_day') => {
     if (!company) {
@@ -555,9 +551,16 @@ const StaffManagement: React.FC = () => {
   const staffList: StaffMember[] = company.staff || [];
 
   /**
+   * Compute hub-derived admin slots and current admin usage.
+   * Uses getCompanyLimits which is tolerant to multiple shapes of company/gameState.
+   */
+  const companyLimits = getCompanyLimits({ company });
+  const adminSlotsAllowed = companyLimits.staffLimit ?? 0;
+  const currentAdminCount = (company.staff || []).filter((s: any) => s.role === 'manager' || s.role === 'dispatcher').length;
+
+  /**
    * sortByAvailability
    * @description Available staff first, then future available sorted by date
-   * @param arr staff array
    */
   const sortByAvailability = (arr: StaffMember[]) => {
     const today = new Date();
@@ -636,6 +639,22 @@ const StaffManagement: React.FC = () => {
 
   const disabledReason = computeDisabledReason(pendingBenefit || '', employeesCount);
 
+  /**
+   * hireNavigationGuard
+   * @description Guard navigation to hiring page — prevents entering job-center hiring flow
+   *              when admin (manager+dispatcher) slots are full. Shows a friendly notification.
+   */
+  const hireNavigationGuard = () => {
+    // Only block manager/dispatcher hires — we cannot tell what role the user will pick in Job Center,
+    // so we block the quick "Hire Staff" navigation when admin capacity is already exhausted.
+    if (adminSlotsAllowed > 0 && currentAdminCount >= adminSlotsAllowed) {
+      setNotification({ type: 'error', message: `Admin slots full (${currentAdminCount}/${adminSlotsAllowed}). You cannot hire more managers or dispatchers.` });
+      // prevent navigation to job-center when trying to hire staff that may be an admin role
+      return false;
+    }
+    return true;
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -650,9 +669,18 @@ const StaffManagement: React.FC = () => {
             <div className="text-sm text-slate-400">Total Staff</div>
             <div className="text-2xl font-bold text-blue-400">{staffList.length}</div>
           </div>
-          <div className="text-right">
-            <div className="text-sm text-slate-400">Company Balance</div>
-            <div className="text-2xl font-bold text-green-400">€{(company.capital || 0).toLocaleString()}</div>
+
+          {/* Divider between Total Staff and Admin slots (visible on large screens only) */}
+          <div aria-hidden="true" className="hidden lg:block h-10 w-px bg-slate-600/60 mx-2" />
+
+          {/* Admin slots badge */}
+          <div className="text-right lg:pl-2">
+            <div className="text-sm text-slate-400">Admin slots</div>
+            <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${currentAdminCount >= adminSlotsAllowed ? 'bg-rose-700 text-rose-100' : 'bg-slate-700 text-slate-100'}`}>
+              <span className="mr-2">Managers/Dispatchers</span>
+              <span className="font-bold">{currentAdminCount}/{adminSlotsAllowed}</span>
+            </div>
+            <div className="text-xs text-slate-500 mt-1">Determined by hub level</div>
           </div>
         </div>
       </div>
@@ -801,22 +829,22 @@ const StaffManagement: React.FC = () => {
                               >
                                 <option value="" disabled>Select Manager...</option>
                                 {(company.staff || [])
-                                  .filter(s => position.requiredRole?.includes(s.role))
-                                  .filter(s => (s.isOwner ? true : s.status === 'available'))
-                                  .filter(s => !isStaffAssignedToAnyPosition(s.id))
-                                  .map(s => (
+                                  .filter((s: any) => position.requiredRole?.includes(s.role))
+                                  .filter((s: any) => (s.isOwner ? true : s.status === 'available'))
+                                  .filter((s: any) => !isStaffAssignedToAnyPosition(s.id))
+                                  .map((s: any) => (
                                     <option key={s.id} value={s.id}>
                                       {s.name} ({s.role})
                                     </option>
                                   ))}
                               </select>
 
-                              { (company.staff || []).filter(s => position.requiredRole?.includes(s.role)).length === 0 && (
+                              { (company.staff || []).filter((s: any) => position.requiredRole?.includes(s.role)).length === 0 && (
                                 <p className="text-xs text-slate-500 mt-2">No suitable managers available. Hire managers from Job Center first.</p>
                               )}
 
-                              { (company.staff || []).filter(s => position.requiredRole?.includes(s.role)).length > 0 &&
-                                (company.staff || []).filter(s => position.requiredRole?.includes(s.role)).every(s => !s.isOwner && s.status !== 'available') && (
+                              { (company.staff || []).filter((s: any) => position.requiredRole?.includes(s.role)).length > 0 &&
+                                (company.staff || []).filter((s: any) => position.requiredRole?.includes(s.role)).every((s: any) => !s.isOwner && s.status !== 'available') && (
                                   <p className="text-xs text-slate-500 mt-2">Managers are hired but none are currently available.</p>
                                 )
                               }
@@ -932,12 +960,29 @@ const StaffManagement: React.FC = () => {
         {/* Grid updated to include Company Benefits box next to Hire Staff */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <button
-            onClick={() => navigate('/job-center')}
+            onClick={() => {
+              /**
+               * Hire button handler
+               * - If admin slots are full, show a notification explaining that
+               *   managers/dispatchers cannot be hired, but still allow navigation
+               *   so the user can hire drivers/mechanics.
+               */
+              if (adminSlotsAllowed > 0 && currentAdminCount >= adminSlotsAllowed) {
+                setNotification({
+                  type: 'error',
+                  message: `Admin slots full (${currentAdminCount}/${adminSlotsAllowed}). You cannot hire more managers or dispatchers. Drivers and mechanics are still available.`,
+                });
+              }
+              navigate('/job-center');
+            }}
             className="bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg p-4 text-left transition-colors"
           >
             <UserPlus className="w-6 h-6 text-blue-400 mb-2" />
             <h4 className="font-medium text-white">Hire Staff</h4>
             <p className="text-sm text-slate-400 mt-1">Recruit new team members</p>
+            {adminSlotsAllowed > 0 && currentAdminCount >= adminSlotsAllowed && (
+              <div className="mt-3 text-xs text-rose-300">Admin slots full — hiring of managers/dispatchers will be blocked.</div>
+            )}
           </button>
 
           {/* Company Benefits card */}
@@ -994,9 +1039,6 @@ const StaffManagement: React.FC = () => {
 
               <div className="text-sm text-slate-400">Employees: <span className="text-white">{(company?.staff || []).length}</span></div>
             </div>
-
-            {/* NOTE: Benefit descriptions are intentionally removed from inline card.
-                They are shown in the confirmation modal when the user clicks Apply. */}
           </div>
         </div>
       </div>

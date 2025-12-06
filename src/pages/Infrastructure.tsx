@@ -24,6 +24,9 @@ import { useGame } from '../contexts/GameContext';
 import HubsPanel from '../components/infrastructure/HubsPanel';
 import FacilitiesPanel from '../components/infrastructure/FacilitiesPanel';
 import HubsDowngradeFix from '../components/infrastructure/HubsDowngradeFix';
+import BuildHubBox from '../components/infrastructure/BuildHubBox';
+import PendingTasksPanel from '../components/infrastructure/PendingTasksPanel';
+import { ALL_FACILITIES } from '../data/hubLevels';
 
 /**
  * formatNumber
@@ -127,24 +130,94 @@ const Infrastructure: React.FC = () => {
   const { gameState } = useGame() as any;
 
   // Derive counts safely from gameState (tolerant lookups)
+  /**
+   * Derive hubsCount and facilitiesCount from the same data sources used by the
+   * HubsPanel and FacilitiesPanel so header numbers match rendered panels.
+   *
+   * - hubsCount: tolerant lookup (prefer company.hubs array, fallback to company.hub,
+   *   infrastructure.hubs, then top-level gameState.hubs).
+   * - facilitiesCount: tolerant lookup of built facilities for the player's company.
+   *   We try common locations where "built" facilities may be stored:
+   *     - company.builtFacilities (array of ids or names)
+   *     - company.facilities (array of objects with a `built` flag or simple strings)
+   *     - infrastructure.builtFacilities
+   *     - hubs[].builtFacilities (aggregate across hubs)
+   *   If none are found, fall back to 0.
+   */
   const { hubsCount, facilitiesCount } = useMemo(() => {
-    const hubsArr = Array.isArray(gameState?.infrastructure?.hubs)
-      ? gameState.infrastructure.hubs
-      : Array.isArray(gameState?.hubs)
-      ? gameState.hubs
-      : Array.isArray(gameState?.company?.hubs)
-      ? gameState.company.hubs
-      : [];
+    if (!gameState) return { hubsCount: 0, facilitiesCount: 0 };
 
-    const facilitiesArr = Array.isArray(gameState?.infrastructure?.facilities)
-      ? gameState.infrastructure.facilities
-      : Array.isArray(gameState?.facilities)
-      ? gameState.facilities
-      : Array.isArray(gameState?.company?.facilities)
-      ? gameState.company.facilities
-      : [];
+    // Determine hubs list using the same tolerant rules used in HubsPanel
+    let hubsArr: any[] = [];
+    if (Array.isArray(gameState?.company?.hubs) && gameState.company.hubs.length > 0) {
+      hubsArr = gameState.company.hubs;
+    } else if (gameState?.company?.hub && typeof gameState.company.hub === 'object') {
+      hubsArr = [gameState.company.hub];
+    } else if (Array.isArray(gameState?.infrastructure?.hubs) && gameState.infrastructure.hubs.length > 0) {
+      hubsArr = gameState.infrastructure.hubs;
+    } else if (Array.isArray(gameState?.hubs) && gameState.hubs.length > 0) {
+      hubsArr = gameState.hubs;
+    } else {
+      hubsArr = [];
+    }
 
-    return { hubsCount: hubsArr.length, facilitiesCount: facilitiesArr.length };
+    // Tolerant lookup for built facilities
+    const builtSet = new Set<string>();
+    const company = gameState?.company ?? null;
+
+    // 1) company.builtFacilities as an array of ids/names
+    if (company && Array.isArray(company.builtFacilities) && company.builtFacilities.length > 0) {
+      company.builtFacilities.forEach((f: any) => {
+        if (f == null) return;
+        builtSet.add(String(typeof f === 'object' ? (f.id ?? f.name ?? JSON.stringify(f)) : f));
+      });
+    }
+
+    // 2) company.facilities (array of objects or strings) where objects may have built flag
+    if (company && Array.isArray(company.facilities) && company.facilities.length > 0) {
+      company.facilities.forEach((f: any) => {
+        if (f == null) return;
+        if (typeof f === 'string') {
+          // string entries may represent built facility ids/names
+          builtSet.add(f);
+        } else if (f?.built) {
+          builtSet.add(String(f.id ?? f.name ?? JSON.stringify(f)));
+        } else if (f?.status === 'built' || f?.isBuilt) {
+          builtSet.add(String(f.id ?? f.name ?? JSON.stringify(f)));
+        }
+      });
+    }
+
+    // 3) infrastructure.builtFacilities (top-level)
+    if (Array.isArray(gameState?.infrastructure?.builtFacilities) && gameState.infrastructure.builtFacilities.length > 0) {
+      gameState.infrastructure.builtFacilities.forEach((f: any) => {
+        if (f == null) return;
+        builtSet.add(String(typeof f === 'object' ? (f.id ?? f.name ?? JSON.stringify(f)) : f));
+      });
+    }
+
+    // 4) per-hub builtFacilities aggregation
+    hubsArr.forEach((h: any) => {
+      if (!h) return;
+      if (Array.isArray(h.builtFacilities) && h.builtFacilities.length > 0) {
+        h.builtFacilities.forEach((f: any) => {
+          if (f == null) return;
+          builtSet.add(String(typeof f === 'object' ? (f.id ?? f.name ?? JSON.stringify(f)) : f));
+        });
+      }
+      // Some hubs may store built/unlocked entries under unlockedFacilities with a `built` flag
+      if (Array.isArray(h.unlockedFacilities) && h.unlockedFacilities.length > 0) {
+        h.unlockedFacilities.forEach((f: any) => {
+          if (f == null) return;
+          if (typeof f === 'string') return; // unlocked-only entry; skip unless explicit built
+          if (f?.built) builtSet.add(String(f.id ?? f.name ?? JSON.stringify(f)));
+        });
+      }
+    });
+
+    const facilitiesCountResolved = builtSet.size;
+
+    return { hubsCount: hubsArr.length, facilitiesCount: facilitiesCountResolved };
   }, [gameState]);
 
   const [active, setActive] = useState<'hubs' | 'facilities'>('hubs');
@@ -202,6 +275,12 @@ const Infrastructure: React.FC = () => {
                   className={active === 'hubs' ? '' : 'hidden'}
                 >
                   <HubsPanel />
+
+                  {/* Build Hub box — sits below the hubs list and lets players construct a hub
+                      in any city from the in-game database. */}
+                  <div className="mt-6">
+                    <BuildHubBox />
+                  </div>
                 </div>
 
                 <div
@@ -216,20 +295,12 @@ const Infrastructure: React.FC = () => {
             </div>
           </section>
 
-          {/* Secondary boxed area — keeps p-6 internally so paragraph spacing is preserved */}
+          {/* Secondary boxed area — keeps p-6 internally so paragraph spacing is preserved.
+               Move the centralized PendingTasksPanel here so it is shown for all facility-related tasks. */}
           <section className="w-full">
             <div className="p-6">
-              <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <h3 className="text-lg font-semibold text-white">Pending Tasks</h3>
-                    <div className="text-sm text-slate-400">Maintenance, build queues and scheduled work</div>
-                  </div>
-                  <div className="text-sm text-slate-400">—</div>
-                </div>
-
-                <div className="text-slate-300 text-sm">No pending tasks.</div>
-              </div>
+              {/* Centralized pending tasks panel for all facilities/hubs */}
+              <PendingTasksPanel />
             </div>
           </section>
         </div>

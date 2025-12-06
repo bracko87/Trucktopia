@@ -1,0 +1,16 @@
+[
+  {
+    "rowId": "10ce789b-e658-41fd-b888-1037b94e659d",
+    "email": "alice@example.com",
+    "authUserId": "404b4a3d-11d4-43bf-b7b0-9ea263f72b5f",
+    "tempPassword": "GyKZHMriaG6I7FB0PSjdXQAA1a!",
+    "status": "created"
+  },
+  {
+    "rowId": "915da0da-edfc-48fc-9687-e70c1d8f072c",
+    "email": "glupostimejlza@gmail.com",
+    "authUserId": "ac74cb7c-590b-418a-b5bd-721c1e57b368",
+    "tempPassword": "to0xA9IE93GPjCzDm3YKEQAA1a!",
+    "status": "created"
+  }
+]

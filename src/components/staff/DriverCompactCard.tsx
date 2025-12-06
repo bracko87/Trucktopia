@@ -102,6 +102,11 @@ const DriverCompactCard: React.FC<DriverCompactCardProps> = ({
   const [showFireConfirm, setShowFireConfirm] = useState(false);
   const [fireProcessing, setFireProcessing] = useState(false);
   const [fireResultMessage, setFireResultMessage] = useState<string | null>(null);
+  /**
+   * forceRemoved
+   * @description Local flag used by the test Fire2 button to immediately hide the card from the UI.
+   */
+  const [forceRemoved, setForceRemoved] = useState<boolean>(false);
 
   /**
    * stoppedDriving
@@ -119,6 +124,9 @@ const DriverCompactCard: React.FC<DriverCompactCardProps> = ({
   const wrapperClasses = fullWidth
     ? 'w-full bg-slate-800 rounded-xl border border-slate-700 hover:border-slate-600 transition-shadow duration-150'
     : 'min-w-[260px] max-w-[340px] bg-slate-800 rounded-xl border border-slate-700 hover:border-slate-600 transition-shadow duration-150';
+
+  // If the quick-test Fire2 button was used, hide this card immediately.
+  if (forceRemoved) return null;
 
   const availabilityText = staff.availabilityDate ? new Date(staff.availabilityDate).toLocaleDateString() : undefined;
   const kilometers = typeof staff.kilometers === 'number' ? staff.kilometers : 0;
@@ -551,7 +559,7 @@ const DriverCompactCard: React.FC<DriverCompactCardProps> = ({
 
         <div className="text-right min-w-[90px]">
           <div className="text-sm text-slate-400">Salary</div>
-          <div className="text-white font-medium">{typeof staff.salary === 'number' ? `$${(staff.salary as number).toLocaleString()}` : (staff.salary === 'FREE' ? 'FREE' : '-')}</div>
+          <div className="text-white font-medium">{typeof staff.salary === 'number' ? `${(staff.salary as number).toLocaleString()}` : (staff.salary === 'FREE' ? 'FREE' : '-')}</div>
         </div>
       </div>
 
@@ -665,6 +673,7 @@ const DriverCompactCard: React.FC<DriverCompactCardProps> = ({
       {/* Integrated game-styled fire confirmation modal */}
       <StaffFireConfirmModal
         open={showFireConfirm}
+        staffId={staff.id}
         staffName={staff.name}
         monthlySalary={typeof staff.salary === 'number' ? staff.salary : 0}
         companyCapital={typeof game?.gameState?.company?.capital === 'number' ? game!.gameState!.company!.capital! : Number(game?.gameState?.company?.capital || 0)}

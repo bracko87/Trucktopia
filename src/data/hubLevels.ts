@@ -1,13 +1,16 @@
 /**
  * hubLevels.ts
  *
- * Hub level configuration and facilities mapping for Infrastructure.
+ * Hub level configuration used by Infrastructure pages.
  *
  * Responsibilities:
  * - Provide canonical hub level definitions (vehicle limits, office spots).
- * - Provide mapping of which facilities unlock on which levels.
+ * - Provide the ALL_FACILITIES list used by the FacilitiesPanel.
  *
- * Note: upgradeCost changed to 100_000 USD per request.
+ * Change introduced:
+ * - Facilities are no longer gated per hub level. The unlocks arrays are intentionally
+ *   left empty so facilities are available from level 1. Upgrades still affect
+ *   vehicleLimit/officeSpots and cost, but do not unlock facilities.
  */
 
 /**
@@ -18,7 +21,7 @@ export interface HubLevel {
   level: number;
   vehicleLimit: number;
   officeSpots: number;
-  unlocks: string[];
+  unlocks: string[]; // kept for compatibility but intentionally empty per product decision
   upgradeCost: number;
 }
 
@@ -43,7 +46,9 @@ export const ALL_FACILITIES: string[] = [
 /**
  * hubLevels
  * @description Array of HubLevel objects indexed by level-1 (level 1 -> index 0).
- * upgradeCost is set to 100,000 USD per level as requested.
+ * upgradeCost is set to 100_000 USD per level (kept as requested).
+ *
+ * NOTE: unlocks arrays intentionally empty so facilities are available from level 1.
  */
 export const hubLevels: HubLevel[] = [
   {
@@ -57,56 +62,56 @@ export const hubLevels: HubLevel[] = [
     level: 2,
     vehicleLimit: 20,
     officeSpots: 4,
-    unlocks: ['Parking Yard', 'Maintenance Garage'],
+    unlocks: [],
     upgradeCost: 100_000
   },
   {
     level: 3,
     vehicleLimit: 40,
     officeSpots: 8,
-    unlocks: ['Staff Training Center', 'Repair Garage'],
+    unlocks: [],
     upgradeCost: 100_000
   },
   {
     level: 4,
     vehicleLimit: 70,
     officeSpots: 12,
-    unlocks: ['Dispatch Center'],
+    unlocks: [],
     upgradeCost: 100_000
   },
   {
     level: 5,
     vehicleLimit: 100,
     officeSpots: 15,
-    unlocks: ['Driver Facilities', 'Spare Parts Warehouse'],
+    unlocks: [],
     upgradeCost: 100_000
   },
   {
     level: 6,
     vehicleLimit: 140,
     officeSpots: 20,
-    unlocks: ['Workshop'],
+    unlocks: [],
     upgradeCost: 100_000
   },
   {
     level: 7,
     vehicleLimit: 170,
     officeSpots: 24,
-    unlocks: ['Distribution Center'],
+    unlocks: [],
     upgradeCost: 100_000
   },
   {
     level: 8,
     vehicleLimit: 200,
     officeSpots: 30,
-    unlocks: ['Warehouse'],
+    unlocks: [],
     upgradeCost: 100_000
   },
   {
     level: 9,
     vehicleLimit: 300,
     officeSpots: 40,
-    unlocks: ['IT/Data Center'],
+    unlocks: [],
     upgradeCost: 100_000
   },
   {

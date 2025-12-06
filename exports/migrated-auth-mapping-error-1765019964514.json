@@ -1,0 +1,3 @@
+{
+  "error": "Error: Failed to fetch users: 401 Unauthorized - {\"message\":\"Invalid API key\",\"hint\":\"Double check your Supabase `anon` or `service_role` API key.\"}"
+}

@@ -113,9 +113,61 @@ const HubDetailsModal: React.FC<HubDetailsModalProps> = ({ hub, onClose, onUpgra
     if (!hub) return;
     setProcessing(true);
     setMessage(null);
+
     try {
-      await Promise.resolve(onUpgrade?.(hub.id));
-      setMessage('Upgrade successful.');
+      if (onUpgrade) {
+        // If parent provided an upgrade handler, use it.
+        await Promise.resolve(onUpgrade(hub.id));
+        setMessage('Upgrade successful.');
+      } else {
+        // Fallback upgrade behavior (symmetric to the downgrade fallback).
+        const company = gameState?.company;
+        if (!company) {
+          setMessage('No company context available.');
+          return;
+        }
+
+        const cost = upgradeCost ?? nextLevelInfo?.upgradeCost ?? 0;
+        if ((company.capital ?? 0) < cost) {
+          setMessage(`Insufficient funds. ${formatCurrency(cost)} required to upgrade.`);
+          return;
+        }
+
+        // Find hubs (preserve original shape: array or keyed object)
+        const rawHubs = Array.isArray(company.hubs)
+          ? company.hubs
+          : company.hubs && typeof company.hubs === 'object'
+          ? Object.values(company.hubs)
+          : [];
+
+        const updatedHubs = rawHubs.map((h: any) => {
+          if (String(h.id) !== String(hub.id)) return h;
+          // perform level bump
+          return {
+            ...h,
+            level: Math.max(1, Math.round(nextLevel)),
+            // ensure unlockedFacilities exists so other code can reference it
+            unlockedFacilities: Array.isArray(h.unlockedFacilities) ? h.unlockedFacilities : [],
+          };
+        });
+
+        const updatedCompany = {
+          ...company,
+          capital: (company.capital ?? 0) - cost,
+          hubs: Array.isArray(company.hubs)
+            ? updatedHubs
+            : // convert back to keyed object if original was keyed
+              updatedHubs.reduce((acc: any, h: any) => {
+                acc[h.id] = h;
+                return acc;
+              }, {}),
+        };
+
+        // Persist change via context updater
+        createCompany(updatedCompany);
+        setMessage('Upgrade successful.');
+      }
+
       setConfirmingUpgrade(false);
       // Close after a short delay to show success
       setTimeout(() => {

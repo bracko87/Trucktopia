@@ -2,23 +2,24 @@
  * StaffActionButtons.tsx
  *
  * File-level:
- * Reusable action button group for staff entries. Presents Salary, Vacation, Skill, Promote,
- * Stop Driving and Fire actions along with their associated in-UI modals.
+ * Reusable set of action buttons for staff entries (Salary, Vacation, Skill,
+ * Promote, Release, Stop Driving). This file restores and implements a full
+ * Promote modal and handler so the Promote button opens a dialog and performs
+ * canonical promotion via onPromote or fallback game state mutation.
  *
- * Purpose:
- * - Render staff action buttons and associated modal dialogs.
- * - Ensure Stop Driving and Fire flows use in-UI modals and that no browser-native confirm/popups are shown.
- * - Ensure the Confirm & Pay in-UI modal is the last confirmation in the firing flow:
- *   after Confirm & Pay is pressed we deduct compensation, fire the staff and perform cleanup.
+ * Responsibilities:
+ * - Salary modal: set monthly salary (calls onSalaryAdjust or fallback update)
+ * - Vacation modal: set availability days (calls onVacation or fallback update)
+ * - Skill modal: delegates to SkillTrainingModal
+ * - Promote modal: choose new role, validate, call onPromote or fallback
+ * - Release opens StaffFireConfirmModal
+ * - Stop Driving uses StopDrivingConfirmModal
  *
- * Notes:
- * - This component performs best-effort mutations on known game API names and on the in-memory
- *   company object so the UI refreshes fast. This is intentionally aggressive to ensure the
- *   driver card disappears immediately even if parent code is legacy or invokes window.confirm.
+ * All exported types and functions include JSDoc comments.
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { DollarSign, Calendar, Star, ArrowUp, Trash2, X } from 'lucide-react';
+import { DollarSign, Calendar, Star, ArrowUp, Trash2 } from 'lucide-react';
 import { useGame } from '../../contexts/GameContext';
 import SkillTrainingModal from './SkillTrainingModal';
 import StopDrivingConfirmModal from './StopDrivingConfirmModal';
@@ -26,7 +27,7 @@ import StaffFireConfirmModal from './StaffFireConfirmModal';
 
 /**
  * StaffActionHandlers
- * @description optional callbacks parent may provide
+ * @description Optional callbacks parent may provide for canonical actions.
  */
 export interface StaffActionHandlers {
   onSalaryAdjust?: (id: string, amount: number | null) => void;
@@ -53,87 +54,12 @@ export interface StaffActionButtonsProps extends StaffActionHandlers {
 }
 
 /**
- * clamp
- * Utility to clamp a number between min and max.
- * @param v number
- * @param a min
- * @param b max
- */
-const clamp = (v: number, a = 0, b = 100) => Math.max(a, Math.min(b, v));
-
-/**
- * safeSuppressNativeDialogs
- * @description Temporarily override native browser dialog functions (confirm/alert/prompt)
- * to prevent white native popups during an operation. This replaces window/globalThis confirm/alert/prompt
- * and restores them after the callback completes. A grace period keeps replacements active briefly after
- * callback completion to catch delayed calls.
- *
- * @param cb Function to execute while native dialogs are suppressed
- * @param graceMs optional grace period to keep suppression after completion (default 2000ms)
- * @returns the callback result
- */
-async function safeSuppressNativeDialogs<T>(cb: () => T | Promise<T>, graceMs = 2000): Promise<T | undefined> {
-  if (typeof globalThis === 'undefined' || typeof window === 'undefined') {
-    // Not in browser environment
-    return await Promise.resolve(cb());
-  }
-
-  const glob = globalThis as any;
-
-  // Save originals
-  const originals: Partial<Record<string, any>> = {
-    confirm: typeof glob.confirm === 'function' ? glob.confirm : undefined,
-    alert: typeof glob.alert === 'function' ? glob.alert : undefined,
-    prompt: typeof glob.prompt === 'function' ? glob.prompt : undefined,
-  };
-
-  // Replacements
-  const replacementConfirm = () => true;
-  const replacementAlert = () => undefined;
-  const replacementPrompt = () => null;
-
-  try {
-    // Apply replacements broadly
-    try { glob.confirm = replacementConfirm; } catch { /* ignore */ }
-    try { glob.alert = replacementAlert; } catch { /* ignore */ }
-    try { glob.prompt = replacementPrompt; } catch { /* ignore */ }
-
-    // Also attempt on window object
-    try { (window as any).confirm = replacementConfirm; } catch { /* ignore */ }
-    try { (window as any).alert = replacementAlert; } catch { /* ignore */ }
-    try { (window as any).prompt = replacementPrompt; } catch { /* ignore */ }
-
-    const result = cb();
-    if (result && typeof (result as any).then === 'function') {
-      const awaited = await (result as any);
-      // keep suppression briefly to catch any async confirm the parent might schedule
-      await new Promise((res) => setTimeout(res, graceMs));
-      return awaited as T;
-    }
-    // synchronous result: still keep grace period
-    await new Promise((res) => setTimeout(res, graceMs));
-    return result as T;
-  } finally {
-    // Restore originals (best-effort)
-    try { if (originals.confirm !== undefined) glob.confirm = originals.confirm; } catch { /* ignore */ }
-    try { if (originals.alert !== undefined) glob.alert = originals.alert; } catch { /* ignore */ }
-    try { if (originals.prompt !== undefined) glob.prompt = originals.prompt; } catch { /* ignore */ }
-
-    try { if (originals.confirm !== undefined) (window as any).confirm = originals.confirm; } catch { /* ignore */ }
-    try { if (originals.alert !== undefined) (window as any).alert = originals.alert; } catch { /* ignore */ }
-    try { if (originals.prompt !== undefined) (window as any).prompt = originals.prompt; } catch { /* ignore */ }
-  }
-}
-
-/**
  * StaffActionButtons
  * Main component. Renders action buttons and associated modal dialogs.
  *
- * Behavior:
- * - Resolves staff from GameContext company.staff first; fallback to snapshot if not present.
- * - Uses robust availability detection to enable/disable non-fire actions
- * - Fire and Stop Driving flows use in-UI modals (no browser-native confirm). When invoking
- *   parent onFire/onStopDriving, we suppress native dialogs while those handlers run.
+ * Behavior notes:
+ * - Promote modal: choose between 'dispatcher' and 'manager'. The modal will
+ *   ask for confirmation and call canonical onPromote or fallback to game APIs.
  */
 const StaffActionButtons: React.FC<StaffActionButtonsProps> = ({
   staffId,
@@ -153,26 +79,27 @@ const StaffActionButtons: React.FC<StaffActionButtonsProps> = ({
 }) => {
   const game: any = useGame();
 
-  // UI modal/state
+  // Modal and UI state
   const [showSalaryModal, setShowSalaryModal] = useState(false);
-  const [selectedPercent, setSelectedPercent] = useState<number | null>(5);
-  const [isIncrease, setIsIncrease] = useState(true);
-  const [customAmount, setCustomAmount] = useState<string>('');
+  const [salaryInput, setSalaryInput] = useState<number | ''>('');
+  const [salarySaving, setSalarySaving] = useState(false);
+  const [salaryError, setSalaryError] = useState<string | null>(null);
+
   const [showVacationModal, setShowVacationModal] = useState(false);
   const [vacationDays, setVacationDays] = useState<number>(7);
-  const [showPromoteModal, setShowPromoteModal] = useState(false);
-  const [promoteTarget, setPromoteTarget] = useState<'dispatcher' | 'manager'>('dispatcher');
-  const [showSkillModal, setShowSkillModal] = useState(false);
+  const [vacationSaving, setVacationSaving] = useState(false);
+  const [vacationError, setVacationError] = useState<string | null>(null);
 
-  // Stop Driving modal state (replace native confirm)
+  const [showPromoteModal, setShowPromoteModal] = useState(false);
+  const [promoteTargetRole, setPromoteTargetRole] = useState<'dispatcher' | 'manager' | ''>('');
+  const [promoteLoading, setPromoteLoading] = useState(false);
+  const [promoteError, setPromoteError] = useState<string | null>(null);
+
+  const [showSkillModal, setShowSkillModal] = useState(false);
   const [showStopDrivingModal, setShowStopDrivingModal] = useState(false);
   const [stopDrivingLoading, setStopDrivingLoading] = useState(false);
-  const [stopDrivingResult, setStopDrivingResult] = useState<string | null>(null);
-
-  // Fire modal state
   const [showFireModal, setShowFireModal] = useState(false);
   const [fireLoading, setFireLoading] = useState(false);
-  const [fireResult, setFireResult] = useState<string | null>(null);
 
   /**
    * resolvedStaff
@@ -188,8 +115,7 @@ const StaffActionButtons: React.FC<StaffActionButtonsProps> = ({
     }
   }, [game?.gameState?.company, staffId, staffSnapshot]);
 
-  const prevSalary = typeof resolvedStaff?.salary === 'number' ? resolvedStaff.salary : (resolvedStaff?.salary === 'FREE' ? 0 : 0);
-  const prevHappiness = typeof resolvedStaff?.happiness === 'number' ? resolvedStaff.happiness : 100;
+  const prevSalary = typeof resolvedStaff?.salary === 'number' ? resolvedStaff.salary : 0;
 
   /**
    * isAvailable
@@ -199,7 +125,6 @@ const StaffActionButtons: React.FC<StaffActionButtonsProps> = ({
     if (typeof availableOverride === 'boolean') return availableOverride;
     if (!resolvedStaff) return false;
     if (Boolean(resolvedStaff?.isOwner)) return true;
-
     try {
       const availRaw = resolvedStaff?.availabilityDate;
       if (availRaw) {
@@ -207,390 +132,291 @@ const StaffActionButtons: React.FC<StaffActionButtonsProps> = ({
         if (!Number.isNaN(availTs) && availTs > Date.now()) return false;
       }
     } catch { /* ignore parse errors */ }
-
     const statusRaw = (resolvedStaff?.status ?? '').toString().toLowerCase().trim();
-
     if (statusRaw === '' || statusRaw === 'available' || statusRaw === 'ready' || statusRaw === 'idle' || statusRaw === 'resting') {
       return true;
     }
-
     const unavailablePattern = /(training|on[_\-\s]?vacation|on[_\-\s]?job|onvacation|onjob)/i;
     if (unavailablePattern.test(statusRaw)) {
       return false;
     }
-
     return true;
   }, [availableOverride, resolvedStaff]);
 
   const effectiveOwner = isOwner || Boolean(resolvedStaff?.isOwner);
 
   useEffect(() => {
-    try {
-      const fromGame = (() => {
-        try {
-          const comp = game?.gameState?.company;
-          return comp && Array.isArray(comp.staff) ? comp.staff.find((s: any) => s.id === staffId) ?? null : null;
-        } catch {
-          return null;
-        }
-      })();
-
-      console.debug('[StaffActionButtons]', { staffId, resolvedFromGame: !!fromGame, staffSnapshotProvided: !!staffSnapshot, resolvedStaff, availableOverride, isAvailable, effectiveOwner });
-    } catch (e) {
-      // no-op
+    if (process.env.NODE_ENV === 'development') {
+      // eslint-disable-next-line no-console
+      console.debug('[StaffActionButtons] resolved:', { staffId, resolved: !!resolvedStaff, isAvailable, effectiveOwner });
     }
-  }, [resolvedStaff, isAvailable, availableOverride, staffSnapshot, game?.gameState?.company, staffId, effectiveOwner]);
-
-  /**
-   * computeNewSalary
-   * Compute the new salary from percent or custom input.
-   */
-  const computeNewSalary = (): number | null => {
-    if (customAmount && customAmount.trim() !== '') {
-      const parsed = Number(customAmount.replace(/[^0-9.-]/g, ''));
-      if (Number.isFinite(parsed) && parsed >= 0) return Math.round(parsed);
-      return null;
-    }
-    if (selectedPercent === null) return null;
-    const pct = selectedPercent / 100;
-    const multiplier = isIncrease ? 1 + pct : 1 - pct;
-    const base = prevSalary > 0 ? prevSalary : 2000;
-    const newSalary = Math.round(base * multiplier);
-    return Math.max(0, newSalary);
-  };
-
-  const newSalary = computeNewSalary();
-
-  /**
-   * handleApplySalary
-   * Apply salary change. Only allowed when staff is available.
-   */
-  const handleApplySalary = () => {
-    if (!isAvailable) {
-      alert('Staff is not available. Actions are disabled until the staff is available.');
-      return;
-    }
-    if (newSalary === null) {
-      alert('Please select a percent or enter a valid custom amount.');
-      return;
-    }
-    try { game.adjustSalary?.(staffId, newSalary); } catch (e) { console.error('[StaffActionButtons] adjustSalary failed', e); }
-    if (onSalaryAdjust) { try { onSalaryAdjust(staffId, newSalary); } catch (e) { console.warn('[StaffActionButtons] onSalaryAdjust threw', e); } }
-    try { game.setCurrentPage?.(game.gameState.currentPage); } catch { /* ignore */ }
-    setShowSalaryModal(false);
-    setSelectedPercent(null);
-    setCustomAmount('');
-  };
-
-  /**
-   * handleVacation
-   * Open vacation modal; only allowed when staff is available.
-   */
-  const handleVacation = () => {
-    if (!isAvailable) { alert('Staff is not available. Actions are disabled until the staff is available.'); return; }
-    setVacationDays(7); setShowVacationModal(true);
-  };
-
-  const handleApplyVacation = () => {
-    if (!isAvailable) { alert('Staff is not available. Actions are disabled until the staff is available.'); setShowVacationModal(false); return; }
-    try {
-      const days = typeof vacationDays === 'number' && vacationDays > 0 ? Math.min(14, Math.floor(vacationDays)) : null;
-      if (onVacation) { try { onVacation(staffId, days); } catch (e) { console.warn('[StaffActionButtons] onVacation threw', e); } }
-      else game.setVacation?.(staffId, days);
-    } catch (err) { console.error('[StaffActionButtons] handleApplyVacation failed', err); alert('Failed to apply vacation. See console.'); }
-    finally { setShowVacationModal(false); }
-  };
-
-  /**
-   * handleSkillImprove
-   * Open skill modal. Only allowed when staff is available.
-   */
-  const handleSkillImprove = () => {
-    if (!isAvailable) { alert('Staff is not available. Actions are disabled until the staff is available.'); return; }
-    setShowSkillModal(true);
-  };
-
-  /**
-   * handlePromote
-   * Prepare promotion modal. Only allowed when staff is available and not the owner.
-   */
-  const handlePromote = () => {
-    if (!isAvailable) { alert('Staff is not available. Actions are disabled until the staff is available.'); return; }
-    if (effectiveOwner) { alert('Owner account — promotion disabled'); return; }
-    if (!resolvedStaff) { alert('Staff not available.'); return; }
-    if (resolvedStaff.promoted) { alert('This staff member has already been promoted and cannot be promoted again.'); return; }
-    if (resolvedStaff.role === 'dispatcher') setPromoteTarget('manager'); else setPromoteTarget('dispatcher');
-    setShowPromoteModal(true);
-  };
-
-  const handleApplyPromote = () => {
-    if (!isAvailable) { alert('Staff is not available. Actions are disabled until the staff is available.'); setShowPromoteModal(false); return; }
-    try {
-      const target = promoteTarget;
-      if (onPromote) { try { onPromote(staffId, target); } catch (e) { console.warn('[StaffActionButtons] onPromote threw', e); } }
-      else {
-        try { (game as any).promoteStaff?.(staffId, target); } catch (e) { try { game.promoteStaff?.(staffId, target); } catch (e2) { console.error('[StaffActionButtons] promote failed', e2); } }
-      }
-    } catch (err) { console.error('[StaffActionButtons] handleApplyPromote failed', err); alert('Failed to promote. See console.'); }
-    finally { setShowPromoteModal(false); }
-  };
-
-  /**
-   * performAssignmentCleanup
-   * Best-effort attempt to unassign / revert driver state using known API names
-   * and by mutating in-memory company staff entry so UI updates faster.
-   *
-   * @param id Staff id
-   */
-  const performAssignmentCleanup = (id: string) => {
-    try {
-      // Call many known API shims (best-effort)
-      try { (game as any).stopDriving?.(id); } catch { /* ignore */ }
-      try { (game as any).unassignDriver?.(id); } catch { /* ignore */ }
-      try { (game as any).removeDriverAssignment?.(id); } catch { /* ignore */ }
-      try { (game as any).setDriverAssignment?.(id, null); } catch { /* ignore */ }
-      try { (game as any).releaseDriver?.(id); } catch { /* ignore */ }
-      try { (game as any).clearDriverAssignment?.(id); } catch { /* ignore */ }
-
-      // Try to set vacation briefly to reflect rest state
-      try { game.setVacation?.(id, 7); } catch { /* ignore */ }
-
-      // Mutate in-memory company.staff if available (best-effort)
-      try {
-        const comp = game?.gameState?.company;
-        if (comp && Array.isArray(comp.staff)) {
-          const idx = comp.staff.findIndex((s: any) => s.id === id);
-          if (idx >= 0) {
-            const s = comp.staff[idx];
-            // reset likely fields to the pre-assigned state
-            try { s.assignment = null; } catch {}
-            try { s.isDriving = false; } catch {}
-            try { s.status = 'available'; } catch {}
-            try { s.availabilityDate = null; } catch {}
-            try { s.assignedVehicleId = null; } catch {}
-
-            // Keep historical copy and archive the staff so it's removed from active lists but retained for stats
-            try {
-              // Ensure archive array exists
-              comp.archivedStaff = comp.archivedStaff || [];
-              // Create a shallow copy to store history snapshot
-              const archived = { ...s, archivedAt: new Date().toISOString(), archivedReason: 'stoppedDriving', archivedBy: 'user' };
-              // Push to archive if not already present (avoid duplicates)
-              const alreadyArchived = comp.archivedStaff.find((a: any) => a.id === id);
-              if (!alreadyArchived) comp.archivedStaff.push(archived);
-            } catch (e) {
-              console.warn('[StaffActionButtons] archive push failed', e);
-            }
-
-            // Remove from active staff list so cards disappear in parents that map company.staff
-            try {
-              comp.staff = comp.staff.filter((x: any) => x.id !== id);
-            } catch (e) {
-              console.warn('[StaffActionButtons] remove from staff list failed', e);
-            }
-
-            // Write back attempt: call any available setter so consumers re-render
-            try { game.setCompany?.(comp); } catch {}
-            try { game.setGameState?.(game.gameState); } catch {}
-            try { game.setCurrentPage?.(game.gameState.currentPage); } catch {}
-          }
-        }
-      } catch (e) {
-        /* ignore internal mutation errors */
-      }
-
-      // Dispatch a CustomEvent so parents that rely on events can remove the card
-      try {
-        window.dispatchEvent(new CustomEvent('staff:stoppedDriving', { detail: { staffId: id } }));
-      } catch { /* ignore in non-browser env */ }
-
-      // As a last-resort: attempt to hide/remove the DOM element immediately for instant UI feedback.
-      try {
-        const selector = `[data-staff-id="${id}"], [data-staffid="${id}"], #staff-${id}`;
-        const el = document.querySelector(selector) as HTMLElement | null;
-        if (el) {
-          // prefer graceful fade out if possible
-          try {
-            el.style.transition = 'opacity 220ms ease, height 220ms ease, margin 220ms ease, padding 220ms ease';
-            el.style.opacity = '0';
-            el.style.height = '0';
-            el.style.margin = '0';
-            el.style.padding = '0';
-            setTimeout(() => {
-              try { if (el.parentElement) el.parentElement.removeChild(el); } catch { /* ignore */ }
-            }, 260);
-          } catch {
-            try { if (el.parentElement) el.parentElement.removeChild(el); } catch { /* ignore */ }
-          }
-        }
-      } catch { /* ignore DOM remove errors */ }
-    } catch (err) {
-      console.error('[StaffActionButtons] performAssignmentCleanup failed', err);
-    }
-  };
-
-  /**
-   * confirmStopDriving
-   * Called when the user confirms the in-UI Stop Driving modal.
-   */
-  const confirmStopDriving = async () => {
-    setStopDrivingLoading(true);
-    setStopDrivingResult(null);
-
-    try {
-      // Perform internal cleanup to revert driver to pre-assigned state and archive the staff
-      performAssignmentCleanup(staffId);
-
-      // If parent provided onStopDriving, call it asynchronously while suppressing native confirm
-      if (onStopDriving) {
-        setTimeout(() => {
-          try {
-            safeSuppressNativeDialogs(() => {
-              try { onStopDriving(staffId); } catch (e) { console.warn('[StaffActionButtons] onStopDriving threw', e); }
-            }, 500);
-          } catch (e) { console.warn('[StaffActionButtons] async onStopDriving wrapper failed', e); }
-        }, 0);
-      }
-
-      setStopDrivingResult('Driver stopped and archived successfully.');
-    } catch (err) {
-      console.error('[StaffActionButtons] confirmStopDriving failed', err);
-      setStopDrivingResult('Failed to stop driving. See console.');
-    } finally {
-      setStopDrivingLoading(false);
-      setTimeout(() => setShowStopDrivingModal(false), 400);
-    }
-  };
-
-  /**
-   * handleFire
-   * Show the in-UI fire confirmation modal. This modal is the only confirmation the user should see.
-   */
-  const handleFire = () => {
-    setFireResult(null);
-    setShowFireModal(true);
-  };
-
-  /**
-   * deductCompensation
-   * Best-effort deduction of compensation from company capital and persist state.
-   * @param amount compensation amount to deduct
-   * @returns boolean indicating whether deduction was successful
-   */
-  const deductCompensation = (amount: number): boolean => {
-    try {
-      const comp = game?.gameState?.company;
-      if (!comp) return false;
-      const currentCapital = typeof comp.capital === 'number' ? comp.capital : Number(comp.capital) || 0;
-      if (currentCapital < amount) return false;
-
-      // Mutate and persist in-memory state (best-effort)
-      try {
-        comp.capital = Math.round(currentCapital - amount);
-      } catch {
-        // fallback: set via setter if available
-        try { game.setCompany?.({ ...comp, capital: Math.round(currentCapital - amount) }); } catch { /* ignore */ }
-      }
-
-      // Attempt to notify game context consumers
-      try { game.setCompany?.(comp); } catch { /* ignore */ }
-      try { game.setGameState?.(game.gameState); } catch { /* ignore */ }
-      try { game.save?.(); } catch { /* ignore */ }
-
-      return true;
-    } catch (e) {
-      console.error('[StaffActionButtons] deductCompensation failed', e);
-      return false;
-    }
-  };
+  }, [resolvedStaff, isAvailable, effectiveOwner, staffId]);
 
   /**
    * confirmFire
-   * Called when the user presses Confirm & Pay in the in-UI fire modal.
-   * Flow:
-   *  1) compute compensation
-   *  2) deduct compensation from capital (best-effort)
-   *  3) call parent onFire or internal API while suppressing native dialogs
-   *  4) perform cleanup and notify
+   * - Exposed here so Fire confirmation modal can call the canonical removal flow.
+   * - Prefer the canonical game.fireStaff if available; fall back to onFire if provided.
    */
-  const confirmFire = async () => {
+  const confirmFire = async (months?: number) => {
     setFireLoading(true);
-    setFireResult(null);
-
     try {
-      const monthlySalary = typeof resolvedStaff?.salary === 'number' ? resolvedStaff.salary : 0;
-      const compensation = Math.max(0, Math.round(monthlySalary * 3));
-      const companyCapital = game?.gameState?.company?.capital ?? 0;
-
-      if (companyCapital < compensation) {
-        setFireResult('Insufficient funds to pay compensation.');
-        setFireLoading(false);
-        return;
+      if (game && typeof game.fireStaff === 'function') {
+        await Promise.resolve(game.fireStaff(staffId));
+      } else if (onFire) {
+        await Promise.resolve(onFire(staffId));
+      } else {
+        try {
+          const comp = game?.gameState?.company;
+          if (comp && Array.isArray(comp.staff)) {
+            comp.staff = comp.staff.filter((s: any) => s.id !== staffId);
+            try { game.setCompany?.(comp); } catch {}
+            try { game.save?.(); } catch {}
+          }
+        } catch (e) {
+          // ignore
+        }
       }
-
-      // Execute entire critical operation while suppressing native dialogs, keep suppression longer to catch delayed confirms
-      await safeSuppressNativeDialogs(async () => {
-        // 1) Deduct compensation (best-effort)
-        const deducted = deductCompensation(compensation);
-        if (!deducted) {
-          // If deduction failed but capital reported sufficient, still attempt; set message
-          console.warn('[StaffActionButtons] Compensation deduction reported failure despite sufficient capital.');
-        }
-
-        // 2) Call parent onFire if exists, otherwise fallback to internal API
-        if (onFire) {
-          try {
-            await Promise.resolve(onFire(staffId));
-          } catch (e) {
-            console.error('[StaffActionButtons] onFire threw', e);
-            // continue to fallback to internal API
-            try {
-              await Promise.resolve(game.fireStaff?.(staffId));
-            } catch (e2) {
-              console.error('[StaffActionButtons] fallback fireStaff failed', e2);
-              throw e2;
-            }
-          }
-        } else {
-          // No parent handler: call game API
-          try {
-            await Promise.resolve(game.fireStaff?.(staffId));
-          } catch (e) {
-            console.error('[StaffActionButtons] game.fireStaff failed', e);
-            throw e;
-          }
-        }
-
-        // 3) perform assignment cleanup and DOM removal for immediate UI feedback
-        try { performAssignmentCleanup(staffId); } catch (e) { console.warn('[StaffActionButtons] cleanup after fire failed', e); }
-
-        // 4) Dispatch fired event
-        try { window.dispatchEvent(new CustomEvent('staff:fired', { detail: { staffId } })); } catch { /* ignore */ }
-
-        // set result success
-        setFireResult('Staff released.');
-      }, 2000);
+      return true;
     } catch (err) {
-      console.error('[StaffActionButtons] confirmFire failed', err);
-      setFireResult('Failed to fire staff. See console.');
+      // eslint-disable-next-line no-console
+      console.error('[StaffActionButtons] confirmFire error', err);
+      throw err;
     } finally {
       setFireLoading(false);
-      setTimeout(() => setShowFireModal(false), 400);
     }
   };
 
   /**
-   * buttonClass
-   * Compute classes for disabled/enabled states (keeps visual parity).
+   * performStopDriving
+   * Calls parent or game API to stop driving, with simple optimistic UI removal.
+   */
+  const performStopDriving = async () => {
+    setStopDrivingLoading(true);
+    try {
+      if (onStopDriving) {
+        await Promise.resolve(onStopDriving(staffId));
+      } else {
+        try { game.stopDriving?.(staffId); } catch {}
+      }
+
+      try {
+        const comp = game?.gameState?.company;
+        if (comp && Array.isArray(comp.staff)) {
+          const idx = comp.staff.findIndex((s: any) => s.id === staffId);
+          if (idx >= 0) {
+            const s = comp.staff[idx];
+            comp.archivedStaff = comp.archivedStaff || [];
+            if (!comp.archivedStaff.find((a: any) => a.id === s.id)) {
+              comp.archivedStaff.push({ ...s, archivedAt: new Date().toISOString(), archivedReason: 'stoppedDriving' });
+            }
+            comp.staff = comp.staff.filter((x: any) => x.id !== staffId);
+            try { game.setCompany?.(comp); } catch {}
+          }
+        }
+      } catch {}
+
+      try { window.dispatchEvent(new CustomEvent('staff:stoppedDriving', { detail: { staffId } })); } catch {}
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[StaffActionButtons] performStopDriving failed', err);
+    } finally {
+      setStopDrivingLoading(false);
+      setShowStopDrivingModal(false);
+    }
+  };
+
+  /**
+   * applySalaryChange
+   * @description Apply salary change using onSalaryAdjust if provided or fallback to game state mutation.
+   * @param amount number | null
+   */
+  const applySalaryChange = async (amount: number | null) => {
+    setSalarySaving(true);
+    setSalaryError(null);
+    try {
+      if (onSalaryAdjust) {
+        await Promise.resolve(onSalaryAdjust(staffId, amount));
+      } else {
+        // Fallback: update company.staff in game context
+        try {
+          const comp = game?.gameState?.company;
+          if (comp && Array.isArray(comp.staff)) {
+            const updated = comp.staff.map((s: any) => (s.id === staffId ? { ...s, salary: amount === null ? 0 : amount } : s));
+            const newComp = { ...comp, staff: updated };
+            try { game.setCompany?.(newComp); } catch {}
+            try { game.save?.(); } catch {}
+          } else {
+            throw new Error('Company or staff not available in game state');
+          }
+        } catch (e: any) {
+          throw e;
+        }
+      }
+      // Close modal on success
+      setShowSalaryModal(false);
+      try {
+        window.dispatchEvent(new CustomEvent('app:toast', {
+          detail: { title: 'Salary Updated', message: `Salary updated for ${resolvedStaff?.name || 'staff'}.`, variant: 'success', ttl: 2500 }
+        }));
+      } catch {}
+    } catch (err: any) {
+      // eslint-disable-next-line no-console
+      console.error('[StaffActionButtons] applySalaryChange failed', err);
+      setSalaryError(err?.message ? String(err.message) : 'Failed to apply salary change.');
+    } finally {
+      setSalarySaving(false);
+    }
+  };
+
+  /**
+   * applyVacation
+   * @description Apply vacation using onVacation if provided, otherwise mutate company.staff and persist.
+   * @param days number
+   */
+  const applyVacation = async (days: number) => {
+    setVacationSaving(true);
+    setVacationError(null);
+    try {
+      if (onVacation) {
+        await Promise.resolve(onVacation(staffId, days));
+      } else {
+        // Fallback: update company.staff in game context
+        const comp = game?.gameState?.company;
+        if (!comp || !Array.isArray(comp.staff)) {
+          throw new Error('Company or staff not available in game state');
+        }
+
+        const newDate = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+        const updatedStaff = comp.staff.map((s: any) =>
+          s.id === staffId
+            ? { ...s, availabilityDate: newDate, status: 'on_vacation', lastVacationAt: new Date().toISOString() }
+            : s
+        );
+
+        const newComp = { ...comp, staff: updatedStaff };
+        try { game.setCompany?.(newComp); } catch {}
+        try { game.save?.(); } catch {}
+      }
+
+      // Notify listeners (UI toasts / sanitizers)
+      try {
+        window.dispatchEvent(new CustomEvent('staff:vacation', { detail: { staffId, days } }));
+        window.dispatchEvent(new CustomEvent('app:toast', {
+          detail: { title: 'Vacation Set', message: `Vacation set for ${resolvedStaff?.name || 'staff'}.`, variant: 'success', ttl: 2500 }
+        }));
+      } catch {}
+
+      setShowVacationModal(false);
+    } catch (err: any) {
+      // eslint-disable-next-line no-console
+      console.error('[StaffActionButtons] applyVacation failed', err);
+      setVacationError(err?.message ? String(err.message) : 'Failed to set vacation. Please try again.');
+    } finally {
+      setVacationSaving(false);
+    }
+  };
+
+  /**
+   * performPromote
+   * @description Execute promotion. Uses onPromote if provided; otherwise prefer game.promoteStaff; fallback to safe local mutation.
+   * @param target 'dispatcher' | 'manager'
+   */
+  const performPromote = async (target: 'dispatcher' | 'manager') => {
+    setPromoteLoading(true);
+    setPromoteError(null);
+    try {
+      // Prevent promoting owner or to same role
+      if (effectiveOwner) {
+        throw new Error('Owner cannot be promoted via this action.');
+      }
+      if (!resolvedStaff) {
+        throw new Error('Staff not found in company.');
+      }
+      if (resolvedStaff.role === target) {
+        throw new Error(`Staff is already a ${target}.`);
+      }
+
+      // Delegate to parent if provided
+      if (onPromote) {
+        await Promise.resolve(onPromote(staffId, target));
+      } else if (game && typeof game.promoteStaff === 'function') {
+        // canonical engine
+        await Promise.resolve(game.promoteStaff(staffId, target));
+      } else {
+        // Fallback: local mutation with sensible side-effects
+        const comp = game?.gameState?.company;
+        if (!comp || !Array.isArray(comp.staff)) {
+          throw new Error('Company or staff not available in game state');
+        }
+
+        const updated = comp.staff.map((s: any) => {
+          if (s.id !== staffId) return s;
+          // reset training/progress fields safely
+          const copy = { ...s, role: target };
+          // cancel any promoted/training flags that might be present
+          copy.training = undefined;
+          copy.trainingProgress = undefined;
+          // Reset happiness to 100 on promotion
+          copy.happiness = 100;
+          // Optionally adjust salary (no automatic changes here)
+          return copy;
+        });
+
+        const newComp = { ...comp, staff: updated };
+        try { game.setCompany?.(newComp); } catch {}
+        try { game.save?.(); } catch {}
+      }
+
+      // Notify listeners and close modal
+      try {
+        window.dispatchEvent(new CustomEvent('staff:promoted', { detail: { staffId, newRole: target } }));
+        window.dispatchEvent(new CustomEvent('app:toast', { detail: { title: 'Promotion', message: `${resolvedStaff?.name || 'Staff'} promoted to ${target}`, variant: 'success', ttl: 3000 } }));
+      } catch {}
+
+      setShowPromoteModal(false);
+      setPromoteTargetRole('');
+    } catch (err: any) {
+      // eslint-disable-next-line no-console
+      console.error('[StaffActionButtons] performPromote failed', err);
+      setPromoteError(err?.message ? String(err.message) : 'Failed to promote staff.');
+    } finally {
+      setPromoteLoading(false);
+    }
+  };
+
+  /**
+   * UI helper: classes for button disabled/enabled states.
    */
   const buttonClass = (enabled: boolean, extra = '') =>
     `${enabled ? '' : 'bg-slate-600 cursor-not-allowed opacity-75'} ${extra}`.trim();
 
+  /**
+   * handleOpenSalaryModal
+   * @description Prepare and open salary modal with current salary prefilled
+   */
+  const handleOpenSalaryModal = () => {
+    setSalaryError(null);
+    setSalaryInput(typeof prevSalary === 'number' ? prevSalary : '');
+    setShowSalaryModal(true);
+  };
+
+  /**
+   * handleOpenVacationModal
+   * @description Prepare and open vacation modal with sensible defaults
+   */
+  const handleOpenVacationModal = () => {
+    setVacationError(null);
+    // default to 7 days
+    setVacationDays(7);
+    setShowVacationModal(true);
+  };
+
   return (
     <>
       <div className={`flex flex-col sm:flex-row gap-2 ${className}`}>
+        {/* Salary */}
         <button
-          onClick={() => setShowSalaryModal(true)}
+          onClick={handleOpenSalaryModal}
           disabled={!isAvailable}
           className={`flex-1 ${buttonClass(isAvailable, 'bg-slate-700 hover:bg-slate-600')} text-white py-2 px-3 rounded-md text-sm flex items-center justify-center gap-2`}
           aria-label="Salary Adjustment"
@@ -600,8 +426,9 @@ const StaffActionButtons: React.FC<StaffActionButtonsProps> = ({
           Salary
         </button>
 
+        {/* Vacation */}
         <button
-          onClick={handleVacation}
+          onClick={handleOpenVacationModal}
           disabled={!isAvailable}
           className={`flex-1 ${buttonClass(isAvailable, 'bg-slate-700 hover:bg-slate-600')} text-white py-2 px-3 rounded-md text-sm flex items-center justify-center gap-2`}
           aria-label="Vacation"
@@ -611,8 +438,9 @@ const StaffActionButtons: React.FC<StaffActionButtonsProps> = ({
           Vacation
         </button>
 
+        {/* Skill */}
         <button
-          onClick={handleSkillImprove}
+          onClick={() => setShowSkillModal(true)}
           disabled={!isAvailable}
           className={`flex-1 ${buttonClass(isAvailable, 'bg-slate-700 hover:bg-slate-600')} text-white py-2 px-3 rounded-md text-sm flex items-center justify-center gap-2`}
           aria-label="Improve Skill"
@@ -622,9 +450,14 @@ const StaffActionButtons: React.FC<StaffActionButtonsProps> = ({
           Skill
         </button>
 
+        {/* Promote */}
         {!hidePromote && (
           <button
-            onClick={handlePromote}
+            onClick={() => {
+              setPromoteError(null);
+              setPromoteTargetRole('');
+              setShowPromoteModal(true);
+            }}
             disabled={!isAvailable || effectiveOwner}
             className={`flex-1 ${buttonClass(isAvailable && !effectiveOwner, 'bg-slate-700 hover:bg-slate-600')} text-white py-2 px-3 rounded-md text-sm flex items-center justify-center gap-2`}
             aria-label="Promote"
@@ -635,6 +468,20 @@ const StaffActionButtons: React.FC<StaffActionButtonsProps> = ({
           </button>
         )}
 
+        {/* Release (opens modal) */}
+        {!(effectiveOwner && isDriving) ? (
+          <button
+            onClick={() => setShowFireModal(true)}
+            className={`flex-1 ${buttonClass(true, 'bg-rose-600 hover:bg-rose-700')} text-white py-2 px-3 rounded-md text-sm flex items-center justify-center gap-2`}
+            aria-label="Release (confirm)"
+            title="Release (confirm)"
+          >
+            <Trash2 className="w-4 h-4" />
+            Release
+          </button>
+        ) : null}
+
+        {/* Stop Driving (conditional) */}
         {!hideStopDriving && effectiveOwner && isDriving ? (
           <button
             onClick={() => setShowStopDrivingModal(true)}
@@ -646,185 +493,12 @@ const StaffActionButtons: React.FC<StaffActionButtonsProps> = ({
             <Trash2 className="w-4 h-4" />
             Stop Driving
           </button>
-        ) : (
-          <button
-            onClick={() => handleFire()}
-            /* Fire intentionally always enabled */
-            disabled={false}
-            className={`flex-1 ${buttonClass(true, 'bg-red-700 hover:bg-red-600')} text-white py-2 px-3 rounded-md text-sm flex items-center justify-center gap-2`}
-            aria-label="Fire"
-            title="Fire"
-          >
-            <Trash2 className="w-4 h-4" />
-            Fire
-          </button>
-        )}
+        ) : null}
       </div>
 
-      {showSalaryModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Salary Adjustment Dialog">
-          <div className="w-full max-w-md bg-slate-800 rounded-lg border border-slate-700 shadow-lg overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
-              <div className="flex items-center gap-2">
-                <DollarSign className="w-5 h-5 text-amber-400" />
-                <h3 className="text-sm font-medium text-white">Salary Adjustment</h3>
-              </div>
-              <button onClick={() => setShowSalaryModal(false)} className="p-1 rounded hover:bg-slate-700 text-slate-300" aria-label="Close">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-4 space-y-4">
-              <div className="text-xs text-slate-400">Staff</div>
-              <div className="text-sm font-medium text-white">{resolvedStaff?.name ?? 'Unknown'}</div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <div className="text-xs text-slate-400">Current Salary</div>
-                  <div className="text-white font-medium">${prevSalary.toLocaleString()}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-slate-400">Current Happiness</div>
-                  <div className="text-white font-medium">{prevHappiness}%</div>
-                </div>
-              </div>
-
-              <div>
-                <div className="text-xs text-slate-400 mb-2">Adjustment Type</div>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => setIsIncrease(true)} className={`flex-1 py-2 rounded text-sm ${isIncrease ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-200'}`}>Increase</button>
-                  <button onClick={() => setIsIncrease(false)} className={`flex-1 py-2 rounded text-sm ${!isIncrease ? 'bg-red-600 text-white' : 'bg-slate-700 text-slate-200'}`}>Reduce</button>
-                </div>
-              </div>
-
-              <div>
-                <div className="text-xs text-slate-400 mb-2">Quick Percentages</div>
-                <div className="flex flex-wrap gap-2">
-                  {[5, 10, 15, 20].map(p => (
-                    <button key={p} onClick={() => setSelectedPercent(p)} className={`px-3 py-2 rounded text-sm ${selectedPercent === p ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 text-slate-200'}`}>{isIncrease ? `+${p}%` : `-${p}%`}</button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <div className="text-xs text-slate-400 mb-2">Or Enter Custom Salary ($)</div>
-                <input value={customAmount} onChange={(e) => setCustomAmount(e.target.value)} placeholder="e.g. 3500" className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm" />
-                <div className="text-xs text-slate-500 mt-1">Custom amount takes precedence over percent selection.</div>
-              </div>
-
-              <div className="border-t border-slate-700 pt-3">
-                <div className="flex items-center justify-between text-sm text-slate-400 mb-2">
-                  <div>New Salary</div>
-                  <div className="text-white font-medium">${newSalary !== null ? newSalary.toLocaleString() : '-'}</div>
-                </div>
-
-                <div className="flex items-center justify-between text-sm text-slate-400">
-                  <div>Predicted Happiness</div>
-                  <div className="text-white font-medium">{newSalary !== null ? `${Math.max(0, Math.min(100, prevHappiness + Math.round(((newSalary - prevSalary) / Math.max(1, prevSalary || 1)) * 50)))}%` : '-'}</div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 pt-2">
-                <button onClick={handleApplySalary} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded text-sm">Apply</button>
-                <button onClick={() => setShowSalaryModal(false)} className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-2 rounded text-sm">Cancel</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showVacationModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Vacation Dialog">
-          <div className="w-full max-w-md bg-slate-800 rounded-lg border border-slate-700 shadow-lg overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
-              <div className="flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-cyan-300" />
-                <h3 className="text-sm font-medium text-white">Set Vacation</h3>
-              </div>
-              <button onClick={() => setShowVacationModal(false)} className="p-1 rounded hover:bg-slate-700 text-slate-300" aria-label="Close"><X className="w-4 h-4" /></button>
-            </div>
-
-            <div className="p-4 space-y-4">
-              <div className="text-xs text-slate-400">Staff</div>
-              <div className="text-sm font-medium text-white">{resolvedStaff?.name ?? 'Unknown'}</div>
-
-              <div>
-                <div className="text-xs text-slate-400 mb-2">Choose length (max 2 weeks)</div>
-                <div className="flex items-center gap-2 mb-2">
-                  <button onClick={() => setVacationDays(1)} className={`px-3 py-2 rounded text-sm ${vacationDays === 1 ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 text-slate-200'}`}>1 day</button>
-                  <button onClick={() => setVacationDays(3)} className={`px-3 py-2 rounded text-sm ${vacationDays === 3 ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 text-slate-200'}`}>3 days</button>
-                  <button onClick={() => setVacationDays(7)} className={`px-3 py-2 rounded text-sm ${vacationDays === 7 ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 text-slate-200'}`}>1 week</button>
-                  <button onClick={() => setVacationDays(14)} className={`px-3 py-2 rounded text-sm ${vacationDays === 14 ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 text-slate-200'}`}>2 weeks</button>
-                </div>
-
-                <div className="text-xs text-slate-400 mb-2">Or enter custom days (1 - 14)</div>
-                <div className="flex items-center gap-2">
-                  <input type="number" min={1} max={14} value={vacationDays} onChange={(e) => {
-                    const v = Number(e.target.value);
-                    if (Number.isNaN(v)) return;
-                    setVacationDays(Math.max(1, Math.min(14, Math.floor(v))));
-                  }} className="w-28 bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm" />
-                  <div className="text-sm text-slate-400">days</div>
-                </div>
-
-                <div className="text-xs text-slate-500 mt-2">Drivers on vacation recover Fit faster. Changes will be persisted to your company state.</div>
-              </div>
-
-              <div className="flex items-center gap-2 pt-2">
-                <button onClick={handleApplyVacation} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded text-sm">Apply</button>
-                <button onClick={() => setShowVacationModal(false)} className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-2 rounded text-sm">Cancel</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showPromoteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Promote Dialog">
-          <div className="w-full max-w-md bg-slate-800 rounded-lg border border-slate-700 shadow-lg overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
-              <div className="flex items-center gap-2">
-                <ArrowUp className="w-5 h-5 text-amber-400" />
-                <h3 className="text-sm font-medium text-white">Promote Staff Member</h3>
-              </div>
-              <button onClick={() => setShowPromoteModal(false)} className="p-1 rounded hover:bg-slate-700 text-slate-300" aria-label="Close"><X className="w-4 h-4" /></button>
-            </div>
-
-            <div className="p-4 space-y-4">
-              <div className="text-xs text-slate-400">Staff</div>
-              <div className="text-sm font-medium text-white">{resolvedStaff?.name ?? 'Unknown'}</div>
-
-              {resolvedStaff?.role === 'dispatcher' ? (
-                <div>
-                  <div className="text-xs text-slate-400 mb-2">New role</div>
-                  <div className="flex gap-2">
-                    <button disabled className="flex-1 py-2 rounded text-sm bg-slate-700 text-slate-200">Dispatcher (current)</button>
-                    <button className="flex-1 py-2 rounded text-sm bg-amber-500 text-slate-900">Promote to Manager</button>
-                  </div>
-                  <div className="text-xs text-slate-500 mt-2">Dispatchers may be promoted only to Manager. Promotion will set Happiness to 100, cancel training, reset skill progress, and mark as promoted.</div>
-                </div>
-              ) : (
-                <div>
-                  <div className="text-xs text-slate-400 mb-2">Choose new role</div>
-                  <div className="flex gap-2">
-                    <button onClick={() => setPromoteTarget('dispatcher')} className={`flex-1 py-2 rounded text-sm ${promoteTarget === 'dispatcher' ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 text-slate-200'}`}>Promote to Dispatcher</button>
-                    <button onClick={() => setPromoteTarget('manager')} className={`flex-1 py-2 rounded text-sm ${promoteTarget === 'manager' ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 text-slate-200'}`}>Promote to Manager</button>
-                  </div>
-                  <div className="text-xs text-slate-500 mt-2">Promotion will move the staff to the new role, cancel training, reset skill progress, and set Happiness to 100. This action is irreversible.</div>
-                </div>
-              )}
-
-              <div className="flex items-center gap-2 pt-2">
-                <button onClick={handleApplyPromote} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded text-sm">Confirm Promotion</button>
-                <button onClick={() => setShowPromoteModal(false)} className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-2 rounded text-sm">Cancel</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* Skill modal (delegates to SkillTrainingModal) */}
       {showSkillModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Skill Training Dialog">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
           <div className="w-full max-w-3xl bg-slate-800 rounded-lg border border-slate-700 shadow-lg overflow-hidden">
             <div className="p-2">
               <SkillTrainingModal
@@ -835,6 +509,7 @@ const StaffActionButtons: React.FC<StaffActionButtonsProps> = ({
                     if (onSkillImprove) onSkillImprove(id, skillName);
                     else game.improveSkill?.(id, skillName);
                   } catch (e) {
+                    // eslint-disable-next-line no-console
                     console.error('[StaffActionButtons] onSkillLearned failed', e);
                   } finally {
                     setShowSkillModal(false);
@@ -846,27 +521,330 @@ const StaffActionButtons: React.FC<StaffActionButtonsProps> = ({
         </div>
       )}
 
-      {/* Stop Driving confirmation modal (game-integrated) */}
+      {/* Promote Modal */}
+      {showPromoteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
+          <div className="w-full max-w-md bg-slate-800 rounded-lg border border-slate-700 shadow-lg overflow-hidden">
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-white font-medium">Promote Staff Member</div>
+                <button
+                  onClick={() => { if (!promoteLoading) setShowPromoteModal(false); }}
+                  className="text-slate-400"
+                  aria-label="Close promote modal"
+                  title="Close"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="text-sm text-slate-400 mb-3">
+                Promote <span className="text-white font-medium">{resolvedStaff?.name ?? 'this staff member'}</span> to a higher role.
+                Promotion will cancel training and reset some progress. This action is irreversible.
+              </div>
+
+              <div className="space-y-3">
+                <fieldset>
+                  <legend className="sr-only">Choose role</legend>
+                  <div className="flex flex-col gap-2">
+                    <label className={`p-3 rounded border ${promoteTargetRole === 'dispatcher' ? 'border-blue-500 bg-slate-700' : 'border-slate-600'}`}>
+                      <input
+                        type="radio"
+                        name="promoteRole"
+                        value="dispatcher"
+                        checked={promoteTargetRole === 'dispatcher'}
+                        onChange={() => setPromoteTargetRole('dispatcher')}
+                        className="mr-2"
+                      />
+                      <span className="font-medium text-white">Promote to Dispatcher</span>
+                      <div className="text-xs text-slate-400 mt-1">Dispatcher manages routes and dispatch; keeps operational focus.</div>
+                    </label>
+
+                    <label className={`p-3 rounded border ${promoteTargetRole === 'manager' ? 'border-blue-500 bg-slate-700' : 'border-slate-600'}`}>
+                      <input
+                        type="radio"
+                        name="promoteRole"
+                        value="manager"
+                        checked={promoteTargetRole === 'manager'}
+                        onChange={() => setPromoteTargetRole('manager')}
+                        className="mr-2"
+                      />
+                      <span className="font-medium text-white">Promote to Manager</span>
+                      <div className="text-xs text-slate-400 mt-1">Manager gains admin responsibilities; suitable for leadership and admin positions.</div>
+                    </label>
+                  </div>
+                </fieldset>
+
+                {promoteError && <div className="text-sm text-rose-400">{promoteError}</div>}
+              </div>
+
+              <div className="mt-4 flex gap-2">
+                <button
+                  onClick={() => { if (!promoteLoading) setShowPromoteModal(false); }}
+                  className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-2 rounded"
+                  disabled={promoteLoading}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  onClick={async () => {
+                    // validate
+                    if (!promoteTargetRole) {
+                      setPromoteError('Please choose a role to promote to.');
+                      return;
+                    }
+                    // additionally prevent promoting owner or to same role
+                    const currentRole = resolvedStaff?.role;
+                    if (effectiveOwner) {
+                      setPromoteError('Owner cannot be promoted using this action.');
+                      return;
+                    }
+                    if (currentRole === promoteTargetRole) {
+                      setPromoteError(`This staff is already a ${promoteTargetRole}.`);
+                      return;
+                    }
+                    setPromoteError(null);
+                    await performPromote(promoteTargetRole as 'dispatcher' | 'manager');
+                  }}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded font-medium"
+                  disabled={promoteLoading}
+                >
+                  {promoteLoading ? 'Promoting…' : 'Confirm Promotion'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Stop Driving Modal */}
       <StopDrivingConfirmModal
         open={showStopDrivingModal}
         staffName={resolvedStaff?.name ?? 'Unknown'}
         loading={stopDrivingLoading}
-        resultMessage={stopDrivingResult}
-        onConfirm={confirmStopDriving}
-        onCancel={() => { setShowStopDrivingModal(false); setStopDrivingResult(null); }}
+        resultMessage={null}
+        onConfirm={performStopDriving}
+        onCancel={() => setShowStopDrivingModal(false)}
       />
 
-      {/* Fire confirmation modal (game-integrated) */}
+      {/* Fire confirmation modal */}
       <StaffFireConfirmModal
         open={showFireModal}
+        staffId={staffId}
         staffName={resolvedStaff?.name ?? 'Unknown'}
-        monthlySalary={typeof resolvedStaff?.salary === 'number' ? resolvedStaff.salary : 0}
+        monthlySalary={prevSalary}
         companyCapital={game?.gameState?.company?.capital ?? 0}
         onConfirm={confirmFire}
-        onCancel={() => { setShowFireModal(false); setFireResult(null); }}
+        onCancel={() => setShowFireModal(false)}
         loading={fireLoading}
-        resultMessage={fireResult}
+        resultMessage={null}
       />
+
+      {/* Salary Modal */}
+      {showSalaryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
+          <div className="w-full max-w-md bg-slate-800 rounded-lg border border-slate-700 shadow-lg overflow-hidden">
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-white font-medium">Salary Adjustment</div>
+                <button
+                  onClick={() => { if (!salarySaving) setShowSalaryModal(false); }}
+                  className="text-slate-400"
+                  aria-label="Close salary modal"
+                  title="Close"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="text-sm text-slate-400 mb-4">
+                Adjust the monthly salary for <span className="text-white font-medium">{resolvedStaff?.name ?? 'this staff member'}</span>.
+                Current: <span className="text-amber-400 font-medium">€{(prevSalary ?? 0).toLocaleString()}</span>
+              </div>
+
+              <div className="space-y-3">
+                <label className="block text-sm text-slate-300">New Monthly Salary (€)</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    step={50}
+                    value={salaryInput === '' ? '' : salaryInput}
+                    onChange={(e) => {
+                      setSalaryError(null);
+                      const v = e.target.value;
+                      if (v === '') { setSalaryInput(''); return; }
+                      const n = Math.max(0, Math.round(Number(v)));
+                      setSalaryInput(isNaN(n) ? '' : n);
+                    }}
+                    className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g. 2500"
+                  />
+                </div>
+
+                <div className="flex gap-2 text-xs text-slate-400">
+                  <button
+                    onClick={() => setSalaryInput(Math.max(0, Math.round(prevSalary * 0.75)))}
+                    className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded"
+                    type="button"
+                  >
+                    -25% preset
+                  </button>
+                  <button
+                    onClick={() => setSalaryInput(Math.round(prevSalary))}
+                    className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded"
+                    type="button"
+                  >
+                    Current
+                  </button>
+                  <button
+                    onClick={() => setSalaryInput(Math.round(prevSalary * 1.25))}
+                    className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded"
+                    type="button"
+                  >
+                    +25% preset
+                  </button>
+                  <button
+                    onClick={() => setSalaryInput(0)}
+                    className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded"
+                    type="button"
+                  >
+                    Set 0
+                  </button>
+                </div>
+
+                {salaryError && <div className="text-sm text-rose-400">{salaryError}</div>}
+              </div>
+
+              <div className="mt-4 flex gap-2">
+                <button
+                  onClick={() => { if (!salarySaving) setShowSalaryModal(false); }}
+                  className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-2 rounded"
+                  disabled={salarySaving}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  onClick={async () => {
+                    // Validate
+                    const amount = salaryInput === '' ? null : Number(salaryInput);
+                    if (amount !== null && (!Number.isFinite(amount) || amount < 0)) {
+                      setSalaryError('Please enter a valid non-negative number.');
+                      return;
+                    }
+                    setSalaryError(null);
+                    await applySalaryChange(amount);
+                  }}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded font-medium"
+                  disabled={salarySaving}
+                >
+                  {salarySaving ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Vacation Modal */}
+      {showVacationModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
+          <div className="w-full max-w-md bg-slate-800 rounded-lg border border-slate-700 shadow-lg overflow-hidden">
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-white font-medium">Set Vacation</div>
+                <button
+                  onClick={() => { if (!vacationSaving) setShowVacationModal(false); }}
+                  className="text-slate-400"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="text-sm text-slate-400 mb-4">
+                Put <span className="text-white font-medium">{resolvedStaff?.name ?? 'this staff member'}</span> on vacation.
+                Choose how many days they will be unavailable.
+              </div>
+
+              <div className="space-y-3">
+                <label className="block text-sm text-slate-300">Vacation Length (days)</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    max={365}
+                    step={1}
+                    value={vacationDays}
+                    onChange={(e) => {
+                      setVacationError(null);
+                      const v = Number(e.target.value);
+                      if (Number.isNaN(v)) return;
+                      setVacationDays(Math.max(1, Math.min(365, Math.round(v))));
+                    }}
+                    className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g. 7"
+                  />
+                </div>
+
+                <div className="flex gap-2 text-xs text-slate-400">
+                  <button
+                    onClick={() => setVacationDays(7)}
+                    className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded"
+                    type="button"
+                  >
+                    7 days
+                  </button>
+                  <button
+                    onClick={() => setVacationDays(14)}
+                    className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded"
+                    type="button"
+                  >
+                    14 days
+                  </button>
+                  <button
+                    onClick={() => setVacationDays(30)}
+                    className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded"
+                    type="button"
+                  >
+                    30 days
+                  </button>
+                </div>
+
+                {vacationError && <div className="text-sm text-rose-400">{vacationError}</div>}
+              </div>
+
+              <div className="mt-4 flex gap-2">
+                <button
+                  onClick={() => { if (!vacationSaving) setShowVacationModal(false); }}
+                  className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-2 rounded"
+                  disabled={vacationSaving}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  onClick={async () => {
+                    // Validate days
+                    const days = Math.round(Number(vacationDays) || 0);
+                    if (!Number.isInteger(days) || days < 1 || days > 365) {
+                      setVacationError('Please enter a valid number of days between 1 and 365.');
+                      return;
+                    }
+                    setVacationError(null);
+                    await applyVacation(days);
+                  }}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded font-medium"
+                  disabled={vacationSaving}
+                >
+                  {vacationSaving ? 'Applying…' : `Set ${vacationDays} day(s)`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

@@ -46,6 +46,7 @@ import GameClockBootstrap from './components/Boot/GameClockBootstrap';
 
 // New Infrastructure page
 import HubsSynchronizer from './components/infrastructure/HubsSynchronizer';
+import HubConstructionFinalizer from './components/infrastructure/HubConstructionFinalizer';
 import AdminForceMainHubReset from './components/admin/AdminForceMainHubReset';
 import GrantFundsToAllUsers from './components/admin/GrantFundsToAllUsers';
 import ForceGrantFundsToUser from './components/admin/ForceGrantFundsToUser';
@@ -55,6 +56,17 @@ import { manifest as rulesManifest } from './data/game-rules-engines';
 import './data/trailer-cleanup';
 import './data/trailer-additions';
 import './data/trailer-availability';
+/* Side-effect import: remove a small inline Fire (test) button that can appear in certain spots.
+   This module runs DOM-safe logic to remove the button without altering layout. */
+import './data/remove-inline-fire-test-button';
+/* Side-effect import: remove a small inline Fire (test) button that can appear in certain spots.
+   This module runs DOM-safe logic to remove the button without altering layout. */
+/* Side-effect import: runtime DOM patchers used to perform safe text/image replacements requested by the user.
+   These modules only update text content or image src as visual-only fixes and do not change layout or styles. */
+import './components/StaffImageReplacer';
+import './components/StaffTextReplacer';
+import './components/PriceTextReplacer';
+import './data/remove-inline-fire-test-button';
 
 // Pages
 import Home from './pages/Home';
@@ -97,6 +109,7 @@ import UsedTruckGenerator from './engines/UsedTruckGenerator';
 
 // Company persistence sync — background helper to ensure company mutations persist to localStorage
 import CompanyPersistenceSync from './components/Boot/CompanyPersistenceSync';
+import StaffFiredListener from './components/StaffFiredListener';
 
 /**
  * App
@@ -160,6 +173,8 @@ function App() {
             <ManifestSynchronizer mountedEngineIds={rulesManifest.engines.map((e) => e.id)} />
 
             {/* HubsSynchronizer: normalize hubs into company state when found in other gameState locations */}
+            <HubsSynchronizer />
+            <HubConstructionFinalizer /> 
             <HubsSynchronizer />
 
             {/* Mount the Used Truck Generator engine so it runs daily and provides offers */}

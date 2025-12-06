@@ -1464,109 +1464,180 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
    * - Persists admin path to tm_admin_state as redundancy.
    * - Updates in-memory state via setGameState so UI updates immediately.
    */
+  /**
+   * fireStaff
+   * @description Robustly remove a staff member from the active company, clean persisted per-staff keys,
+   *              clear assignments and ensure the in-memory and persisted state reflect the removal.
+   *
+   * Goals:
+   * - Remove staff entry from company.staff and sanitize related job assignments.
+   * - Remove per-staff persisted artifacts (skill progress, mechanic skill records).
+   * - Clear admin position assignments referencing the staff.
+   * - Persist updated company state to userStorage and localStorage fallbacks.
+   * - Update in-memory gameState so UI updates immediately.
+   * - Emit a 'staff:fired' event so other background helpers can react.
+   */
   const fireStaff = (staffId: string) => {
     if (!gameState || !gameState.company || !gameState.currentUser) return;
 
     try {
       const email = String(gameState.currentUser).toLowerCase();
 
-      // Build updated company snapshot
+      // 1) Locate the staff entry (if present) so we can clean related persisted keys like hireUid
+      const prevStaffList = Array.isArray(gameState.company.staff) ? gameState.company.staff : [];
+      const existingStaff = prevStaffList.find((s: any) => String(s.id) === String(staffId)) || null;
+      const hireUid = existingStaff?.hireUid ? String(existingStaff.hireUid) : null;
+
+      // 2) Build a new company snapshot removing the staff and sanitizing activeJobs
+      const sanitizedJobs = (gameState.company.activeJobs || []).map((j: any) => {
+        try {
+          const job = { ...j };
+          if (String(job.assignedDriver) === String(staffId)) job.assignedDriver = '';
+          if (String(job.assignedCoDriver) === String(staffId)) job.assignedCoDriver = '';
+          if (Array.isArray(job.assignedDrivers)) {
+            job.assignedDrivers = job.assignedDrivers.filter((id: any) => String(id) !== String(staffId));
+          }
+          return job;
+        } catch {
+          return j;
+        }
+      });
+
       const updatedCompany: any = {
         ...gameState.company,
-        staff: (gameState.company.staff || []).filter((s: any) => String(s.id) !== String(staffId)),
-        activeJobs: (gameState.company.activeJobs || []).map((j: any) => {
-          try {
-            if (String(j.assignedDriver) === String(staffId)) j.assignedDriver = '';
-            if (String(j.assignedCoDriver) === String(staffId)) j.assignedCoDriver = '';
-            if (Array.isArray(j.assignedDrivers)) {
-              j.assignedDrivers = j.assignedDrivers.filter((id: any) => String(id) !== String(staffId));
-            }
-          } catch {
-            // ignore per-job errors
-          }
-          return j;
-        })
+        staff: prevStaffList.filter((s: any) => String(s.id) !== String(staffId)),
+        activeJobs: sanitizedJobs
       };
 
-      // Enforce reputation = 0 when persisting (business rule)
-      updatedCompany.reputation = 0;
+      // Business rule: always keep reputation at 0 in persisted state
+      try { updatedCompany.reputation = 0; } catch { /* ignore */ }
 
-      // Persist robustly
+      // 3) Remove persisted per-staff keys to avoid rehydration on next load
+      try {
+        const toRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (!key) continue;
+
+          // Per-skill progress keys: tm_skill_progress_<owner>_<skill>
+          if (key.startsWith('tm_skill_progress_')) {
+            if (key.includes(`_${staffId}_`) || (hireUid && key.includes(`_${hireUid}_`))) {
+              toRemove.push(key);
+            }
+          }
+
+          // Mechanic skills: tm_mechanic_skills_<user>_<staffId>
+          if (key.startsWith('tm_mechanic_skills_') && key.endsWith(`_${staffId}`)) {
+            toRemove.push(key);
+          }
+
+          // Admin positions: tm_admin_positions_<email> may contain assigned staff references.
+          // We don't remove the key here; we'll parse & clean it below.
+        }
+
+        toRemove.forEach(k => {
+          try { localStorage.removeItem(k); } catch { /* ignore */ }
+        });
+      } catch (e) {
+        console.warn('[fireStaff] failed to clean per-staff localStorage keys', e);
+      }
+
+      // 4) Clean admin positions assigned to this staff (so they don't reappear)
+      try {
+        const adminKey = `tm_admin_positions_${email}`;
+        const raw = localStorage.getItem(adminKey);
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+              const cleaned = parsed.map((p: any) => {
+                if (p && p.assignedStaff && String(p.assignedStaff.id) === String(staffId)) {
+                  return { ...p, assignedStaff: undefined };
+                }
+                return p;
+              });
+              localStorage.setItem(adminKey, JSON.stringify(cleaned));
+            }
+          } catch (err) {
+            // best-effort parse; ignore errors
+            console.warn('[fireStaff] parsing tm_admin_positions failed', err);
+          }
+        }
+      } catch (err) {
+        console.warn('[fireStaff] admin positions cleanup failed', err);
+      }
+
+      // 5) Persist updated company state robustly:
+      //    - Try userStorage.updateUser to keep tm_users coherent
+      //    - Always write authoritative per-user tm_user_state_<email>
+      //    - Fallback to direct localStorage writes
       if (email === ADMIN_ACCOUNT.email.toLowerCase()) {
-        // Admin: save admin state and also write tm_admin_state directly for redundancy
         try {
           userStorage.saveAdminState({ isAuthenticated: true, company: updatedCompany, sidebarCollapsed: gameState.sidebarCollapsed });
-        } catch (e) {
-          console.warn('[fireStaff] userStorage.saveAdminState failed', e);
+        } catch (err) {
+          console.warn('[fireStaff] saveAdminState failed', err);
         }
         try {
           localStorage.setItem('tm_admin_state', JSON.stringify({ isAuthenticated: true, company: updatedCompany, sidebarCollapsed: gameState.sidebarCollapsed }));
-        } catch (e) {
-          console.warn('[fireStaff] direct tm_admin_state write failed', e);
+        } catch (err) {
+          console.warn('[fireStaff] direct tm_admin_state write failed', err);
         }
       } else {
-        // Regular user path
-        let updateUserApplied = false;
-
-        // Try updateUser (keeps tm_users coherent)
+        let updateApplied = false;
         try {
-          updateUserApplied = userStorage.updateUser(email, { company: updatedCompany }) || false;
-        } catch (e) {
-          console.warn('[fireStaff] userStorage.updateUser threw', e);
-          updateUserApplied = false;
+          updateApplied = userStorage.updateUser(email, { company: updatedCompany }) || false;
+        } catch (err) {
+          console.warn('[fireStaff] updateUser threw', err);
+          updateApplied = false;
         }
 
-        // Always write authoritative per-user state (tm_user_state_<email>)
         try {
           userStorage.saveUserGameState(email, { isAuthenticated: true, company: updatedCompany, sidebarCollapsed: gameState.sidebarCollapsed });
-        } catch (e) {
-          console.warn('[fireStaff] userStorage.saveUserGameState failed', e);
+        } catch (err) {
+          console.warn('[fireStaff] saveUserGameState failed', err);
         }
 
-        // Also write direct localStorage key as best-effort fallback
         try {
           const perKey = 'tm_user_state_' + email;
           localStorage.setItem(perKey, JSON.stringify({ isAuthenticated: true, company: updatedCompany, sidebarCollapsed: gameState.sidebarCollapsed }));
-        } catch (e) {
-          console.warn('[fireStaff] direct tm_user_state write failed', e);
+        } catch (err) {
+          console.warn('[fireStaff] direct tm_user_state write failed', err);
         }
 
-        // If updateUser didn't succeed, ensure tm_users array has a matching entry so legacy restores won't overwrite
-        if (!updateUserApplied) {
+        // If updateUser didn't persist, ensure tm_users contains at least a minimal entry so legacy flows don't rehydrate old data
+        if (!updateApplied) {
           try {
             const users = userStorage.getAllUsers();
             const idx = users.findIndex((u: any) => (u.email || '').toLowerCase() === email);
             if (idx === -1) {
               users.push({
                 email,
-                password: users && users.length > 0 && users[0].password ? '' : '', // do not invent credentials
+                password: '',
                 username: email.split('@')[0] || email,
                 company: updatedCompany,
                 createdAt: new Date().toISOString()
               });
-              console.debug('[fireStaff] appended minimal user to tm_users for', email);
             } else {
               users[idx].company = updatedCompany;
-              console.debug('[fireStaff] updated existing user.company in tm_users for', email);
             }
             userStorage.saveAllUsers(users);
-          } catch (e) {
-            console.warn('[fireStaff] fallback tm_users update failed', e);
+          } catch (err) {
+            console.warn('[fireStaff] fallback tm_users update failed', err);
           }
         }
       }
 
-      // Update in-memory state so UI reflects removal immediately
+      // 6) Update in-memory state so UI reflects removal immediately.
+      // Use functional setter to avoid stale closures.
       setGameState(prev => ({ ...prev, company: updatedCompany }));
 
-      // Notify listeners
+      // 7) Emit an event so any background helper or UI listener can react (example: UI components listening to 'staff:fired')
       try {
         window.dispatchEvent(new CustomEvent('staff:fired', { detail: { staffId } }));
-      } catch {
-        // ignore non-browser env errors
-      }
+      } catch { /* ignore non-browser env */ }
 
-      console.info(`[fireStaff] removed staff ${staffId} and persisted state for user ${gameState.currentUser}`);
+      // 8) Log outcome
+      console.info(`[fireStaff] staff ${staffId} removed from company and persisted (user=${email})`);
     } catch (err) {
       console.error('[fireStaff] unexpected error', err);
     }

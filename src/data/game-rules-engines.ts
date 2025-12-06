@@ -724,3 +724,59 @@ export const manifest: {
 };
 
 export default manifest;
+
+/**
+ * Hub Construction manifest additions
+ * @description Append Hub Construction entries so the admin UI can discover and audit them.
+ * These are appended at runtime so we don't need to re-write the entire manifest literal.
+ */
+const __nowDate = new Date().toISOString().split('T')[0];
+
+try {
+  manifest.gameRules.push({
+    id: 'GR-020',
+    name: 'Hub Construction',
+    description:
+      'Client-side hub construction flow: price & ETA estimation, pending task persistence and finalization by HubConstructionFinalizer. Enforces single hub per city.',
+    category: 'Infrastructure',
+    status: 'active',
+    version: '1.0.0',
+    lastModified: __nowDate,
+    author: 'System',
+    codePaths: ['src/components/infrastructure/BuildHubModal.tsx', 'src/components/infrastructure/BuildHubBox.tsx', 'src/components/infrastructure/HubConstructionFinalizer.tsx', 'src/utils/pendingTasks.ts'],
+    notes: 'Price range enforced client-side between 600,000 and 1,800,000 USD. Admin UI will show queued builds as pending tasks.',
+    metadata: { ui: true, enforcement: 'client-side' }
+  });
+
+  manifest.engines.push({
+    id: 'E-023',
+    name: 'Hub Construction Finalizer',
+    description: 'Finalizes build-hub pending tasks when their completionGameMs is reached; appends new level-1 hubs to company.hubs.',
+    path: 'src/components/infrastructure/HubConstructionFinalizer.tsx',
+    tags: ['infrastructure', 'finalizer', 'migration'],
+    mountStatus: 'mounted',
+    status: 'active',
+    version: '1.0.0',
+    lastModified: __nowDate,
+    author: 'System',
+    notes: 'Mounted in App to ensure client-side completion of hub builds using game clock.'
+  });
+
+  manifest.cronJobs.push({
+    id: 'C-015',
+    name: 'Hub Construction Cron (client)',
+    description:
+      'Client-side check (driven by HubConstructionFinalizer) to finalize hub construction tasks when the game clock reaches completionGameMs. Recorded for auditing.',
+    path: 'src/components/infrastructure/HubConstructionFinalizer.tsx',
+    schedule: 'on-mount / game-clock driven',
+    trigger: 'on-mount',
+    status: 'active',
+    lastModified: __nowDate,
+    author: 'System',
+    notes: 'Documented cron to make the hub construction flow visible in admin tooling and manifest audits.'
+  });
+} catch (err) {
+  // If manifest mutation fails, don't break startup — we only append for admin visibility.
+  // eslint-disable-next-line no-console
+  console.warn('[game-rules-engines] append-hub-construction failed', err);
+}

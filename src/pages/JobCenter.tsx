@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router';
 import { useGame } from '../contexts/GameContext';
 import { UserPlus, Briefcase, AlertCircle, Info, Euro } from 'lucide-react';
 import StaffSkillsOverview from '../components/staff/StaffSkillsOverview';
+import { getCompanyLimits } from '../utils/hubUtils';
 
 /**
  * Candidate interface
@@ -44,6 +45,14 @@ const JobCenter: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   const company = gameState.company;
+
+  // Compute admin capacity to determine if managers/dispatchers should be blocked.
+  // When admin slots are full we will gray out manager/dispatcher candidates and
+  // disable hiring for these roles until capacity is freed or increased.
+  const companyLimits = getCompanyLimits({ company });
+  const adminSlotsAllowed = companyLimits.staffLimit ?? 0;
+  const currentAdminCount = (company?.staff || []).filter((s: any) => s.role === 'manager' || s.role === 'dispatcher').length;
+  const adminBlocked = adminSlotsAllowed > 0 && currentAdminCount >= adminSlotsAllowed;
 
   /**
    * getAvailabilityDelay
@@ -1214,8 +1223,8 @@ const JobCenter: React.FC = () => {
               <option value="all">All Roles</option>
               <option value="driver">Drivers</option>
               <option value="mechanic">Mechanics</option>
-              <option value="manager">Managers</option>
-              <option value="dispatcher">Dispatchers</option>
+              <option value="manager" disabled={adminBlocked}>{adminBlocked ? 'Managers (blocked)' : 'Managers'}</option>
+              <option value="dispatcher" disabled={adminBlocked}>{adminBlocked ? 'Dispatchers (blocked)' : 'Dispatchers'}</option>
             </select>
           </div>
 
@@ -1288,8 +1297,12 @@ const JobCenter: React.FC = () => {
             const hiringFee = Math.floor(candidate.expectedSalary * (feePercent / 100));
             const totalCost = candidate.expectedSalary + hiringFee;
 
+            // Admin blocking: managers & dispatchers may be blocked when admin capacity full.
+            const isAdminRole = candidate.role === 'manager' || candidate.role === 'dispatcher';
+            const blocked = adminBlocked && isAdminRole;
+
             return (
-              <div key={candidate.id} className="bg-slate-800 rounded-xl border border-slate-700 hover:border-slate-600 transition-all duration-200">
+              <div key={candidate.id} className={`bg-slate-800 rounded-xl border border-slate-700 hover:border-slate-600 transition-all duration-200 ${blocked ? 'opacity-50 grayscale' : ''}`}> 
                 {/* Candidate Header */}
                 <div className="p-6 border-b border-slate-700">
                   <div className="flex items-start justify-between mb-4">
@@ -1362,11 +1375,19 @@ const JobCenter: React.FC = () => {
                   </div>
 
                   <button
-                    onClick={() => hireCandidate(candidate)}
-                    className="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2"
+                    onClick={() => {
+                      if (blocked) {
+                        // Inform user briefly — hiring of managers/dispatchers blocked due to admin capacity.
+                        alert('Hiring managers/dispatchers is currently blocked — admin slots full. Free up a slot or upgrade your hub to hire these roles.');
+                        return;
+                      }
+                      hireCandidate(candidate);
+                    }}
+                    disabled={blocked}
+                    className={`w-full ${blocked ? 'bg-slate-600 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'} text-white py-2 px-4 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2`}
                   >
                     <UserPlus className="w-4 h-4" />
-                    <span>Hire Candidate</span>
+                    <span>{blocked ? 'Blocked' : 'Hire Candidate'}</span>
                   </button>
                 </div>
               </div>

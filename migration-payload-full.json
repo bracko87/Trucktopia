@@ -1,0 +1,154 @@
+{
+  "metadata": {
+    "requestedBy": "bracko87@live.com",
+    "exportedAt": "2025-11-24T17:27:38.599Z"
+  },
+  "collections": {
+    "users": [
+      {
+        "id": "local-glupostimejlza@gmail.com",
+        "email": "glupostimejlza@gmail.com",
+        "password": "",
+        "name": "glupostimejlza",
+        "createdAt": "2025-11-24T12:47:49.115Z",
+        "userState": {
+          "isAuthenticated": true,
+          "company": {
+            "id": "company-1763988478951",
+            "name": "KKKOOOPPP",
+            "level": "startup",
+            "capital": 8000,
+            "reputation": 0,
+            "employees": 1,
+            "founded": "2025-11-24T12:47:58.951Z",
+            "hub": {
+              "id": "tirana",
+              "name": "Tirana",
+              "country": "Albania",
+              "region": "euro-asia",
+              "capacity": 5,
+              "level": 1,
+              "cost": 2000
+            },
+            "trucks": [],
+            "contracts": [],
+            "logo": null,
+            "email": "glupostimejlza@gmail.com",
+            "trailers": [],
+            "staff": [],
+            "activeJobs": []
+          },
+          "sidebarCollapsed": false
+        }
+      },
+      {
+        "id": "local-tvmejlza@gmail.com",
+        "email": "tvmejlza@gmail.com",
+        "password": "",
+        "name": "tvmejlza",
+        "createdAt": "2025-11-24T14:28:00.411Z",
+        "userState": {
+          "isAuthenticated": true,
+          "company": {
+            "id": "company-1763994487867",
+            "name": "aweawdasdsadas",
+            "level": "startup",
+            "capital": 8000,
+            "reputation": 0,
+            "employees": 1,
+            "founded": "2025-11-24T14:28:07.867Z",
+            "hub": {
+              "id": "durrës",
+              "name": "Durrës",
+              "country": "Albania",
+              "region": "euro-asia",
+              "capacity": 5,
+              "level": 1,
+              "cost": 2000
+            },
+            "trucks": [],
+            "contracts": [],
+            "logo": null,
+            "email": "tvmejlza@gmail.com",
+            "trailers": [],
+            "staff": [],
+            "activeJobs": []
+          },
+          "sidebarCollapsed": false
+        }
+      },
+      {
+        "id": "local-panonianvirtual@gmail.com",
+        "email": "panonianvirtual@gmail.com",
+        "password": "",
+        "name": "panonianvirtual",
+        "createdAt": "2025-11-24T14:38:36.602Z",
+        "userState": {
+          "isAuthenticated": true,
+          "company": {
+            "id": "company-1763995146573",
+            "name": "zzbfghgfhfg",
+            "level": "startup",
+            "capital": 8000,
+            "reputation": 0,
+            "employees": 1,
+            "founded": "2025-11-24T14:39:06.573Z",
+            "hub": {
+              "id": "poipet",
+              "name": "Poipet",
+              "country": "Cambodia",
+              "region": "euro-asia",
+              "capacity": 5,
+              "level": 1,
+              "cost": 2000
+            },
+            "trucks": [],
+            "contracts": [],
+            "logo": null,
+            "email": "panonianvirtual@gmail.com",
+            "trailers": [],
+            "staff": [],
+            "activeJobs": []
+          },
+          "sidebarCollapsed": false
+        }
+      },
+      {
+        "id": "local-virtualairserbia3@gmail.com",
+        "email": "virtualairserbia3@gmail.com",
+        "password": "",
+        "name": "virtualairserbia3",
+        "createdAt": "2025-11-24T14:53:44.094Z",
+        "userState": {
+          "isAuthenticated": true,
+          "company": {
+            "id": "company-1763996036581",
+            "name": "adaerfdcsdcsdc",
+            "level": "startup",
+            "capital": 8000,
+            "reputation": 0,
+            "employees": 1,
+            "founded": "2025-11-24T14:53:56.581Z",
+            "hub": {
+              "id": "mymensingh",
+              "name": "Mymensingh",
+              "country": "Bangladesh",
+              "region": "euro-asia",
+              "capacity": 5,
+              "level": 1,
+              "cost": 2000
+            },
+            "trucks": [],
+            "contracts": [],
+            "logo": null,
+            "email": "virtualairserbia3@gmail.com",
+            "trailers": [],
+            "staff": [],
+            "activeJobs": []
+          },
+          "sidebarCollapsed": false
+        }
+      }
+    ]
+  }
+}

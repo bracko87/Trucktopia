@@ -5,7 +5,11 @@
  *
  * Purpose:
  * - Render a lightweight grid/list of facility cards.
- * - Show whether each facility is unlocked by the company's main hub (grayed out when locked).
+ * - Show whether each facility is unlocked by the company's main hub.
+ *
+ * Change introduced:
+ * - Facilities are available from the beginning (level 1). The panel now treats
+ *   all items in ALL_FACILITIES as unlocked so they can be built from the start.
  *
  * Notes:
  * - Defensive lookups for company/main hub are used so this component works even if different
@@ -44,7 +48,7 @@ const FacilityCard: React.FC<FacilityCardProps> = ({ title, subtitle, unlocked =
 
       <div className="flex-1">
         <div className={`font-medium ${unlocked ? 'text-white' : 'text-slate-400'}`}>{title}</div>
-        <div className={`text-sm ${unlocked ? 'text-slate-300' : 'text-slate-500'}`}>{subtitle ?? (unlocked ? 'Unlocked' : 'Locked — upgrade main hub to unlock')}</div>
+        <div className={`text-sm ${unlocked ? 'text-slate-300' : 'text-slate-500'}`}>{subtitle ?? (unlocked ? 'Available' : 'Locked')}</div>
       </div>
     </div>
   );
@@ -55,6 +59,10 @@ const FacilityCard: React.FC<FacilityCardProps> = ({ title, subtitle, unlocked =
  *
  * @description Shows a lightweight display of facilities (garages, depots, workshops)
  *              and whether they are unlocked by the company's main hub.
+ *
+ * Behavior change:
+ * - All facilities from ALL_FACILITIES are treated as unlocked from level 1 and thus
+ *   can be built immediately. The UI no longer depends on hub.level unlock lists.
  */
 const FacilitiesPanel: React.FC = () => {
   const { gameState } = useGame() as any;
@@ -65,28 +73,26 @@ const FacilitiesPanel: React.FC = () => {
   const mainHub = hubs.find(h => String(h?.id ?? h?.name ?? '') === String(mainHubId)) ?? hubs[0] ?? null;
   const mainLevel = mainHub && typeof mainHub.level === 'number' ? mainHub.level : 1;
 
-  // Aggregate unlocked facilities up to current level (previous levels also count)
-  const unlockedSoFar: Set<string> = new Set();
-  for (let l = 1; l <= mainLevel; l++) {
-    try {
-      const lvl = getHubLevel(l);
-      for (const f of lvl.unlocks) unlockedSoFar.add(f);
-    } catch {
-      // ignore errors and continue
-    }
-  }
+  /**
+   * unlockedSoFar
+   * @description Previously computed by aggregating unlocks across levels.
+   *              New behavior: all facilities are available from the start.
+   */
+  const unlockedSoFar: Set<string> = new Set(ALL_FACILITIES);
 
   return (
     <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {ALL_FACILITIES.map((facility) => {
           const unlocked = unlockedSoFar.has(facility);
+          // Subtitle can show which level would have unlocked it historically (optional).
+          // For now, indicate "Available" to be clear the facility can be built now.
           return (
             <FacilityCard
               key={facility}
               title={facility}
               unlocked={unlocked}
-              subtitle={unlocked ? 'Unlocked' : 'Locked — upgrade main hub to unlock'}
+              subtitle={unlocked ? 'Available — can be built' : 'Locked'}
             />
           );
         })}

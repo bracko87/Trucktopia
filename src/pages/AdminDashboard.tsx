@@ -1,4 +1,3 @@
-
 /**
  * AdminDashboard.tsx
  *
@@ -30,6 +29,7 @@ import {
 } from 'lucide-react';
 import RemoteStats from '../components/admin/RemoteStats';
 import UsedTruckGeneratorCard from '../components/admin/UsedTruckGeneratorCard';
+import MigratedUsersPanel from '../components/migration/MigratedUsersPanel'; // <-- Added migration panel
 
 /**
  * UserStats
@@ -262,6 +262,11 @@ const AdminDashboard: React.FC = () => {
 
       {/* RemoteStats: hideErrors enabled to suppress runtime banners */}
       <RemoteStats hideErrors />
+
+      {/* Migration panel: quick access for admins to preview & install migrated users */}
+      <div className="mt-6">
+        <MigratedUsersPanel />
+      </div>
 
       {/* Admin Actions Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
