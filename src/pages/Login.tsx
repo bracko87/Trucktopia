@@ -6,6 +6,7 @@
  * Responsibilities:
  * - Render the login form and handle sign-in flow.
  * - Provide a safe "clear old data" developer action.
+ * - Provide "Forgot password?" flow: a modal to request password reset or show instructions.
  *
  * This file renders a visually rich, accessible login card and uses the GameContext
  * login API to authenticate. It includes server-safe developer actions guarded by confirm().
@@ -22,7 +23,7 @@ import {
   CardHeader,
   CardTitle,
 } from '../components/ui/card';
-import { Truck, Mail, Lock, Eye, EyeOff, Trash2 } from 'lucide-react';
+import { Truck, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { useGame } from '../contexts/GameContext';
 
 /**
@@ -35,6 +36,8 @@ import { useGame } from '../contexts/GameContext';
 export default function Login(): JSX.Element {
   const navigate = useNavigate();
   const { login, clearOldData } = useGame();
+  // Keep a reference to the full game API in case it exposes a password reset method
+  const gameApi = useGame() as any;
 
   const [formData, setFormData] = useState({
     email: '',
@@ -42,6 +45,11 @@ export default function Login(): JSX.Element {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Forgot password modal state
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [isResetting, setIsResetting] = useState(false);
 
   /**
    * handleSubmit
@@ -98,6 +106,49 @@ export default function Login(): JSX.Element {
         console.error('Error clearing storage', err);
         alert('Failed to clear storage. Check console for details.');
       }
+    }
+  };
+
+  /**
+   * handlePasswordReset
+   * @description Try to trigger a password reset flow using GameContext if available.
+   *              Falls back to showing instructions when no API is present.
+   */
+  const handlePasswordReset = async () => {
+    if (!resetEmail) {
+      alert('Please enter your email address to receive a password reset link.');
+      return;
+    }
+
+    setIsResetting(true);
+
+    try {
+      // Try common method names used in different implementations
+      if (gameApi && typeof gameApi.sendPasswordReset === 'function') {
+        await gameApi.sendPasswordReset(resetEmail);
+        alert('If the email exists, a password reset link has been sent.');
+        setShowForgotModal(false);
+      } else if (gameApi && typeof gameApi.requestPasswordReset === 'function') {
+        await gameApi.requestPasswordReset(resetEmail);
+        alert('If the email exists, a password reset link has been sent.');
+        setShowForgotModal(false);
+      } else if (gameApi && typeof gameApi.resetPassword === 'function') {
+        await gameApi.resetPassword(resetEmail);
+        alert('If the email exists, a password reset link has been sent.');
+        setShowForgotModal(false);
+      } else {
+        // No programmatic reset exposed by GameContext - provide guidance
+        alert(
+          'Password reset is not currently available in the UI. ' +
+            'Please use the Supabase Auth dashboard to trigger a reset for this user or contact support.'
+        );
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('Password reset error', err);
+      alert('Failed to request a password reset. Please try again or contact support.');
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -196,9 +247,94 @@ export default function Login(): JSX.Element {
                 Create account
               </Link>
             </div>
+
+            {/* Forgot password trigger */}
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowForgotModal(true)}
+                className="text-yellow-400 hover:underline"
+              >
+                Forgot password?
+              </button>
+            </div>
+          </div>
+
+          {/* Developer Clear Storage (kept intentionally below secondary actions) */}
+          <div className="flex items-center justify-between text-xs text-slate-500">
+            <button
+              onClick={handleClearStorage}
+              className="text-slate-400 hover:text-white transition-colors"
+            >
+              Developer: Clear local data
+            </button>
           </div>
         </CardContent>
       </Card>
+
+      {/* Footer Note */}
+      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-slate-400 text-sm">
+        <p>Secure registration • Your data is protected</p>
+      </div>
+
+      {/* Forgot Password Modal */}
+      {showForgotModal && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md bg-slate-800 rounded-xl border border-slate-700 p-6">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-bold text-white">Reset Password</h3>
+                <p className="text-sm text-slate-400">Enter your email to receive a password reset link.</p>
+              </div>
+              <button
+                onClick={() => setShowForgotModal(false)}
+                className="text-slate-400 hover:text-white"
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Email Address</label>
+                <input
+                  type="email"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowForgotModal(false)}
+                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handlePasswordReset}
+                  disabled={isResetting}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                >
+                  {isResetting ? 'Requesting…' : 'Send Reset Link'}
+                </button>
+              </div>
+
+              <div className="text-xs text-slate-400">
+                <p>
+                  Note: if password reset is not wired into the in-app system, this will provide
+                  instructions instead. If you rely on Supabase Auth you can trigger a reset from
+                  the Supabase dashboard or create a small server-side endpoint that calls Supabase
+                  Admin API.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
