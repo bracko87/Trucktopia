@@ -13,7 +13,8 @@
  * - Avoids client-side CORS issues and centralizes error handling.
  */
 
-const fetch = require('node-fetch'); // Node fetch available in Netlify runtime. If unavailable, native fetch may be used.
+/* eslint-disable no-undef */
+const fetch = globalThis.fetch || require('node-fetch');
 
 exports.handler = async (event) => {
   const headersBase = {
@@ -91,7 +92,7 @@ exports.handler = async (event) => {
     // Normalize error message
     const errMessage = payload && payload.error ? payload.error : (typeof payload === 'string' ? payload : `Supabase recover failed with status ${res.status}`);
     return {
-      statusCode: 400,
+      statusCode: res.status || 400,
       headers: headersBase,
       body: JSON.stringify({ success: false, message: `Password reset failed: ${errMessage}` })
     };
