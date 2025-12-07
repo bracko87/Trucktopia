@@ -1,52 +1,65 @@
 /**
- * netlify/functions/supabase-config.js
+ * supabase-config.js
  *
- * Netlify Function returning Supabase client config (SUPABASE_URL and SUPABASE_ANON_KEY)
+ * Netlify serverless function that returns runtime Supabase configuration to the client.
  *
- * Purpose:
- * - Provide runtime-accessible Supabase configuration to the browser without embedding
- *   secrets into the client bundle at build-time.
- * - The values are read from process.env on the server (Netlify build/runtime) and returned
- *   to the client. The anon key is considered public for client usage.
+ * Responsibilities:
+ * - Expose SUPABASE_URL and SUPABASE_ANON_KEY (from environment) to client code that needs them.
+ * - Return 404 with a helpful message when vars are not set.
  *
- * Notes:
- * - Keep this function simple and CORS-friendly so the SPA can call it from any origin.
- * - The function expects environment variables SUPABASE_URL and SUPABASE_ANON_KEY to be
- *   set in Netlify environment variables.
+ * Security note:
+ * - The Supabase anon key is intended for public client use for typical auth operations.
+ * - If you prefer not to expose keys, use the reset-password.js function (also provided) and
+ *   call it from the client instead of fetching the config.
  */
 
-/**
- * handler
- * @description Netlify serverless function entrypoint. Returns JSON with SUPABASE_URL and SUPABASE_ANON_KEY.
- */
-exports.handler = async function handler() {
+exports.handler = async (event) => {
   try {
-    const SUPABASE_URL = process.env.SUPABASE_URL || '';
-    const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || '';
+    const SUPABASE_URL = process.env.SUPABASE_URL || null;
+    const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_ANON || null;
 
-    const body = JSON.stringify({
-      SUPABASE_URL,
-      SUPABASE_ANON_KEY
-    });
+    const headers = {
+      'Content-Type': 'application/json',
+      // Allow any origin to call; adjust for stricter security if needed
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET,OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type'
+    };
+
+    // Handle OPTIONS preflight
+    if (event.httpMethod === 'OPTIONS') {
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({ ok: true })
+      };
+    }
+
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      return {
+        statusCode: 404,
+        headers,
+        body: JSON.stringify({
+          success: false,
+          message: 'Supabase configuration is not present on the server. Please set SUPABASE_URL and SUPABASE_ANON_KEY in Netlify environment variables.'
+        })
+      };
+    }
 
     return {
       statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        // Allow client calls from the site; keep permissive for SPA usage
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type'
-      },
-      body
+      headers,
+      body: JSON.stringify({
+        success: true,
+        SUPABASE_URL,
+        SUPABASE_ANON_KEY
+      })
     };
   } catch (err) {
     return {
       statusCode: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
-      },
-      body: JSON.stringify({ error: 'Failed to read Supabase config' })
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      body: JSON.stringify({ success: false, message: 'Internal error retrieving Supabase config' })
     };
   }
 };

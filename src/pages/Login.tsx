@@ -6,7 +6,7 @@
  * Responsibilities:
  * - Render the login form and handle sign-in flow.
  * - Provide a safe "clear old data" developer action.
- * - Provide "Forgot password?" flow: a modal to request password reset or show instructions.
+ * - Provide "Forgot password?" flow wired to GameContext.sendPasswordReset.
  *
  * This file renders a visually rich, accessible login card and uses the GameContext
  * login API to authenticate. It includes server-safe developer actions guarded by confirm().
@@ -35,9 +35,7 @@ import { useGame } from '../contexts/GameContext';
  */
 export default function Login(): JSX.Element {
   const navigate = useNavigate();
-  const { login, clearOldData } = useGame();
-  // Keep a reference to the full game API in case it exposes a password reset method
-  const gameApi = useGame() as any;
+  const { login, clearOldData, sendPasswordReset } = useGame();
 
   const [formData, setFormData] = useState({
     email: '',
@@ -50,6 +48,8 @@ export default function Login(): JSX.Element {
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
   const [isResetting, setIsResetting] = useState(false);
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
+  const [resetSuccess, setResetSuccess] = useState<boolean | null>(null);
 
   /**
    * handleSubmit
@@ -66,6 +66,7 @@ export default function Login(): JSX.Element {
         navigate('/dashboard');
       } else {
         // Basic client-side error handling
+        // Use inline message rather than throwing to console
         alert(result?.message || 'Sign in failed. Check credentials and try again.');
       }
     } catch (err) {
@@ -111,42 +112,39 @@ export default function Login(): JSX.Element {
 
   /**
    * handlePasswordReset
-   * @description Try to trigger a password reset flow using GameContext if available.
-   *              Falls back to showing instructions when no API is present.
+   * @description Trigger password reset using GameContext.sendPasswordReset.
+   *              Shows inline feedback and keeps the modal open on error.
    */
   const handlePasswordReset = async () => {
     if (!resetEmail) {
-      alert('Please enter your email address to receive a password reset link.');
+      setResetMessage('Please enter your email address to receive a password reset link.');
+      setResetSuccess(false);
       return;
     }
 
     setIsResetting(true);
+    setResetMessage(null);
+    setResetSuccess(null);
 
     try {
-      // Try common method names used in different implementations
-      if (gameApi && typeof gameApi.sendPasswordReset === 'function') {
-        await gameApi.sendPasswordReset(resetEmail);
-        alert('If the email exists, a password reset link has been sent.');
-        setShowForgotModal(false);
-      } else if (gameApi && typeof gameApi.requestPasswordReset === 'function') {
-        await gameApi.requestPasswordReset(resetEmail);
-        alert('If the email exists, a password reset link has been sent.');
-        setShowForgotModal(false);
-      } else if (gameApi && typeof gameApi.resetPassword === 'function') {
-        await gameApi.resetPassword(resetEmail);
-        alert('If the email exists, a password reset link has been sent.');
-        setShowForgotModal(false);
-      } else {
-        // No programmatic reset exposed by GameContext - provide guidance
-        alert(
-          'Password reset is not currently available in the UI. ' +
-            'Please use the Supabase Auth dashboard to trigger a reset for this user or contact support.'
-        );
+      const res = await sendPasswordReset(resetEmail);
+      setResetMessage(res?.message || (res.success ? 'If the email exists, a reset link has been sent.' : 'Failed to request password reset.'));
+      setResetSuccess(Boolean(res?.success));
+
+      // On success, auto-close modal after a short delay to give user feedback
+      if (res?.success) {
+        setTimeout(() => {
+          setShowForgotModal(false);
+          setResetEmail('');
+          setResetMessage(null);
+          setResetSuccess(null);
+        }, 1800);
       }
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('Password reset error', err);
-      alert('Failed to request a password reset. Please try again or contact support.');
+      setResetMessage('Failed to request a password reset due to a network error. Please try again later.');
+      setResetSuccess(false);
     } finally {
       setIsResetting(false);
     }
@@ -287,7 +285,12 @@ export default function Login(): JSX.Element {
                 <p className="text-sm text-slate-400">Enter your email to receive a password reset link.</p>
               </div>
               <button
-                onClick={() => setShowForgotModal(false)}
+                onClick={() => {
+                  setShowForgotModal(false);
+                  setResetEmail('');
+                  setResetMessage(null);
+                  setResetSuccess(null);
+                }}
                 className="text-slate-400 hover:text-white"
                 aria-label="Close"
               >
@@ -307,9 +310,25 @@ export default function Login(): JSX.Element {
                 />
               </div>
 
+              {/* Inline message area */}
+              {resetMessage && (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className={`text-sm ${resetSuccess ? 'text-green-300' : 'text-rose-300'}`}
+                >
+                  {resetMessage}
+                </div>
+              )}
+
               <div className="flex justify-end space-x-3">
                 <button
-                  onClick={() => setShowForgotModal(false)}
+                  onClick={() => {
+                    setShowForgotModal(false);
+                    setResetEmail('');
+                    setResetMessage(null);
+                    setResetSuccess(null);
+                  }}
                   className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
                 >
                   Cancel
@@ -317,7 +336,7 @@ export default function Login(): JSX.Element {
                 <button
                   onClick={handlePasswordReset}
                   disabled={isResetting}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50"
                 >
                   {isResetting ? 'Requesting…' : 'Send Reset Link'}
                 </button>
