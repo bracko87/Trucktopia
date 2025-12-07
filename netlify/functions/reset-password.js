@@ -6,16 +6,27 @@
  * Responsibilities:
  * - Accept POST { email } from client.
  * - Use SUPABASE_URL and SUPABASE_ANON_KEY from environment to call Supabase /auth/v1/recover.
+ * - Optionally include redirect_to if RESET_REDIRECT_URL (or SUPABASE_SITE_URL) is set to guarantee
+ *   the link in the email points to the right host (prevents localhost links).
  * - Return a normalized { success, message } JSON response.
  *
- * Advantages:
- * - Avoids client-side reliance on supabase-config + direct calls to Supabase.
- * - Avoids client-side CORS issues and centralizes error handling.
+ * Usage:
+ * - Set environment variables in Netlify:
+ *    SUPABASE_URL, SUPABASE_ANON_KEY
+ *    Optionally: RESET_REDIRECT_URL (e.g. https://your-site.netlify.app) or SUPABASE_SITE_URL
+ *
+ * Note:
+ * - If your Supabase project's "Site URL" is set to http://localhost, emails will include localhost.
+ *   Fix that in the Supabase Dashboard (Authentication → Settings → Site URL) or set RESET_REDIRECT_URL.
  */
 
 /* eslint-disable no-undef */
 const fetch = globalThis.fetch || require('node-fetch');
 
+/**
+ * handler
+ * @description Netlify function entrypoint. Handles POST for password recovery.
+ */
 exports.handler = async (event) => {
   const headersBase = {
     'Content-Type': 'application/json',
@@ -54,7 +65,6 @@ exports.handler = async (event) => {
 
     const SUPABASE_URL = process.env.SUPABASE_URL;
     const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_ANON;
-
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
       return {
         statusCode: 500,
@@ -62,6 +72,15 @@ exports.handler = async (event) => {
         body: JSON.stringify({ success: false, message: 'Supabase configuration is not present on the server. Please configure SUPABASE_URL and SUPABASE_ANON_KEY.' })
       };
     }
+
+    // Determine redirect target for the reset email (avoid localhost links)
+    // Priority: RESET_REDIRECT_URL env var -> SUPABASE_SITE_URL env var -> no redirect param
+    const redirectTo = (process.env.RESET_REDIRECT_URL && process.env.RESET_REDIRECT_URL.trim()) ||
+                       (process.env.SUPABASE_SITE_URL && process.env.SUPABASE_SITE_URL.trim()) ||
+                       null;
+
+    // Construct recover payload; include redirect_to only when present
+    const recoverPayload = redirectTo ? { email, redirect_to: redirectTo } : { email };
 
     const recoverUrl = SUPABASE_URL.replace(/\/$/, '') + '/auth/v1/recover';
     const res = await fetch(recoverUrl, {
@@ -71,7 +90,7 @@ exports.handler = async (event) => {
         'apikey': SUPABASE_ANON_KEY,
         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
       },
-      body: JSON.stringify({ email })
+      body: JSON.stringify(recoverPayload)
     });
 
     let payload;
@@ -82,6 +101,7 @@ exports.handler = async (event) => {
     }
 
     if (res.ok) {
+      // Return a friendly message regardless of whether email exists (avoid leaking)
       return {
         statusCode: 200,
         headers: headersBase,
@@ -94,7 +114,7 @@ exports.handler = async (event) => {
     return {
       statusCode: res.status || 400,
       headers: headersBase,
-      body: JSON.stringify({ success: false, message: `Password reset failed: ${errMessage}` })
+      body: JSON.stringify({ success: false, message: `Password reset failed: ${String(errMessage)}` })
     };
   } catch (err) {
     return {

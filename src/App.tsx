@@ -85,6 +85,7 @@ import Trailers from './pages/Trailers';
 import VehicleMarket from './pages/VehicleMarket';
 import JobCenter from './pages/JobCenter';
 import Logout from './pages/Logout';
+import ResetPassword from './pages/ResetPassword';
 import StorageManagement from './pages/StorageManagement';
 import AdminDashboard from './pages/AdminDashboard';
 import UserManagement from './pages/UserManagement';
