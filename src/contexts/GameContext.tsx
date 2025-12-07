@@ -20,14 +20,14 @@
  * File-level comments and JSDoc are present for clarity.
  */
 
-/**
- * NOTE:
- * This file was edited to avoid a build/parsing error caused by an unexpected "$"
- * token inside a constructed message string. The training-start success message
- * now uses plain string concatenation and does not include any raw '$' characters,
- * replacing them with the currency label "USD" instead. This prevents the build
- * parser from encountering ambiguous "$" sequences in source code.
- */
+ /**
+  * NOTE:
+  * This file was edited to avoid a build/parsing error caused by an unexpected "$"
+  * token inside a constructed message string. The training-start success message
+  * now uses plain string concatenation and does not include any raw '$' characters,
+  * replacing them with the currency label "USD" instead. This prevents the build
+  * parser from encountering ambiguous "$" sequences in source code.
+  */
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { Company, GameState, GamePage, ActiveJob } from '../types/game';
@@ -65,6 +65,12 @@ export interface GameContextType {
    *              Returns success + message. Training days default to 7..10.
    */
   startTraining: (staffId: string, skillName: string, days?: number) => { success: boolean; message: string };
+  /**
+   * sendPasswordReset
+   * @description Trigger Supabase password recovery flow for the given email using the
+   *              runtime supabase-config helper. Returns success + message.
+   */
+  sendPasswordReset: (email: string) => Promise<{ success: boolean; message: string }>;
   /**
    * upgradeHub
    * @description Upgrade a hub (by id) to the next level if the company has sufficient capital.
@@ -928,6 +934,76 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   };
 
   /**
+   * sendPasswordReset
+   * @description Trigger Supabase password recovery flow for the given email using runtime
+   *              supabase-config helper. Returns a friendly {success,message} shape.
+   */
+  const sendPasswordReset = async (email: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      const normalized = String(email || '').toLowerCase().trim();
+      if (!normalized) return { success: false, message: 'Please provide an email address' };
+
+      // Try to obtain Supabase runtime config from Netlify function (same pattern as register)
+      let supabaseUrl: string | null = null;
+      let supabaseAnon: string | null = null;
+      try {
+        const cfgRes = await fetch('/.netlify/functions/supabase-config', { method: 'GET' });
+        if (cfgRes.ok) {
+          const cfg = await cfgRes.json().catch(() => null);
+          if (cfg) {
+            supabaseUrl = typeof cfg.SUPABASE_URL === 'string' ? cfg.SUPABASE_URL : null;
+            supabaseAnon = typeof cfg.SUPABASE_ANON_KEY === 'string' ? cfg.SUPABASE_ANON_KEY : null;
+          }
+        } else {
+          console.warn('[GameContext.sendPasswordReset] supabase-config returned non-ok', cfgRes.status);
+        }
+      } catch (err) {
+        console.warn('[GameContext.sendPasswordReset] could not fetch supabase-config', err);
+      }
+
+      // If we do not have runtime config, fall back to instructive message
+      if (!supabaseUrl || !supabaseAnon) {
+        return {
+          success: false,
+          message: 'Password reset is not available because Supabase configuration is not present. Please contact support or use the Supabase dashboard to reset this account.'
+        };
+      }
+
+      try {
+        const recoverRes = await fetch(`${supabaseUrl.replace(/\/$/, '')}/auth/v1/recover`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': supabaseAnon,
+            'Authorization': `Bearer ${supabaseAnon}`
+          },
+          body: JSON.stringify({ email: normalized })
+        });
+
+        let recoverBody: any = null;
+        try {
+          recoverBody = await recoverRes.json();
+        } catch {
+          recoverBody = await recoverRes.text().catch(() => null);
+        }
+
+        if (recoverRes.ok) {
+          return { success: true, message: 'If the email exists, a password reset link has been sent.' };
+        } else {
+          const msg = recoverBody && recoverBody.error ? recoverBody.error : (typeof recoverBody === 'string' ? recoverBody : `Supabase recover failed with status ${recoverRes.status}`);
+          return { success: false, message: `Password reset failed: ${msg}` };
+        }
+      } catch (err) {
+        console.error('[GameContext.sendPasswordReset] request failed', err);
+        return { success: false, message: 'Network error while requesting password reset. Please try again later.' };
+      }
+    } catch (err) {
+      console.error('sendPasswordReset unexpected error', err);
+      return { success: false, message: 'Failed to request password reset' };
+    }
+  };
+
+  /**
    * createCompany
    *
    * Ensures new companies have defaults (including reputation = 0) and persists them.
@@ -1707,7 +1783,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       setGameState(prev => ({ ...prev, company: companyClone }));
 
       // Build a safe message without any raw '$' characters to avoid parser issues in some build chains
-      const msg = 'Training started for ' + staff.name + ' on "' + skillName + '" (' + plannedDays + ' days, cost ' + cost.toLocaleString() + ' USD)';
+      const msg = 'Training started for ' + staff.name + ' on \"' + skillName + '\" (' + plannedDays + ' days, cost ' + cost.toLocaleString() + ' USD)';
       return { success: true, message: msg };
     } catch (err) {
       console.error('startTraining error', err);
@@ -1737,7 +1813,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     improveSkill,
     promoteStaff,
     fireStaff,
-    startTraining
+    startTraining,
+    sendPasswordReset,
+    upgradeHub: (hubId: string) => ({ success: false, message: 'Not implemented' })
   };
 
   return (
