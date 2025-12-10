@@ -495,8 +495,21 @@ const VehicleMarket: React.FC = () => {
 
       if (looksLikeTruck) {
         const unified = unifyTrucksList();
+        // Prefer exact id matches first.
         authoritative = unified.find((t: any) => String(t.id) === String(vehicle.id)) ?? null;
-        if (!authoritative && vehicle.brand && vehicle.model) {
+
+        // Determine whether this market item should be treated as a market/used offer.
+        // If it is a market/used offer, we should NOT override its metadata with
+        // canonical dataset values (brand+model lookup), because offers carry
+        // the correct condition/km/year that the user expects.
+        const marketOfferHint =
+          (vehicle.marketSource && String(vehicle.marketSource).toLowerCase().includes('used')) ||
+          Boolean(vehicle.marketEntry && Object.keys(vehicle.marketEntry).length > 0) ||
+          isUsedVehicle(vehicle);
+
+        // Only fallback to brand+model heuristics when the clicked item does NOT look like
+        // a specific market/used offer (to avoid overwriting used-offer fields such as condition/km).
+        if (!authoritative && !marketOfferHint && vehicle.brand && vehicle.model) {
           authoritative =
             unified.find(
               (t: any) =>
@@ -511,11 +524,103 @@ const VehicleMarket: React.FC = () => {
       authoritative = null;
     }
 
-    // If the market item came from a generator, or is a used offer, keep the exact object as authoritative
+    // If the market item came from a generator, or is a used offer, prefer the listing (vehicle)
+    // but merge authoritative technical specifications where the listing lacks them.
+    // This keeps market metadata (price, condition, km, year, availability) intact while
+    // enriching the item with canonical technical specs from the authoritative dataset.
     const source = authoritative ?? vehicle;
-    // Clone to avoid mutating original objects
-    const cloned = JSON.parse(JSON.stringify(source));
-    if (!cloned.specifications) cloned.specifications = {};
+
+    /** 
+     * Build merged object:
+     * - Start with authoritative dataset when available (it provides canonical technical defaults)
+     * - Overlay listing (vehicle) top-level fields so market-specific metadata wins
+     * - Merge specifications by using authoritative.specifications as base and layering vehicle.specifications on top
+     * - Ensure common market metadata keys are preserved from the vehicle when present
+     */
+    let merged: any = {};
+
+    if (authoritative) {
+      // Deep-clone authoritative as base
+      merged = JSON.parse(JSON.stringify(authoritative));
+
+      // Overlay top-level values from the vehicle (market/listing). We skip 'specifications'
+      // because it is merged explicitly below.
+      if (vehicle && typeof vehicle === 'object') {
+        for (const k of Object.keys(vehicle)) {
+          if (k === 'specifications') continue;
+          // Copy listing-specific values (price, condition, year, km, availability, etc.) to merged
+          merged[k] = vehicle[k];
+        }
+      }
+
+      // Merge specifications: authoritative values are base, vehicle.specifications may override
+      merged.specifications = {
+        ...(authoritative.specifications ?? {}),
+        ...(vehicle?.specifications ?? {})
+      };
+    } else {
+      // No authoritative dataset: clone the listing directly
+      merged = JSON.parse(JSON.stringify(vehicle ?? {}));
+      merged.specifications = { ...(merged.specifications ?? {}) };
+    }
+
+    // Normalize and explicitly preserve critical market metadata from the listing when present.
+    // Price: prefer explicit listing price variants when available.
+    const priceCandidates = [
+      'price',
+      'listingPrice',
+      'offerPrice',
+      'purchasePrice',
+      'amount',
+      'marketPrice',
+    ];
+    for (const p of priceCandidates) {
+      if (vehicle && vehicle[p] !== undefined && vehicle[p] !== null && String(vehicle[p]).trim() !== '') {
+        merged.price = vehicle[p];
+        break;
+      }
+    }
+
+    // Condition (explicit numeric or percentage)
+    if (vehicle && (vehicle.condition !== undefined && vehicle.condition !== null)) {
+      merged.condition = vehicle.condition;
+    }
+
+    // Year resolution (explicit listing year preferred)
+    const listedYear =
+      vehicle?.year ??
+      vehicle?.productionYear ??
+      vehicle?.specifications?.year ??
+      vehicle?.specifications?.productionYear;
+    if (listedYear !== undefined && listedYear !== null) merged.year = listedYear;
+
+    // Kilometres / mileage resolution (preserve listing mileage when present)
+    const listedKm =
+      vehicle?.kilometers ??
+      vehicle?.km ??
+      vehicle?.mileage ??
+      vehicle?.specifications?.kilometers ??
+      vehicle?.specifications?.mileage;
+    if (listedKm !== undefined && listedKm !== null) {
+      // Keep both common names to maximize downstream compatibility
+      merged.kilometers = listedKm;
+      merged.km = listedKm;
+      merged.mileage = listedKm;
+    }
+
+    // Availability / deliveryDays preservation
+    if (vehicle && (vehicle.availability !== undefined && vehicle.availability !== null)) {
+      merged.availability = vehicle.availability;
+    }
+    if (vehicle && (vehicle.deliveryDays !== undefined && vehicle.deliveryDays !== null)) {
+      merged.deliveryDays = vehicle.deliveryDays;
+    }
+
+    // Ensure marketEntry is preserved (original listing snapshot)
+    merged.marketEntry = JSON.parse(JSON.stringify(vehicle?.marketEntry ?? vehicle ?? {}));
+
+    // Final cloned object used by the modal
+    const cloned = merged;
 
     // Resolve some normalized fields to ensure modal displays consistent keys
     const resolveField = (keyCandidates: string[] | string) => {

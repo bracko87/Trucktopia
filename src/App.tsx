@@ -36,6 +36,7 @@ import MarketRedirectListener from './components/MarketRedirectListener';
 import TrailerNormalizer from './components/fleet/TrailerNormalizer';
 import HideTrailerFleetHeader from './components/fleet/HideTrailerFleetHeader';
 import HideTrailerPackageIconBox from './components/fleet/HideTrailerPackageIconBox';
+// CompanyLevelEngine removed per request
 import ForceHidePackageIconBox from './components/fleet/ForceHidePackageIconBox';
 import IncomingDeliveryFinalizer from './components/fleet/IncomingDeliveryFinalizer';
 import ForceInjectTruck from './components/admin/ForceInjectTruck';
@@ -43,6 +44,9 @@ import ManifestSynchronizer from './components/ManifestSynchronizer';
 
 // Bootstrap: ensure canonical in-game time seeded before any background engines mount
 import GameClockBootstrap from './components/Boot/GameClockBootstrap';
+
+// New: Fleet components popup listener (captures inline "More Details" clicks on Fleet pages)
+import FleetComponentsPopupListener from './components/fleet/FleetComponentsPopupListener';
 
 // New Infrastructure page
 import HubsSynchronizer from './components/infrastructure/HubsSynchronizer';
@@ -59,11 +63,10 @@ import './data/trailer-availability';
 /* Side-effect import: remove a small inline Fire (test) button that can appear in certain spots.
    This module runs DOM-safe logic to remove the button without altering layout. */
 import './data/remove-inline-fire-test-button';
-/* Side-effect import: remove a small inline Fire (test) button that can appear in certain spots.
-   This module runs DOM-safe logic to remove the button without altering layout. */
 /* Side-effect import: runtime DOM patchers used to perform safe text/image replacements requested by the user.
    These modules only update text content or image src as visual-only fixes and do not change layout or styles. */
 import './components/StaffImageReplacer';
+
 import './components/StaffTextReplacer';
 import './components/PriceTextReplacer';
 import './data/remove-inline-fire-test-button';
@@ -183,6 +186,9 @@ function App() {
 
             {/* Company persistence sync: ensure in-memory company changes are persisted to localStorage */}
             <CompanyPersistenceSync />
+
+            {/* Fleet components popup listener: intercepts "More Details" clicks on Fleet pages and opens the components-only modal */}
+            <FleetComponentsPopupListener />
 
             <Routes>
               <Route path="/" element={<Home />} />

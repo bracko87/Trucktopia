@@ -1,0 +1,8652 @@
+{
+  "generatedAt": "2025-12-10T10:28:29.675Z",
+  "repoRoot": "C:\\Users\\Aleks\\Desktop\\Trucktopia\\Test",
+  "scannedFiles": 388,
+  "matchedFiles": 346,
+  "heavyFiles": 8,
+  "files": [
+    {
+      "filePath": "api\\migrate.ts",
+      "sizeBytes": 4172,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "docs\\truck-driving-engine\\manifest.json",
+      "sizeBytes": 1763,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "truck"
+      ]
+    },
+    {
+      "filePath": "game-rules-engines-manifest.json",
+      "sizeBytes": 21763,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "cities",
+        "city",
+        "distance",
+        "distances",
+        "hub",
+        "seed",
+        "seeders",
+        "worlds",
+        "cargo"
+      ]
+    },
+    {
+      "filePath": "hubs_candidates.json",
+      "sizeBytes": 8691750,
+      "heavy": true,
+      "imports": [],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "cities",
+        "city",
+        "distance",
+        "hub",
+        "hubs",
+        "seed",
+        "cargo"
+      ]
+    },
+    {
+      "filePath": "logs\\replay_log_20251204_165744.json",
+      "sizeBytes": 5014,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "logs\\replay_log_20251204_172130.json",
+      "sizeBytes": 3240,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "logs\\replay_log_20251204_172342.json",
+      "sizeBytes": 4404,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "migration-payload-full.json",
+      "sizeBytes": 4591,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "city",
+        "hub"
+      ]
+    },
+    {
+      "filePath": "migration-payload.json",
+      "sizeBytes": 8002485,
+      "heavy": true,
+      "imports": [],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "cities",
+        "city",
+        "distance",
+        "hub",
+        "hubs",
+        "seed",
+        "cargo"
+      ]
+    },
+    {
+      "filePath": "netlify\\functions\\debug-admin-token.js",
+      "sizeBytes": 3800,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "crypto",
+          "line": 45,
+          "type": "require"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "netlify\\functions\\debug-deploy-check.js",
+      "sizeBytes": 2217,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "crypto",
+          "line": 15,
+          "type": "require"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "netlify\\functions\\health.ts",
+      "sizeBytes": 1604,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "netlify\\functions\\migrate-debug.js",
+      "sizeBytes": 4139,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "crypto",
+          "line": 42,
+          "type": "require"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "netlify\\functions\\migrate.js",
+      "sizeBytes": 17129,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "crypto",
+          "line": 81,
+          "type": "require"
+        },
+        {
+          "specifier": "aws-lambda",
+          "line": 238,
+          "type": "dynamic-import"
+        }
+      ],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "netlify\\functions\\migrate.ts",
+      "sizeBytes": 14652,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "node-fetch",
+          "line": 22,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "netlify\\functions\\normalize-hubs-relay.js",
+      "sizeBytes": 4234,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "node-fetch",
+          "line": 30,
+          "type": "require"
+        }
+      ],
+      "matchedKeywords": [
+        "hub",
+        "hubs"
+      ]
+    },
+    {
+      "filePath": "netlify\\functions\\normalize-hubs.js",
+      "sizeBytes": 8794,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "city",
+        "hub",
+        "hubs",
+        "payload"
+      ]
+    },
+    {
+      "filePath": "netlify\\functions\\reset-password.js",
+      "sizeBytes": 5554,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "node-fetch",
+          "line": 17,
+          "type": "require"
+        }
+      ],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "netlify\\functions\\supabase-stats.js",
+      "sizeBytes": 6215,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "node-fetch",
+          "line": 15,
+          "type": "require"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "package-lock.json",
+      "sizeBytes": 197043,
+      "heavy": true,
+      "imports": [],
+      "matchedKeywords": [
+        "hub"
+      ]
+    },
+    {
+      "filePath": "quick-verify.ts",
+      "sizeBytes": 10231,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "fs/promises",
+          "line": 32,
+          "type": "import"
+        },
+        {
+          "specifier": "path",
+          "line": 33,
+          "type": "import"
+        },
+        {
+          "specifier": "process",
+          "line": 34,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "scripts\\audit-clock-usage.js",
+      "sizeBytes": 7108,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "fs",
+          "line": 25,
+          "type": "require"
+        },
+        {
+          "specifier": "path",
+          "line": 26,
+          "type": "require"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "scripts\\audit-world-imports.ts",
+      "sizeBytes": 9995,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "url",
+          "line": 23,
+          "type": "import"
+        },
+        {
+          "specifier": "path",
+          "line": 24,
+          "type": "import"
+        },
+        {
+          "specifier": "fs/promises",
+          "line": 25,
+          "type": "import"
+        },
+        {
+          "specifier": "fs",
+          "line": 26,
+          "type": "import"
+        },
+        {
+          "specifier": "x",
+          "line": 155,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "cities",
+        "city",
+        "distance",
+        "distances",
+        "hub",
+        "hubs",
+        "seed",
+        "seeders",
+        "manifest",
+        "worlds",
+        "assets/worlds",
+        "cargo",
+        "payload"
+      ]
+    },
+    {
+      "filePath": "scripts\\create-supabase-auth-users.ts",
+      "sizeBytes": 9672,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "fs/promises",
+          "line": 21,
+          "type": "import"
+        },
+        {
+          "specifier": "path",
+          "line": 22,
+          "type": "import"
+        },
+        {
+          "specifier": "process",
+          "line": 23,
+          "type": "import"
+        },
+        {
+          "specifier": "crypto",
+          "line": 24,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "scripts\\enrich-hubs-nominatim.js",
+      "sizeBytes": 6833,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "fs",
+          "line": 26,
+          "type": "require"
+        },
+        {
+          "specifier": "path",
+          "line": 27,
+          "type": "require"
+        }
+      ],
+      "matchedKeywords": [
+        "city",
+        "hub",
+        "hubs"
+      ]
+    },
+    {
+      "filePath": "scripts\\enrich-hubs-nominatim.ts",
+      "sizeBytes": 8477,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "fs",
+          "line": 29,
+          "type": "import"
+        },
+        {
+          "specifier": "path",
+          "line": 30,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city",
+        "hub",
+        "hubs"
+      ]
+    },
+    {
+      "filePath": "scripts\\export-hub-locations-dev.js",
+      "sizeBytes": 14369,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "city",
+        "hub",
+        "hubs",
+        "seed",
+        "payload"
+      ]
+    },
+    {
+      "filePath": "scripts\\export-local-to-migration-payload-v2.ts",
+      "sizeBytes": 9904,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "scripts\\export-local-to-migration-payload.js",
+      "sizeBytes": 2438,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "scripts\\export-local-to-migration-payload.ts",
+      "sizeBytes": 5854,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "scripts\\export-supabase-to-migration-payload.js",
+      "sizeBytes": 4865,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "fs",
+          "line": 24,
+          "type": "require"
+        },
+        {
+          "specifier": "path",
+          "line": 25,
+          "type": "require"
+        }
+      ],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "scripts\\extract-users-from-payload.js",
+      "sizeBytes": 5301,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "fs",
+          "line": 19,
+          "type": "require"
+        },
+        {
+          "specifier": "path",
+          "line": 20,
+          "type": "require"
+        }
+      ],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "scripts\\generate-migrated-users.js",
+      "sizeBytes": 2913,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "fs",
+          "line": 18,
+          "type": "require"
+        },
+        {
+          "specifier": "path",
+          "line": 19,
+          "type": "require"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "scripts\\import-migrated-collections-to-users.ts",
+      "sizeBytes": 16708,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "scripts\\import-migration-payload-to-supabase.js",
+      "sizeBytes": 7417,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "fs",
+          "line": 26,
+          "type": "require"
+        },
+        {
+          "specifier": "path",
+          "line": 27,
+          "type": "require"
+        },
+        {
+          "specifier": "crypto",
+          "line": 28,
+          "type": "require"
+        }
+      ],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "scripts\\inspect-users.js",
+      "sizeBytes": 2044,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "fs",
+          "line": 21,
+          "type": "require"
+        },
+        {
+          "specifier": "path",
+          "line": 22,
+          "type": "require"
+        }
+      ],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "scripts\\inspectPayload.js",
+      "sizeBytes": 8176,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "fs",
+          "line": 23,
+          "type": "require"
+        },
+        {
+          "specifier": "path",
+          "line": 24,
+          "type": "require"
+        },
+        {
+          "specifier": "fs",
+          "line": 189,
+          "type": "require"
+        },
+        {
+          "specifier": "path",
+          "line": 190,
+          "type": "require"
+        }
+      ],
+      "matchedKeywords": [
+        "city",
+        "hub",
+        "hubs",
+        "payload"
+      ]
+    },
+    {
+      "filePath": "scripts\\local-migrate-runner.js",
+      "sizeBytes": 6690,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "path",
+          "line": 24,
+          "type": "require"
+        },
+        {
+          "specifier": "fs",
+          "line": 40,
+          "type": "require"
+        },
+        {
+          "specifier": "path",
+          "line": 41,
+          "type": "require"
+        }
+      ],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "scripts\\local-migrate.js",
+      "sizeBytes": 5753,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "fs",
+          "line": 18,
+          "type": "require"
+        },
+        {
+          "specifier": "path",
+          "line": 19,
+          "type": "require"
+        }
+      ],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "scripts\\local-migrate.ts",
+      "sizeBytes": 6326,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "fs/promises",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "path",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "url",
+          "line": 20,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "scripts\\mark-migrated-users.ts",
+      "sizeBytes": 4566,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "fs/promises",
+          "line": 16,
+          "type": "import"
+        },
+        {
+          "specifier": "path",
+          "line": 17,
+          "type": "import"
+        },
+        {
+          "specifier": "process",
+          "line": 18,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "scripts\\migrate-auth-users.js",
+      "sizeBytes": 8156,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "path",
+          "line": 28,
+          "type": "require"
+        },
+        {
+          "specifier": "fs",
+          "line": 46,
+          "type": "require"
+        },
+        {
+          "specifier": "path",
+          "line": 47,
+          "type": "require"
+        }
+      ],
+      "matchedKeywords": [
+        "hub",
+        "payload"
+      ]
+    },
+    {
+      "filePath": "scripts\\migration-payload-full.json",
+      "sizeBytes": 4438,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "city",
+        "hub"
+      ]
+    },
+    {
+      "filePath": "scripts\\migration-payload.json",
+      "sizeBytes": 348,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "scripts\\migrationExport.js",
+      "sizeBytes": 8961,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "scripts\\preview-migration.js",
+      "sizeBytes": 3404,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "fs",
+          "line": 19,
+          "type": "require"
+        },
+        {
+          "specifier": "path",
+          "line": 20,
+          "type": "require"
+        }
+      ],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "scripts\\quick-verify.ts",
+      "sizeBytes": 11213,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "fs/promises",
+          "line": 33,
+          "type": "import"
+        },
+        {
+          "specifier": "path",
+          "line": 34,
+          "type": "import"
+        },
+        {
+          "specifier": "process",
+          "line": 35,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "scripts\\run-migrate-insert-test.js",
+      "sizeBytes": 2154,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "path",
+          "line": 12,
+          "type": "require"
+        }
+      ],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "scripts\\run-migrate-real.js",
+      "sizeBytes": 3672,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "fs",
+          "line": 21,
+          "type": "require"
+        },
+        {
+          "specifier": "path",
+          "line": 22,
+          "type": "require"
+        }
+      ],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "scripts\\run-migrate-test.js",
+      "sizeBytes": 4533,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "path",
+          "line": 22,
+          "type": "require"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "scripts\\send-migration.ts",
+      "sizeBytes": 4002,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "fs",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "path",
+          "line": 19,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "scripts\\static-serve.js",
+      "sizeBytes": 3432,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "http",
+          "line": 19,
+          "type": "require"
+        },
+        {
+          "specifier": "fs",
+          "line": 20,
+          "type": "require"
+        },
+        {
+          "specifier": "path",
+          "line": 21,
+          "type": "require"
+        },
+        {
+          "specifier": "url",
+          "line": 22,
+          "type": "require"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "scripts\\supabase-upsert-game-rules-engines.js",
+      "sizeBytes": 5922,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "fs",
+          "line": 25,
+          "type": "require"
+        },
+        {
+          "specifier": "path",
+          "line": 26,
+          "type": "require"
+        }
+      ],
+      "matchedKeywords": [
+        "manifest"
+      ]
+    },
+    {
+      "filePath": "scripts\\upload-by-collection.js",
+      "sizeBytes": 3356,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "fs/promises",
+          "line": 15,
+          "type": "import"
+        },
+        {
+          "specifier": "path",
+          "line": 16,
+          "type": "import"
+        },
+        {
+          "specifier": "url",
+          "line": 17,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "server\\migrate-server.ts",
+      "sizeBytes": 2562,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\App.tsx",
+      "sizeBytes": 10871,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "react-router",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "./contexts/GameContext",
+          "line": 20,
+          "type": "import"
+        },
+        {
+          "specifier": "./contexts/JobMarketContext",
+          "line": 21,
+          "type": "import"
+        },
+        {
+          "specifier": "./components/layout/Layout",
+          "line": 22,
+          "type": "import"
+        },
+        {
+          "specifier": "./components/Debug/ExposeGameState",
+          "line": 23,
+          "type": "import"
+        },
+        {
+          "specifier": "./components/staff/MechanicSkillAssigner",
+          "line": 25,
+          "type": "import"
+        },
+        {
+          "specifier": "./components/staff/ClearPromotedSkills",
+          "line": 26,
+          "type": "import"
+        },
+        {
+          "specifier": "./components/staff/StaffIdAssigner",
+          "line": 27,
+          "type": "import"
+        },
+        {
+          "specifier": "./components/staff/ManagerSkillAssigner",
+          "line": 28,
+          "type": "import"
+        },
+        {
+          "specifier": "./components/JobSanitizer",
+          "line": 29,
+          "type": "import"
+        },
+        {
+          "specifier": "./components/RemoveSpecs",
+          "line": 30,
+          "type": "import"
+        },
+        {
+          "specifier": "./components/RemoveAnnouncement",
+          "line": 31,
+          "type": "import"
+        },
+        {
+          "specifier": "./components/MarketRedirectListener",
+          "line": 33,
+          "type": "import"
+        },
+        {
+          "specifier": "./components/fleet/TrailerNormalizer",
+          "line": 36,
+          "type": "import"
+        },
+        {
+          "specifier": "./components/fleet/HideTrailerFleetHeader",
+          "line": 37,
+          "type": "import"
+        },
+        {
+          "specifier": "./components/fleet/HideTrailerPackageIconBox",
+          "line": 38,
+          "type": "import"
+        },
+        {
+          "specifier": "./components/fleet/ForceHidePackageIconBox",
+          "line": 40,
+          "type": "import"
+        },
+        {
+          "specifier": "./components/fleet/IncomingDeliveryFinalizer",
+          "line": 41,
+          "type": "import"
+        },
+        {
+          "specifier": "./components/admin/ForceInjectTruck",
+          "line": 42,
+          "type": "import"
+        },
+        {
+          "specifier": "./components/ManifestSynchronizer",
+          "line": 43,
+          "type": "import"
+        },
+        {
+          "specifier": "./components/Boot/GameClockBootstrap",
+          "line": 46,
+          "type": "import"
+        },
+        {
+          "specifier": "./components/infrastructure/HubsSynchronizer",
+          "line": 49,
+          "type": "import"
+        },
+        {
+          "specifier": "./components/infrastructure/HubConstructionFinalizer",
+          "line": 50,
+          "type": "import"
+        },
+        {
+          "specifier": "./components/admin/AdminForceMainHubReset",
+          "line": 51,
+          "type": "import"
+        },
+        {
+          "specifier": "./components/admin/GrantFundsToAllUsers",
+          "line": 52,
+          "type": "import"
+        },
+        {
+          "specifier": "./components/admin/ForceGrantFundsToUser",
+          "line": 53,
+          "type": "import"
+        },
+        {
+          "specifier": "./data/game-rules-engines",
+          "line": 55,
+          "type": "import"
+        },
+        {
+          "specifier": "./data/trailer-cleanup",
+          "line": 57,
+          "type": "import"
+        },
+        {
+          "specifier": "./data/trailer-additions",
+          "line": 58,
+          "type": "import"
+        },
+        {
+          "specifier": "./data/trailer-availability",
+          "line": 59,
+          "type": "import"
+        },
+        {
+          "specifier": "./data/remove-inline-fire-test-button",
+          "line": 62,
+          "type": "import"
+        },
+        {
+          "specifier": "./components/StaffImageReplacer",
+          "line": 67,
+          "type": "import"
+        },
+        {
+          "specifier": "./components/StaffTextReplacer",
+          "line": 69,
+          "type": "import"
+        },
+        {
+          "specifier": "./components/PriceTextReplacer",
+          "line": 70,
+          "type": "import"
+        },
+        {
+          "specifier": "./data/remove-inline-fire-test-button",
+          "line": 71,
+          "type": "import"
+        },
+        {
+          "specifier": "./pages/Home",
+          "line": 74,
+          "type": "import"
+        },
+        {
+          "specifier": "./pages/Login",
+          "line": 75,
+          "type": "import"
+        },
+        {
+          "specifier": "./pages/Registration",
+          "line": 76,
+          "type": "import"
+        },
+        {
+          "specifier": "./pages/CreateCompany",
+          "line": 77,
+          "type": "import"
+        },
+        {
+          "specifier": "./pages/Dashboard",
+          "line": 78,
+          "type": "import"
+        },
+        {
+          "specifier": "./pages/Garage",
+          "line": 79,
+          "type": "import"
+        },
+        {
+          "specifier": "./pages/Staff",
+          "line": 80,
+          "type": "import"
+        },
+        {
+          "specifier": "./pages/Market",
+          "line": 81,
+          "type": "import"
+        },
+        {
+          "specifier": "./pages/Jobs",
+          "line": 82,
+          "type": "import"
+        },
+        {
+          "specifier": "./pages/Finances",
+          "line": 83,
+          "type": "import"
+        },
+        {
+          "specifier": "./pages/Map",
+          "line": 84,
+          "type": "import"
+        },
+        {
+          "specifier": "./pages/Trucks",
+          "line": 85,
+          "type": "import"
+        },
+        {
+          "specifier": "./pages/Trailers",
+          "line": 86,
+          "type": "import"
+        },
+        {
+          "specifier": "./pages/VehicleMarket",
+          "line": 87,
+          "type": "import"
+        },
+        {
+          "specifier": "./pages/JobCenter",
+          "line": 88,
+          "type": "import"
+        },
+        {
+          "specifier": "./pages/Logout",
+          "line": 89,
+          "type": "import"
+        },
+        {
+          "specifier": "./pages/ResetPassword",
+          "line": 90,
+          "type": "import"
+        },
+        {
+          "specifier": "./pages/StorageManagement",
+          "line": 91,
+          "type": "import"
+        },
+        {
+          "specifier": "./pages/AdminDashboard",
+          "line": 92,
+          "type": "import"
+        },
+        {
+          "specifier": "./pages/UserManagement",
+          "line": 93,
+          "type": "import"
+        },
+        {
+          "specifier": "./pages/TestDistance",
+          "line": 94,
+          "type": "import"
+        },
+        {
+          "specifier": "./pages/Settings",
+          "line": 95,
+          "type": "import"
+        },
+        {
+          "specifier": "./pages/UserSettings",
+          "line": 96,
+          "type": "import"
+        },
+        {
+          "specifier": "./pages/GameRulesEngines",
+          "line": 97,
+          "type": "import"
+        },
+        {
+          "specifier": "./pages/FreightJobDatabase",
+          "line": 98,
+          "type": "import"
+        },
+        {
+          "specifier": "./pages/FleetControl",
+          "line": 99,
+          "type": "import"
+        },
+        {
+          "specifier": "./pages/ContractJobs",
+          "line": 100,
+          "type": "import"
+        },
+        {
+          "specifier": "./pages/CargoTrailerCompatibility",
+          "line": 101,
+          "type": "import"
+        },
+        {
+          "specifier": "./pages/Migration",
+          "line": 104,
+          "type": "import"
+        },
+        {
+          "specifier": "./pages/Infrastructure",
+          "line": 107,
+          "type": "import"
+        },
+        {
+          "specifier": "./pages/MigrationTasks",
+          "line": 108,
+          "type": "import"
+        },
+        {
+          "specifier": "./engines/UsedTruckGenerator",
+          "line": 111,
+          "type": "import"
+        },
+        {
+          "specifier": "./components/Boot/CompanyPersistenceSync",
+          "line": 114,
+          "type": "import"
+        },
+        {
+          "specifier": "./components/StaffFiredListener",
+          "line": 115,
+          "type": "import"
+        },
+        {
+          "specifier": "./components/RawJsonReplacer",
+          "line": 132,
+          "type": "dynamic-import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "distance",
+        "hub",
+        "hubs",
+        "seed",
+        "manifest",
+        "cargo"
+      ]
+    },
+    {
+      "filePath": "src\\components\\admin\\AdminForceMainHubReset.tsx",
+      "sizeBytes": 9800,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 17,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "../../data/hubLevels",
+          "line": 19,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "hub",
+        "hubs"
+      ]
+    },
+    {
+      "filePath": "src\\components\\admin\\AdminRefreshButton.tsx",
+      "sizeBytes": 2056,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 13,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 14,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 15,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\admin\\CronCard.tsx",
+      "sizeBytes": 2636,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 10,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 11,
+          "type": "import"
+        },
+        {
+          "specifier": "../../data/game-rules-engines",
+          "line": 12,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\admin\\DataImporter.tsx",
+      "sizeBytes": 5529,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 6,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 7,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\admin\\EngineCard.tsx",
+      "sizeBytes": 2660,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 10,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 11,
+          "type": "import"
+        },
+        {
+          "specifier": "../../data/game-rules-engines",
+          "line": 12,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "manifest"
+      ]
+    },
+    {
+      "filePath": "src\\components\\admin\\ForceGrantFundsToUser.tsx",
+      "sizeBytes": 5363,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 18,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "hub"
+      ]
+    },
+    {
+      "filePath": "src\\components\\admin\\ForceInjectTruck.tsx",
+      "sizeBytes": 6301,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 16,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 17,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\admin\\FreightJobDatabase.tsx",
+      "sizeBytes": 26279,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 7,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/JobMarketContext",
+          "line": 8,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 9,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 10,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trailer",
+        "cities",
+        "city",
+        "distance",
+        "cargo"
+      ]
+    },
+    {
+      "filePath": "src\\components\\admin\\GrantFundsToAllUsers.tsx",
+      "sizeBytes": 5166,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 18,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\admin\\GrantFundsToUser.tsx",
+      "sizeBytes": 5525,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 20,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "hub"
+      ]
+    },
+    {
+      "filePath": "src\\components\\admin\\ManifestTotals.tsx",
+      "sizeBytes": 2301,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 13,
+          "type": "import"
+        },
+        {
+          "specifier": "../../data/game-rules-engines",
+          "line": 14,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "manifest"
+      ]
+    },
+    {
+      "filePath": "src\\components\\admin\\MigrationItem.tsx",
+      "sizeBytes": 1546,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 7,
+          "type": "import"
+        },
+        {
+          "specifier": "../../components/ui",
+          "line": 8,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 9,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\admin\\MigrationModal.tsx",
+      "sizeBytes": 1201,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 7,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 8,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\admin\\MigrationPanel.tsx",
+      "sizeBytes": 11229,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 16,
+          "type": "import"
+        },
+        {
+          "specifier": "./MigrationItem",
+          "line": 17,
+          "type": "import"
+        },
+        {
+          "specifier": "./MigrationModal",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "../../hooks/useMigration",
+          "line": 20,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\components\\admin\\MigrationTaskDetailsModal.tsx",
+      "sizeBytes": 2492,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 12,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 13,
+          "type": "import"
+        },
+        {
+          "specifier": "./MigrationTaskForm",
+          "line": 15,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\admin\\MigrationTaskForm.tsx",
+      "sizeBytes": 3031,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 12,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 13,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck"
+      ]
+    },
+    {
+      "filePath": "src\\components\\admin\\MigrationTaskList.tsx",
+      "sizeBytes": 2100,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 11,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 12,
+          "type": "import"
+        },
+        {
+          "specifier": "./MigrationTaskForm",
+          "line": 13,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\admin\\MigrationTodoCard.tsx",
+      "sizeBytes": 2331,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 12,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 13,
+          "type": "import"
+        },
+        {
+          "specifier": "react-router",
+          "line": 14,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\admin\\RemoteStats.tsx",
+      "sizeBytes": 8566,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 14,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 15,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\components\\admin\\RuleCard.tsx",
+      "sizeBytes": 2849,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 11,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 12,
+          "type": "import"
+        },
+        {
+          "specifier": "../../data/game-rules-engines",
+          "line": 13,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\admin\\StaffRegenerateCard.tsx",
+      "sizeBytes": 5533,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 6,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 7,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\admin\\UsedTruckGeneratorCard.tsx",
+      "sizeBytes": 4187,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 10,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 11,
+          "type": "import"
+        },
+        {
+          "specifier": "../../engines/UsedTruckGenerator",
+          "line": 12,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\Boot\\CompanyPersistenceSync.tsx",
+      "sizeBytes": 5971,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 20,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\Boot\\GameClockBootstrap.tsx",
+      "sizeBytes": 6095,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 17,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/gameClock",
+          "line": 18,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "seed",
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\components\\Boot\\TrainingReconciler.tsx",
+      "sizeBytes": 5705,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 20,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/gameClock",
+          "line": 21,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/gameTime",
+          "line": 22,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/skillPersistence",
+          "line": 23,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\cargo\\CargoTrailerMatrix.tsx",
+      "sizeBytes": 11972,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 6,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 7,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trailer",
+        "trailers",
+        "city",
+        "cargo"
+      ]
+    },
+    {
+      "filePath": "src\\components\\common\\TechnicalSpecs.tsx",
+      "sizeBytes": 6373,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 17,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/specsFetcher",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/specsFetcher",
+          "line": 20,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trailer",
+        "city",
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\components\\Debug\\ExposeGameState.tsx",
+      "sizeBytes": 2211,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 13,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 14,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers"
+      ]
+    },
+    {
+      "filePath": "src\\components\\Debug\\GameTimeBadge.tsx",
+      "sizeBytes": 2444,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 13,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 14,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/gameClock",
+          "line": 15,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\Debug\\GameTimeController.tsx",
+      "sizeBytes": 8794,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 16,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 17,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/gameTime",
+          "line": 29,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\Debug\\ResetFlowDebugger.tsx",
+      "sizeBytes": 3753,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 14,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\Debug\\RuntimeSpecLocator.tsx",
+      "sizeBytes": 9324,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 15,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\EngineStarter.tsx",
+      "sizeBytes": 1005,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 9,
+          "type": "import"
+        },
+        {
+          "specifier": "../engines/driverEngine",
+          "line": 10,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\ErrorBoundary.tsx",
+      "sizeBytes": 2387,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 14,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\fleet\\FinalizeIncomingDeliveries.tsx",
+      "sizeBytes": 5223,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 15,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 16,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/incomingDeliveryUtils",
+          "line": 17,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\components\\fleet\\FleetTabs.tsx",
+      "sizeBytes": 3481,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 13,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 14,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers"
+      ]
+    },
+    {
+      "filePath": "src\\components\\fleet\\ForceHidePackageIconBox.tsx",
+      "sizeBytes": 5654,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 16,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "trailer"
+      ]
+    },
+    {
+      "filePath": "src\\components\\fleet\\GarageHeader.tsx",
+      "sizeBytes": 2377,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 16,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 17,
+          "type": "import"
+        },
+        {
+          "specifier": "react-router",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 19,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers"
+      ]
+    },
+    {
+      "filePath": "src\\components\\fleet\\HideTrailerFleetHeader.tsx",
+      "sizeBytes": 6400,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 11,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "trailer",
+        "trailers"
+      ]
+    },
+    {
+      "filePath": "src\\components\\fleet\\HideTrailerPackageIconBox.tsx",
+      "sizeBytes": 5830,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 16,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "trailer",
+        "trailers"
+      ]
+    },
+    {
+      "filePath": "src\\components\\fleet\\IncomingDeliveriesPanel.tsx",
+      "sizeBytes": 1585,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 15,
+          "type": "import"
+        },
+        {
+          "specifier": "../../types/incomingDelivery",
+          "line": 16,
+          "type": "import"
+        },
+        {
+          "specifier": "./IncomingDeliveryCard",
+          "line": 17,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\fleet\\IncomingDeliveryCard.tsx",
+      "sizeBytes": 3015,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 11,
+          "type": "import"
+        },
+        {
+          "specifier": "../../types/incomingDelivery",
+          "line": 12,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 13,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trailer"
+      ]
+    },
+    {
+      "filePath": "src\\components\\fleet\\IncomingDeliveryFinalizer.tsx",
+      "sizeBytes": 16867,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 21,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 22,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/incomingDeliveryUtils",
+          "line": 23,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 24,
+          "type": "import"
+        },
+        {
+          "specifier": "../notifications/Toaster",
+          "line": 25,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "manifest",
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\components\\fleet\\PurchasedDeliveriesBox.tsx",
+      "sizeBytes": 31106,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 20,
+          "type": "import"
+        },
+        {
+          "specifier": "../market/TruckCard",
+          "line": 21,
+          "type": "import"
+        },
+        {
+          "specifier": "./TrailerCard",
+          "line": 22,
+          "type": "import"
+        },
+        {
+          "specifier": "../market/VehicleSpecsSelector",
+          "line": 23,
+          "type": "import"
+        },
+        {
+          "specifier": "../trailer/TrailerTechnicalSpecs",
+          "line": 24,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/vehicleTypeUtils",
+          "line": 25,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "city",
+        "hub",
+        "cargo"
+      ]
+    },
+    {
+      "filePath": "src\\components\\fleet\\PurchasedItemCard.tsx",
+      "sizeBytes": 3617,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 8,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 9,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trailer"
+      ]
+    },
+    {
+      "filePath": "src\\components\\fleet\\SearchFilterBar.tsx",
+      "sizeBytes": 3857,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 11,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 12,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\fleet\\SectionHeader.tsx",
+      "sizeBytes": 2935,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 16,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "trailer",
+        "trailers"
+      ]
+    },
+    {
+      "filePath": "src\\components\\fleet\\SpecsModal.tsx",
+      "sizeBytes": 12236,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 17,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "../market/VehicleSpecsSelector",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "../../data/trucks",
+          "line": 20,
+          "type": "import"
+        },
+        {
+          "specifier": "../trailer/TrailerTechnicalSpecs",
+          "line": 21,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\components\\fleet\\TestDeliveryInjector.tsx",
+      "sizeBytes": 3527,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 15,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 16,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks"
+      ]
+    },
+    {
+      "filePath": "src\\components\\fleet\\TrailerCard.tsx",
+      "sizeBytes": 16670,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 17,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "./SpecsModal",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/vehicleAvailability",
+          "line": 20,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "city",
+        "hub",
+        "cargo",
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\components\\fleet\\TrailerNormalizer.tsx",
+      "sizeBytes": 8620,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/vehicleTypeUtils",
+          "line": 20,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers"
+      ]
+    },
+    {
+      "filePath": "src\\components\\fleet\\TrailerSection.tsx",
+      "sizeBytes": 12359,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "./SectionHeader",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "./TrailerCard",
+          "line": 20,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 21,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 22,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/vehicleTypeUtils",
+          "line": 23,
+          "type": "import"
+        },
+        {
+          "specifier": "react-router",
+          "line": 24,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "city",
+        "hub"
+      ]
+    },
+    {
+      "filePath": "src\\components\\fleet\\TruckCard.tsx",
+      "sizeBytes": 33280,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 17,
+          "type": "import"
+        },
+        {
+          "specifier": "./SpecsModal",
+          "line": 31,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/vehicleAvailability",
+          "line": 32,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "city",
+        "hub",
+        "cargo",
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\components\\fleet\\TruckSection.tsx",
+      "sizeBytes": 6275,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 17,
+          "type": "import"
+        },
+        {
+          "specifier": "react-router",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "./SectionHeader",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "./TruckCard",
+          "line": 20,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 21,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 22,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/vehicleTypeUtils",
+          "line": 23,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\GoogleMapsLoader.tsx",
+      "sizeBytes": 2004,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 5,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\infrastructure\\BuildHubBox.tsx",
+      "sizeBytes": 7388,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 13,
+          "type": "import"
+        },
+        {
+          "specifier": "./CountrySelect",
+          "line": 14,
+          "type": "import"
+        },
+        {
+          "specifier": "../../data/cities",
+          "line": 15,
+          "type": "import"
+        },
+        {
+          "specifier": "./BuildHubModal",
+          "line": 16,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/pendingTasks",
+          "line": 17,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 19,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "cities",
+        "city",
+        "hub",
+        "hubs",
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\components\\infrastructure\\BuildHubModal.tsx",
+      "sizeBytes": 7892,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 12,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/gameClock",
+          "line": 13,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city",
+        "hub",
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\components\\infrastructure\\CountrySelect.tsx",
+      "sizeBytes": 6928,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "../../data/cities",
+          "line": 20,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "cities"
+      ]
+    },
+    {
+      "filePath": "src\\components\\infrastructure\\FacilitiesPanel.tsx",
+      "sizeBytes": 3878,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 20,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 21,
+          "type": "import"
+        },
+        {
+          "specifier": "../../data/hubLevels",
+          "line": 22,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city",
+        "hub",
+        "hubs"
+      ]
+    },
+    {
+      "filePath": "src\\components\\infrastructure\\HubConstructionFinalizer.tsx",
+      "sizeBytes": 3725,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 13,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/gameClock",
+          "line": 14,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/pendingTasks",
+          "line": 15,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 16,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city",
+        "hub",
+        "hubs"
+      ]
+    },
+    {
+      "filePath": "src\\components\\infrastructure\\HubDetailsModal.tsx",
+      "sizeBytes": 15981,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 22,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 23,
+          "type": "import"
+        },
+        {
+          "specifier": "../../data/hubLevels",
+          "line": 24,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 25,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city",
+        "hub",
+        "hubs"
+      ]
+    },
+    {
+      "filePath": "src\\components\\infrastructure\\HubsDowngradeFix.tsx",
+      "sizeBytes": 14949,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 20,
+          "type": "import"
+        },
+        {
+          "specifier": "../../data/hubLevels",
+          "line": 21,
+          "type": "import"
+        },
+        {
+          "specifier": "../ui/PortalModal",
+          "line": 22,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city",
+        "hub",
+        "hubs"
+      ]
+    },
+    {
+      "filePath": "src\\components\\infrastructure\\HubsPanel.tsx",
+      "sizeBytes": 10950,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 23,
+          "type": "import"
+        },
+        {
+          "specifier": "react-router",
+          "line": 24,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 25,
+          "type": "import"
+        },
+        {
+          "specifier": "./HubDetailsModal",
+          "line": 26,
+          "type": "import"
+        },
+        {
+          "specifier": "../../data/hubLevels",
+          "line": 27,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/pendingTasks",
+          "line": 28,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city",
+        "hub",
+        "hubs"
+      ]
+    },
+    {
+      "filePath": "src\\components\\infrastructure\\HubsSynchronizer.tsx",
+      "sizeBytes": 3960,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 19,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city",
+        "hub",
+        "hubs"
+      ]
+    },
+    {
+      "filePath": "src\\components\\infrastructure\\InfrastructureTabs.tsx",
+      "sizeBytes": 3121,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 12,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 13,
+          "type": "import"
+        },
+        {
+          "specifier": "../ErrorBoundary",
+          "line": 14,
+          "type": "import"
+        },
+        {
+          "specifier": "./HubsPanel",
+          "line": 16,
+          "type": "dynamic-import"
+        },
+        {
+          "specifier": "./FacilitiesPanel",
+          "line": 17,
+          "type": "dynamic-import"
+        }
+      ],
+      "matchedKeywords": [
+        "hub",
+        "hubs"
+      ]
+    },
+    {
+      "filePath": "src\\components\\infrastructure\\PendingTasksPanel.tsx",
+      "sizeBytes": 7890,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 15,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/pendingTasks",
+          "line": 16,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/gameClock",
+          "line": 17,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city",
+        "hub"
+      ]
+    },
+    {
+      "filePath": "src\\components\\jobs\\AcceptedJobCompact.tsx",
+      "sizeBytes": 6115,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 12,
+          "type": "import"
+        },
+        {
+          "specifier": "../../components/jobs/LoadInfo",
+          "line": 13,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 14,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "city",
+        "cargo"
+      ]
+    },
+    {
+      "filePath": "src\\components\\jobs\\JobCard.tsx",
+      "sizeBytes": 19066,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "../../types/game",
+          "line": 20,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 21,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 22,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/cargoTrailerCompatibility",
+          "line": 23,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "distance",
+        "cargo"
+      ]
+    },
+    {
+      "filePath": "src\\components\\jobs\\JobList.tsx",
+      "sizeBytes": 1325,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 11,
+          "type": "import"
+        },
+        {
+          "specifier": "./JobCard",
+          "line": 12,
+          "type": "import"
+        },
+        {
+          "specifier": "../../types/game",
+          "line": 13,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck"
+      ]
+    },
+    {
+      "filePath": "src\\components\\jobs\\LoadInfo.tsx",
+      "sizeBytes": 6998,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 20,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\jobs\\StaffStatusOverview.tsx",
+      "sizeBytes": 5053,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 11,
+          "type": "import"
+        },
+        {
+          "specifier": "../../types/game",
+          "line": 12,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 13,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\JobSanitizer.tsx",
+      "sizeBytes": 2523,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 15,
+          "type": "import"
+        },
+        {
+          "specifier": "../contexts/GameContext",
+          "line": 16,
+          "type": "import"
+        },
+        {
+          "specifier": "../utils/jobNormalization",
+          "line": 17,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\layout\\Footer.tsx",
+      "sizeBytes": 3465,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 12,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 13,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 14,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/gameClock",
+          "line": 15,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck"
+      ]
+    },
+    {
+      "filePath": "src\\components\\layout\\ForumContent.tsx",
+      "sizeBytes": 5244,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 5,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 6,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\layout\\Header.tsx",
+      "sizeBytes": 10394,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 20,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 21,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 22,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "city",
+        "hub"
+      ]
+    },
+    {
+      "filePath": "src\\components\\layout\\Layout.tsx",
+      "sizeBytes": 990,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 5,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 6,
+          "type": "import"
+        },
+        {
+          "specifier": "./Header",
+          "line": 7,
+          "type": "import"
+        },
+        {
+          "specifier": "./Sidebar",
+          "line": 8,
+          "type": "import"
+        },
+        {
+          "specifier": "./Footer",
+          "line": 9,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\layout\\Sidebar.tsx",
+      "sizeBytes": 9281,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 16,
+          "type": "import"
+        },
+        {
+          "specifier": "react-router",
+          "line": 17,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "../../types/game",
+          "line": 34,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "hub",
+        "hubs"
+      ]
+    },
+    {
+      "filePath": "src\\components\\layout\\UserDropdown.tsx",
+      "sizeBytes": 19904,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 5,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 17,
+          "type": "import"
+        },
+        {
+          "specifier": "./ForumContent",
+          "line": 18,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\levels\\LevelBadge.tsx",
+      "sizeBytes": 1207,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 14,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\levels\\LevelBox.tsx",
+      "sizeBytes": 1021,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 15,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\ManifestSynchronizer.tsx",
+      "sizeBytes": 4776,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 16,
+          "type": "import"
+        },
+        {
+          "specifier": "../data/game-rules-engines",
+          "line": 17,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "manifest",
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\components\\market\\BigTruckSpecsBox.tsx",
+      "sizeBytes": 10793,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 17,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 18,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "city",
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\components\\market\\ConfirmPurchaseHubInfo.tsx",
+      "sizeBytes": 1642,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 17,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city",
+        "hub"
+      ]
+    },
+    {
+      "filePath": "src\\components\\market\\FreightOfferCard.tsx",
+      "sizeBytes": 16982,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 20,
+          "type": "import"
+        },
+        {
+          "specifier": "../ui/button",
+          "line": 21,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 22,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/countryMapping",
+          "line": 23,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/countryNames",
+          "line": 24,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trailer",
+        "city",
+        "distance",
+        "cargo"
+      ]
+    },
+    {
+      "filePath": "src\\components\\market\\MarketFilters.tsx",
+      "sizeBytes": 19255,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 7,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 8,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/countryMapping",
+          "line": 9,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "cities",
+        "city",
+        "distance",
+        "hub",
+        "cargo"
+      ]
+    },
+    {
+      "filePath": "src\\components\\market\\MarketTabs.tsx",
+      "sizeBytes": 3537,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 17,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 18,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers"
+      ]
+    },
+    {
+      "filePath": "src\\components\\market\\PurchaseButton.tsx",
+      "sizeBytes": 12111,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "./ConfirmPurchaseHubInfo",
+          "line": 20,
+          "type": "import"
+        },
+        {
+          "specifier": "../../engines/hubCapacityEngine",
+          "line": 21,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/selectedHubStorage",
+          "line": 22,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/vehiclePurchaseUtils",
+          "line": 23,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trailer",
+        "city",
+        "hub",
+        "hubs"
+      ]
+    },
+    {
+      "filePath": "src\\components\\market\\SmallTruckSpecsBox.tsx",
+      "sizeBytes": 10094,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 17,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 18,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "city",
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\components\\market\\TruckCard.tsx",
+      "sizeBytes": 6650,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 20,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "city",
+        "cargo"
+      ]
+    },
+    {
+      "filePath": "src\\components\\market\\UsedTruckModal.tsx",
+      "sizeBytes": 5213,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 12,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 13,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/usedTrucksStorage",
+          "line": 14,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 15,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\components\\market\\VehicleSpecsSelector.tsx",
+      "sizeBytes": 5993,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "./BigTruckSpecsBox",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "./SmallTruckSpecsBox",
+          "line": 20,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "city",
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\components\\MarketRedirectListener.tsx",
+      "sizeBytes": 4077,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 15,
+          "type": "import"
+        },
+        {
+          "specifier": "react-router",
+          "line": 16,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks"
+      ]
+    },
+    {
+      "filePath": "src\\components\\migration\\AppwriteMigrationPanel.tsx",
+      "sizeBytes": 8952,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 14,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 15,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\components\\migration\\MigratedUsersPanel.tsx",
+      "sizeBytes": 19125,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 19,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\components\\migration\\MigrationTabs.tsx",
+      "sizeBytes": 1623,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 8,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\migration\\SupabaseMigrationPanel.tsx",
+      "sizeBytes": 8768,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 14,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 15,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\components\\modals\\HireConfirmModal.tsx",
+      "sizeBytes": 10219,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 16,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 17,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\ModalZIndexFix.tsx",
+      "sizeBytes": 2293,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 19,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\notifications\\Toaster.tsx",
+      "sizeBytes": 3885,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 21,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\PriceTextReplacer.tsx",
+      "sizeBytes": 9300,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 21,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\RawJsonReplacer.tsx",
+      "sizeBytes": 12569,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "react-dom/client",
+          "line": 270,
+          "type": "dynamic-import"
+        }
+      ],
+      "matchedKeywords": [
+        "trailer",
+        "trailers",
+        "city",
+        "hub"
+      ]
+    },
+    {
+      "filePath": "src\\components\\RemoveAnnouncement.tsx",
+      "sizeBytes": 2269,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 13,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers"
+      ]
+    },
+    {
+      "filePath": "src\\components\\RemoveSpecs.tsx",
+      "sizeBytes": 6141,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 17,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city",
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\components\\staff\\ActionButton.tsx",
+      "sizeBytes": 1897,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 8,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 9,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\staff\\AllSkillsGrid.tsx",
+      "sizeBytes": 5348,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 16,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 17,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/skillsDatabase",
+          "line": 18,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\staff\\ClearPromotedSkills.tsx",
+      "sizeBytes": 5166,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 20,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\staff\\CompanyBenefitsModal.tsx",
+      "sizeBytes": 5159,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 16,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 17,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\staff\\DispatcherSkillPersister.tsx",
+      "sizeBytes": 6698,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/skillsDatabase",
+          "line": 20,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "seed"
+      ]
+    },
+    {
+      "filePath": "src\\components\\staff\\DriverCompactCard.tsx",
+      "sizeBytes": 27968,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 20,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 21,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 22,
+          "type": "import"
+        },
+        {
+          "specifier": "./StaffActionButtons",
+          "line": 23,
+          "type": "import"
+        },
+        {
+          "specifier": "./SmallSkillCard",
+          "line": 24,
+          "type": "import"
+        },
+        {
+          "specifier": "./RolePanels/PositionBlock",
+          "line": 25,
+          "type": "import"
+        },
+        {
+          "specifier": "./StaffFireConfirmModal",
+          "line": 26,
+          "type": "import"
+        },
+        {
+          "specifier": "sonner",
+          "line": 27,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/inGameTime",
+          "line": 28,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck"
+      ]
+    },
+    {
+      "filePath": "src\\components\\staff\\DriverSkillsGrid.tsx",
+      "sizeBytes": 6230,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 15,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 16,
+          "type": "import"
+        },
+        {
+          "specifier": "../../data/driverSkills",
+          "line": 17,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city",
+        "distance",
+        "cargo"
+      ]
+    },
+    {
+      "filePath": "src\\components\\staff\\ManagerSkillAssigner.tsx",
+      "sizeBytes": 7764,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 17,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/skillPersistence",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/roleSkills",
+          "line": 20,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city",
+        "seed"
+      ]
+    },
+    {
+      "filePath": "src\\components\\staff\\MechanicSkillAssigner.tsx",
+      "sizeBytes": 10196,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 22,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 23,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/skillsDatabase",
+          "line": 24,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/skillPersistence",
+          "line": 25,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city",
+        "seed"
+      ]
+    },
+    {
+      "filePath": "src\\components\\staff\\ProgressBar.tsx",
+      "sizeBytes": 1203,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 8,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\staff\\RolePanels\\DispatcherPanel.tsx",
+      "sizeBytes": 2230,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 8,
+          "type": "import"
+        },
+        {
+          "specifier": "../ProgressBar",
+          "line": 9,
+          "type": "import"
+        },
+        {
+          "specifier": "../ActionButton",
+          "line": 10,
+          "type": "import"
+        },
+        {
+          "specifier": "../types",
+          "line": 11,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\staff\\RolePanels\\DriverPanel.tsx",
+      "sizeBytes": 2805,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 8,
+          "type": "import"
+        },
+        {
+          "specifier": "../StatBlock",
+          "line": 9,
+          "type": "import"
+        },
+        {
+          "specifier": "../ProgressBar",
+          "line": 10,
+          "type": "import"
+        },
+        {
+          "specifier": "../ActionButton",
+          "line": 11,
+          "type": "import"
+        },
+        {
+          "specifier": "../types",
+          "line": 12,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\staff\\RolePanels\\ManagerPanel.tsx",
+      "sizeBytes": 2200,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 8,
+          "type": "import"
+        },
+        {
+          "specifier": "../ProgressBar",
+          "line": 9,
+          "type": "import"
+        },
+        {
+          "specifier": "../ActionButton",
+          "line": 10,
+          "type": "import"
+        },
+        {
+          "specifier": "../types",
+          "line": 11,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\staff\\RolePanels\\MechanicPanel.tsx",
+      "sizeBytes": 2210,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 8,
+          "type": "import"
+        },
+        {
+          "specifier": "../ProgressBar",
+          "line": 9,
+          "type": "import"
+        },
+        {
+          "specifier": "../ActionButton",
+          "line": 10,
+          "type": "import"
+        },
+        {
+          "specifier": "../types",
+          "line": 11,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\staff\\RolePanels\\PositionBlock.tsx",
+      "sizeBytes": 1398,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 9,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\staff\\SkillTrainingModal.tsx",
+      "sizeBytes": 22790,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 20,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 21,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/skillsDatabase",
+          "line": 22,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/skillPersistence",
+          "line": 23,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/inGameTime",
+          "line": 24,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "seed"
+      ]
+    },
+    {
+      "filePath": "src\\components\\staff\\SmallSkillCard.tsx",
+      "sizeBytes": 1718,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 11,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\staff\\StaffActionButtons.tsx",
+      "sizeBytes": 33928,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 21,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 22,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 23,
+          "type": "import"
+        },
+        {
+          "specifier": "./SkillTrainingModal",
+          "line": 24,
+          "type": "import"
+        },
+        {
+          "specifier": "./StopDrivingConfirmModal",
+          "line": 25,
+          "type": "import"
+        },
+        {
+          "specifier": "./StaffFireConfirmModal",
+          "line": 26,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\staff\\StaffConditionEngineStarter.tsx",
+      "sizeBytes": 907,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 8,
+          "type": "import"
+        },
+        {
+          "specifier": "../../engines/staffConditionEngine",
+          "line": 9,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\staff\\StaffFireConfirmModal.tsx",
+      "sizeBytes": 9011,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 15,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\staff\\StaffIdAssigner.tsx",
+      "sizeBytes": 3845,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 19,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\staff\\StaffPanel.tsx",
+      "sizeBytes": 1478,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 9,
+          "type": "import"
+        },
+        {
+          "specifier": "./types",
+          "line": 10,
+          "type": "import"
+        },
+        {
+          "specifier": "./RolePanels/ManagerPanel",
+          "line": 11,
+          "type": "import"
+        },
+        {
+          "specifier": "./RolePanels/DriverPanel",
+          "line": 12,
+          "type": "import"
+        },
+        {
+          "specifier": "./RolePanels/MechanicPanel",
+          "line": 13,
+          "type": "import"
+        },
+        {
+          "specifier": "./RolePanels/DispatcherPanel",
+          "line": 14,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\staff\\StaffSkillsOverview.tsx",
+      "sizeBytes": 2224,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 13,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 14,
+          "type": "import"
+        },
+        {
+          "specifier": "./AllSkillsGrid",
+          "line": 15,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\staff\\StatBlock.tsx",
+      "sizeBytes": 827,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 8,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\staff\\StopDrivingConfirmModal.tsx",
+      "sizeBytes": 3723,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 17,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 18,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\staff\\TrainingProgram.tsx",
+      "sizeBytes": 9494,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 17,
+          "type": "import"
+        },
+        {
+          "specifier": "react-router",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/skillsDatabase",
+          "line": 19,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\StaffFiredListener.tsx",
+      "sizeBytes": 3651,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 23,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\test\\DistanceTest.tsx",
+      "sizeBytes": 9584,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 6,
+          "type": "import"
+        },
+        {
+          "specifier": "../ui/card",
+          "line": 7,
+          "type": "import"
+        },
+        {
+          "specifier": "../ui/badge",
+          "line": 8,
+          "type": "import"
+        },
+        {
+          "specifier": "../ui/button",
+          "line": 9,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/distanceCalculator",
+          "line": 10,
+          "type": "import"
+        },
+        {
+          "specifier": "../../utils/jobGenerator",
+          "line": 11,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "cities",
+        "city",
+        "distance",
+        "distances"
+      ]
+    },
+    {
+      "filePath": "src\\components\\trailer\\TrailerTechnicalSpecs.tsx",
+      "sizeBytes": 5815,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 14,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 15,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "trailer",
+        "trailers",
+        "city",
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\components\\ui\\accordion.tsx",
+      "sizeBytes": 2015,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "@radix-ui/react-accordion",
+          "line": 4,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 5,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 7,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\ui\\alert-dialog.tsx",
+      "sizeBytes": 4433,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "@radix-ui/react-alert-dialog",
+          "line": 4,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 6,
+          "type": "import"
+        },
+        {
+          "specifier": "@/components/ui/button",
+          "line": 7,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\ui\\alert.tsx",
+      "sizeBytes": 1598,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 1,
+          "type": "import"
+        },
+        {
+          "specifier": "class-variance-authority",
+          "line": 2,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 4,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\ui\\aspect-ratio.tsx",
+      "sizeBytes": 154,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "@radix-ui/react-aspect-ratio",
+          "line": 3,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\ui\\avatar.tsx",
+      "sizeBytes": 1419,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "@radix-ui/react-avatar",
+          "line": 4,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 6,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\ui\\badge.tsx",
+      "sizeBytes": 1140,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 1,
+          "type": "import"
+        },
+        {
+          "specifier": "class-variance-authority",
+          "line": 2,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 4,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\ui\\breadcrumb.tsx",
+      "sizeBytes": 2712,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 1,
+          "type": "import"
+        },
+        {
+          "specifier": "@radix-ui/react-slot",
+          "line": 2,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 5,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\ui\\button.tsx",
+      "sizeBytes": 1622,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 1,
+          "type": "import"
+        },
+        {
+          "specifier": "class-variance-authority",
+          "line": 2,
+          "type": "import"
+        },
+        {
+          "specifier": "../../lib/utils",
+          "line": 3,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\ui\\calendar.tsx",
+      "sizeBytes": 2949,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 4,
+          "type": "import"
+        },
+        {
+          "specifier": "react-day-picker",
+          "line": 5,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 7,
+          "type": "import"
+        },
+        {
+          "specifier": "@/components/ui/button",
+          "line": 8,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\ui\\card.tsx",
+      "sizeBytes": 1881,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 1,
+          "type": "import"
+        },
+        {
+          "specifier": "../../lib/utils",
+          "line": 2,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\ui\\carousel.tsx",
+      "sizeBytes": 6224,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 7,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 9,
+          "type": "import"
+        },
+        {
+          "specifier": "@/components/ui/button",
+          "line": 10,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\ui\\chart.tsx",
+      "sizeBytes": 10481,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "recharts",
+          "line": 4,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 6,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\components\\ui\\checkbox.tsx",
+      "sizeBytes": 1026,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "@radix-ui/react-checkbox",
+          "line": 4,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 5,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 7,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\ui\\collapsible.tsx",
+      "sizeBytes": 329,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "@radix-ui/react-collapsible",
+          "line": 3,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\ui\\command.tsx",
+      "sizeBytes": 4887,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "@radix-ui/react-dialog",
+          "line": 4,
+          "type": "import"
+        },
+        {
+          "specifier": "cmdk",
+          "line": 5,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 6,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 8,
+          "type": "import"
+        },
+        {
+          "specifier": "@/components/ui/dialog",
+          "line": 9,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\ui\\context-menu.tsx",
+      "sizeBytes": 7420,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "@radix-ui/react-context-menu",
+          "line": 4,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 5,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 7,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\ui\\dialog.tsx",
+      "sizeBytes": 3849,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "@radix-ui/react-dialog",
+          "line": 4,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 5,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 7,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\ui\\drawer.tsx",
+      "sizeBytes": 3021,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "vaul",
+          "line": 4,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 6,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\ui\\dropdown-menu.tsx",
+      "sizeBytes": 7606,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "@radix-ui/react-dropdown-menu",
+          "line": 4,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 5,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 7,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\ui\\form.tsx",
+      "sizeBytes": 4132,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "@radix-ui/react-label",
+          "line": 4,
+          "type": "import"
+        },
+        {
+          "specifier": "@radix-ui/react-slot",
+          "line": 5,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 15,
+          "type": "import"
+        },
+        {
+          "specifier": "@/components/ui/label",
+          "line": 16,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\ui\\hover-card.tsx",
+      "sizeBytes": 1251,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "@radix-ui/react-hover-card",
+          "line": 4,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 6,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\ui\\input-otp.tsx",
+      "sizeBytes": 2157,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "input-otp",
+          "line": 4,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 5,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 7,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\ui\\input.tsx",
+      "sizeBytes": 815,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 1,
+          "type": "import"
+        },
+        {
+          "specifier": "../../lib/utils",
+          "line": 2,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\ui\\label.tsx",
+      "sizeBytes": 724,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "@radix-ui/react-label",
+          "line": 4,
+          "type": "import"
+        },
+        {
+          "specifier": "class-variance-authority",
+          "line": 5,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 7,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\ui\\menubar.tsx",
+      "sizeBytes": 8622,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "@radix-ui/react-menubar",
+          "line": 4,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 5,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 7,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\ui\\navigation-menu.tsx",
+      "sizeBytes": 5124,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 1,
+          "type": "import"
+        },
+        {
+          "specifier": "@radix-ui/react-navigation-menu",
+          "line": 2,
+          "type": "import"
+        },
+        {
+          "specifier": "class-variance-authority",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 4,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 6,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\ui\\pagination.tsx",
+      "sizeBytes": 2751,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 1,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 2,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 4,
+          "type": "import"
+        },
+        {
+          "specifier": "@/components/ui/button",
+          "line": 5,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\ui\\popover.tsx",
+      "sizeBytes": 1356,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "@radix-ui/react-popover",
+          "line": 4,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 6,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\ui\\PortalModal.tsx",
+      "sizeBytes": 2109,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 14,
+          "type": "import"
+        },
+        {
+          "specifier": "react-dom",
+          "line": 15,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\ui\\progress.tsx",
+      "sizeBytes": 792,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "@radix-ui/react-progress",
+          "line": 4,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 6,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\ui\\radio-group.tsx",
+      "sizeBytes": 1424,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "@radix-ui/react-radio-group",
+          "line": 4,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 5,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 7,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\ui\\resizable.tsx",
+      "sizeBytes": 1723,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "lucide-react",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "react-resizable-panels",
+          "line": 4,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 6,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\ui\\scroll-area.tsx",
+      "sizeBytes": 1656,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "@radix-ui/react-scroll-area",
+          "line": 4,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 6,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\ui\\select.tsx",
+      "sizeBytes": 5556,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 1,
+          "type": "import"
+        },
+        {
+          "specifier": "@radix-ui/react-select",
+          "line": 2,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "../../lib/utils",
+          "line": 4,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\ui\\separator.tsx",
+      "sizeBytes": 770,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "@radix-ui/react-separator",
+          "line": 4,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 6,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\ui\\sheet.tsx",
+      "sizeBytes": 4280,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "@radix-ui/react-dialog",
+          "line": 4,
+          "type": "import"
+        },
+        {
+          "specifier": "class-variance-authority",
+          "line": 5,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 6,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 8,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\ui\\sidebar.tsx",
+      "sizeBytes": 23581,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "@radix-ui/react-slot",
+          "line": 4,
+          "type": "import"
+        },
+        {
+          "specifier": "class-variance-authority",
+          "line": 5,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 6,
+          "type": "import"
+        },
+        {
+          "specifier": "@/hooks/use-mobile",
+          "line": 8,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 9,
+          "type": "import"
+        },
+        {
+          "specifier": "@/components/ui/button",
+          "line": 10,
+          "type": "import"
+        },
+        {
+          "specifier": "@/components/ui/input",
+          "line": 11,
+          "type": "import"
+        },
+        {
+          "specifier": "@/components/ui/separator",
+          "line": 12,
+          "type": "import"
+        },
+        {
+          "specifier": "@/components/ui/skeleton",
+          "line": 20,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\ui\\skeleton.tsx",
+      "sizeBytes": 266,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "@/lib/utils",
+          "line": 1,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\ui\\slider.tsx",
+      "sizeBytes": 1051,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "@radix-ui/react-slider",
+          "line": 4,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 6,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\ui\\sonner.tsx",
+      "sizeBytes": 894,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "next-themes",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "sonner",
+          "line": 4,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\ui\\switch.tsx",
+      "sizeBytes": 1162,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "@radix-ui/react-switch",
+          "line": 4,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 6,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\ui\\table.tsx",
+      "sizeBytes": 2859,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 1,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 3,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\ui\\tabs.tsx",
+      "sizeBytes": 1891,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "@radix-ui/react-tabs",
+          "line": 4,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 6,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\ui\\textarea.tsx",
+      "sizeBytes": 649,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 1,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 3,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\ui\\toast.tsx",
+      "sizeBytes": 4832,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "@radix-ui/react-toast",
+          "line": 4,
+          "type": "import"
+        },
+        {
+          "specifier": "class-variance-authority",
+          "line": 5,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 6,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 8,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\ui\\toaster.tsx",
+      "sizeBytes": 786,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "@/hooks/use-toast",
+          "line": 3,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\ui\\toggle-group.tsx",
+      "sizeBytes": 1753,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "@radix-ui/react-toggle-group",
+          "line": 4,
+          "type": "import"
+        },
+        {
+          "specifier": "class-variance-authority",
+          "line": 5,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 7,
+          "type": "import"
+        },
+        {
+          "specifier": "@/components/ui/toggle",
+          "line": 8,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\ui\\toggle.tsx",
+      "sizeBytes": 1500,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "@radix-ui/react-toggle",
+          "line": 4,
+          "type": "import"
+        },
+        {
+          "specifier": "class-variance-authority",
+          "line": 5,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 7,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\components\\ui\\tooltip.tsx",
+      "sizeBytes": 1267,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 3,
+          "type": "import"
+        },
+        {
+          "specifier": "@radix-ui/react-tooltip",
+          "line": 4,
+          "type": "import"
+        },
+        {
+          "specifier": "@/lib/utils",
+          "line": 6,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\components\\world\\WorldSelector.tsx",
+      "sizeBytes": 2834,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 6,
+          "type": "import"
+        },
+        {
+          "specifier": "../../types/gameWorld",
+          "line": 7,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city",
+        "worlds"
+      ]
+    },
+    {
+      "filePath": "src\\config\\world.ts",
+      "sizeBytes": 2335,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "../data/worlds/american/manifest",
+          "line": 60,
+          "type": "dynamic-import"
+        },
+        {
+          "specifier": "../data/worlds/euroasia/manifest",
+          "line": 63,
+          "type": "dynamic-import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "seed",
+        "seeders",
+        "manifest",
+        "worlds"
+      ]
+    },
+    {
+      "filePath": "src\\contexts\\GameContext.tsx",
+      "sizeBytes": 78182,
+      "heavy": true,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 32,
+          "type": "import"
+        },
+        {
+          "specifier": "../types/game",
+          "line": 33,
+          "type": "import"
+        },
+        {
+          "specifier": "../utils/skillsDatabase",
+          "line": 34,
+          "type": "import"
+        },
+        {
+          "specifier": "../utils/skillPersistence",
+          "line": 35,
+          "type": "import"
+        },
+        {
+          "specifier": "../utils/roleSkills",
+          "line": 36,
+          "type": "import"
+        },
+        {
+          "specifier": "../utils/jobNormalization",
+          "line": 37,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "city",
+        "distance",
+        "hub",
+        "seed",
+        "cargo"
+      ]
+    },
+    {
+      "filePath": "src\\contexts\\JobMarketContext.tsx",
+      "sizeBytes": 7577,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 10,
+          "type": "import"
+        },
+        {
+          "specifier": "../utils/jobGenerator",
+          "line": 11,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "trailer",
+        "cities",
+        "city",
+        "distance",
+        "hub",
+        "cargo"
+      ]
+    },
+    {
+      "filePath": "src\\data\\cities.ts",
+      "sizeBytes": 17071,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "cities",
+        "city",
+        "hub"
+      ]
+    },
+    {
+      "filePath": "src\\data\\driverSkills.ts",
+      "sizeBytes": 656,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\data\\game-rules-engines.ts",
+      "sizeBytes": 30375,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "cities",
+        "city",
+        "distance",
+        "distances",
+        "hub",
+        "hubs",
+        "seed",
+        "seeders",
+        "manifest",
+        "worlds",
+        "cargo"
+      ]
+    },
+    {
+      "filePath": "src\\data\\hubLevels.ts",
+      "sizeBytes": 2989,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "hub"
+      ]
+    },
+    {
+      "filePath": "src\\data\\remove-company-level-badge.ts",
+      "sizeBytes": 7514,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\data\\trailer-additions.ts",
+      "sizeBytes": 11120,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "./trailers",
+          "line": 18,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "trailer",
+        "trailers",
+        "city",
+        "cargo"
+      ]
+    },
+    {
+      "filePath": "src\\data\\trailer-availability.ts",
+      "sizeBytes": 2462,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "./trailers",
+          "line": 21,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "trailer",
+        "trailers"
+      ]
+    },
+    {
+      "filePath": "src\\data\\trailer-cleanup.ts",
+      "sizeBytes": 2373,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "./trailers",
+          "line": 33,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "trailer",
+        "trailers"
+      ]
+    },
+    {
+      "filePath": "src\\data\\trailers.ts",
+      "sizeBytes": 29598,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "truck",
+        "trailer",
+        "trailers",
+        "city",
+        "cargo",
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\data\\trucks\\big.ts",
+      "sizeBytes": 53567,
+      "heavy": true,
+      "imports": [],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "city",
+        "cargo"
+      ]
+    },
+    {
+      "filePath": "src\\data\\trucks\\index.ts",
+      "sizeBytes": 395,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "./small",
+          "line": 8,
+          "type": "import"
+        },
+        {
+          "specifier": "./medium",
+          "line": 9,
+          "type": "import"
+        },
+        {
+          "specifier": "./big",
+          "line": 10,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks"
+      ]
+    },
+    {
+      "filePath": "src\\data\\trucks\\medium.ts",
+      "sizeBytes": 16648,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "cities",
+        "city",
+        "cargo"
+      ]
+    },
+    {
+      "filePath": "src\\data\\trucks\\normalize.ts",
+      "sizeBytes": 9598,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "city",
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\data\\trucks\\small.ts",
+      "sizeBytes": 17090,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "city",
+        "cargo"
+      ]
+    },
+    {
+      "filePath": "src\\data\\trucks.ts",
+      "sizeBytes": 2910,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "./trucks/small",
+          "line": 86,
+          "type": "import"
+        },
+        {
+          "specifier": "./trucks/medium",
+          "line": 87,
+          "type": "import"
+        },
+        {
+          "specifier": "./trucks/big",
+          "line": 88,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "city",
+        "cargo"
+      ]
+    },
+    {
+      "filePath": "src\\data\\worlds\\american\\manifest.ts",
+      "sizeBytes": 881,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "../../../config/world",
+          "line": 17,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "seed",
+        "seeders",
+        "manifest",
+        "worlds",
+        "assets/worlds"
+      ]
+    },
+    {
+      "filePath": "src\\data\\worlds\\euroasia\\manifest.ts",
+      "sizeBytes": 1334,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "../../config/world",
+          "line": 12,
+          "type": "import"
+        },
+        {
+          "specifier": "../../../config/world",
+          "line": 16,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "cities",
+        "hub",
+        "seed",
+        "seeders",
+        "manifest",
+        "worlds",
+        "assets/worlds"
+      ]
+    },
+    {
+      "filePath": "src\\engines\\driverEngine.ts",
+      "sizeBytes": 13541,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "../utils/gameClock",
+          "line": 20,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers"
+      ]
+    },
+    {
+      "filePath": "src\\engines\\hubCapacityEngine.ts",
+      "sizeBytes": 6638,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "../data/hubLevels",
+          "line": 15,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "city",
+        "hub",
+        "hubs"
+      ]
+    },
+    {
+      "filePath": "src\\engines\\staffConditionEngine.ts",
+      "sizeBytes": 17086,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "../utils/gameClock",
+          "line": 20,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers"
+      ]
+    },
+    {
+      "filePath": "src\\engines\\UsedTruckGenerator.tsx",
+      "sizeBytes": 14541,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "../contexts/GameContext",
+          "line": 20,
+          "type": "import"
+        },
+        {
+          "specifier": "../data/trucks",
+          "line": 21,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks"
+      ]
+    },
+    {
+      "filePath": "src\\hooks\\use-mobile.tsx",
+      "sizeBytes": 565,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 1,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\hooks\\use-toast.ts",
+      "sizeBytes": 3948,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 4,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\hooks\\useMigratedUsers.ts",
+      "sizeBytes": 2509,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 60,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\hooks\\useMigration.ts",
+      "sizeBytes": 1936,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 11,
+          "type": "import"
+        },
+        {
+          "specifier": "../utils/normalizeExport",
+          "line": 12,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\lib\\utils.ts",
+      "sizeBytes": 165,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "clsx",
+          "line": 1,
+          "type": "import"
+        },
+        {
+          "specifier": "tailwind-merge",
+          "line": 2,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\main.tsx",
+      "sizeBytes": 171,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react-dom/client",
+          "line": 1,
+          "type": "import"
+        },
+        {
+          "specifier": "./shadcn.css",
+          "line": 2,
+          "type": "import"
+        },
+        {
+          "specifier": "./App",
+          "line": 3,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\pages\\AccountSettings.tsx",
+      "sizeBytes": 18252,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 6,
+          "type": "import"
+        },
+        {
+          "specifier": "../contexts/GameContext",
+          "line": 7,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\AdminDashboard.tsx",
+      "sizeBytes": 16048,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "react-router",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "../contexts/GameContext",
+          "line": 20,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/admin/RemoteStats",
+          "line": 30,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/admin/UsedTruckGeneratorCard",
+          "line": 31,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/migration/MigratedUsersPanel",
+          "line": 32,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "cities",
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\CargoTrailerCompatibility.tsx",
+      "sizeBytes": 492,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 6,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/layout/Layout",
+          "line": 7,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/cargo/CargoTrailerMatrix",
+          "line": 8,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "trailer",
+        "cargo"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\ContractJobs.tsx",
+      "sizeBytes": 47732,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 6,
+          "type": "import"
+        },
+        {
+          "specifier": "../contexts/GameContext",
+          "line": 7,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 8,
+          "type": "import"
+        },
+        {
+          "specifier": "../utils/cargoTrailerCompatibility",
+          "line": 11,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "city",
+        "hub",
+        "cargo"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\CreateCompany.tsx",
+      "sizeBytes": 23083,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 5,
+          "type": "import"
+        },
+        {
+          "specifier": "react-router",
+          "line": 6,
+          "type": "import"
+        },
+        {
+          "specifier": "../contexts/GameContext",
+          "line": 7,
+          "type": "import"
+        },
+        {
+          "specifier": "../types/game",
+          "line": 8,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/ui/button",
+          "line": 9,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/ui/input",
+          "line": 10,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/ui/card",
+          "line": 11,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/ui/select",
+          "line": 12,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 13,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "cities",
+        "city",
+        "hub"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\Dashboard.tsx",
+      "sizeBytes": 14554,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 9,
+          "type": "import"
+        },
+        {
+          "specifier": "../contexts/GameContext",
+          "line": 10,
+          "type": "import"
+        },
+        {
+          "specifier": "../hooks/useCompanyLevel",
+          "line": 160,
+          "type": "require"
+        },
+        {
+          "specifier": "../hooks/useCompanyLevel",
+          "line": 162,
+          "type": "require"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "hub"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\Finances.tsx",
+      "sizeBytes": 8992,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 5,
+          "type": "import"
+        },
+        {
+          "specifier": "../contexts/GameContext",
+          "line": 6,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 7,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\FleetControl.tsx",
+      "sizeBytes": 44358,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 5,
+          "type": "import"
+        },
+        {
+          "specifier": "react-router",
+          "line": 6,
+          "type": "import"
+        },
+        {
+          "specifier": "../contexts/GameContext",
+          "line": 7,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 8,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "city",
+        "hub"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\FreightJobDatabase.tsx",
+      "sizeBytes": 36117,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 7,
+          "type": "import"
+        },
+        {
+          "specifier": "react-router",
+          "line": 8,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 9,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trailer",
+        "cities",
+        "city",
+        "distance",
+        "cargo"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\GameRulesEngines.tsx",
+      "sizeBytes": 6439,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "../data/game-rules-engines",
+          "line": 20,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/admin/RuleCard",
+          "line": 21,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/admin/EngineCard",
+          "line": 22,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/admin/CronCard",
+          "line": 23,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 24,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/admin/ManifestTotals",
+          "line": 25,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "manifest"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\Garage.tsx",
+      "sizeBytes": 25177,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 16,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 17,
+          "type": "import"
+        },
+        {
+          "specifier": "../contexts/GameContext",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "../data/trailers",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/fleet/TruckCard",
+          "line": 20,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/fleet/TrailerCard",
+          "line": 21,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/ErrorBoundary",
+          "line": 22,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/fleet/GarageHeader",
+          "line": 23,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/fleet/SearchFilterBar",
+          "line": 24,
+          "type": "import"
+        },
+        {
+          "specifier": "../utils/gameTime",
+          "line": 25,
+          "type": "import"
+        },
+        {
+          "specifier": "../utils/gameClock",
+          "line": 26,
+          "type": "import"
+        },
+        {
+          "specifier": "../utils/vehicleTypeUtils",
+          "line": 27,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "city",
+        "cargo",
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\home\\FeaturesGrid.tsx",
+      "sizeBytes": 2105,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 7,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 8,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\home\\GameFactsGrid.tsx",
+      "sizeBytes": 3000,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 11,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 12,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "hub",
+        "hubs"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\home\\Hero.tsx",
+      "sizeBytes": 5125,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 11,
+          "type": "import"
+        },
+        {
+          "specifier": "react-router",
+          "line": 12,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 13,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "hub",
+        "cargo"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\home\\HowToPlay.tsx",
+      "sizeBytes": 3008,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 11,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 12,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "hub",
+        "hubs"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\home\\InfoTabs.tsx",
+      "sizeBytes": 6065,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 13,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 14,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "hub",
+        "hubs"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\home\\LandingFooter.tsx",
+      "sizeBytes": 3127,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 13,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 14,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 15,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\home\\MetricsGrid.tsx",
+      "sizeBytes": 2568,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 8,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 9,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "hub"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\home\\QuickActions.tsx",
+      "sizeBytes": 2239,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 8,
+          "type": "import"
+        },
+        {
+          "specifier": "react-router",
+          "line": 9,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 10,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\home\\ScreenshotGallery.tsx",
+      "sizeBytes": 6082,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 16,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 17,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "city",
+        "distance",
+        "cargo"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\home\\StatsBar.tsx",
+      "sizeBytes": 6570,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 16,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 17,
+          "type": "import"
+        },
+        {
+          "specifier": "../../contexts/GameContext",
+          "line": 18,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\Home.tsx",
+      "sizeBytes": 5859,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 17,
+          "type": "import"
+        },
+        {
+          "specifier": "react-router",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "./home/Hero",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "./home/StatsBar",
+          "line": 20,
+          "type": "import"
+        },
+        {
+          "specifier": "./home/FeaturesGrid",
+          "line": 21,
+          "type": "import"
+        },
+        {
+          "specifier": "./home/InfoTabs",
+          "line": 22,
+          "type": "import"
+        },
+        {
+          "specifier": "./home/GameFactsGrid",
+          "line": 23,
+          "type": "import"
+        },
+        {
+          "specifier": "./home/HowToPlay",
+          "line": 24,
+          "type": "import"
+        },
+        {
+          "specifier": "./home/LandingFooter",
+          "line": 25,
+          "type": "import"
+        },
+        {
+          "specifier": "./home/ScreenshotGallery",
+          "line": 26,
+          "type": "import"
+        },
+        {
+          "specifier": "../contexts/GameContext",
+          "line": 27,
+          "type": "import"
+        },
+        {
+          "specifier": "./WelcomeBack",
+          "line": 28,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "hub",
+        "hubs"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\Infrastructure.tsx",
+      "sizeBytes": 12441,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 21,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 22,
+          "type": "import"
+        },
+        {
+          "specifier": "../contexts/GameContext",
+          "line": 23,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/infrastructure/HubsPanel",
+          "line": 24,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/infrastructure/FacilitiesPanel",
+          "line": 25,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/infrastructure/HubsDowngradeFix",
+          "line": 26,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/infrastructure/BuildHubBox",
+          "line": 27,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/infrastructure/PendingTasksPanel",
+          "line": 28,
+          "type": "import"
+        },
+        {
+          "specifier": "../data/hubLevels",
+          "line": 29,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city",
+        "hub",
+        "hubs"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\JobCenter.tsx",
+      "sizeBytes": 26946,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 11,
+          "type": "import"
+        },
+        {
+          "specifier": "react-router",
+          "line": 12,
+          "type": "import"
+        },
+        {
+          "specifier": "../contexts/GameContext",
+          "line": 13,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 14,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/staff/StaffSkillsOverview",
+          "line": 15,
+          "type": "import"
+        },
+        {
+          "specifier": "../utils/hubUtils",
+          "line": 16,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/modals/HireConfirmModal",
+          "line": 17,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city",
+        "hub"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\Jobs.tsx",
+      "sizeBytes": 10964,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "../contexts/GameContext",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/jobs/JobList",
+          "line": 20,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/jobs/JobCard",
+          "line": 21,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 22,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trailer",
+        "distance",
+        "cargo"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\Login.tsx",
+      "sizeBytes": 13805,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 15,
+          "type": "import"
+        },
+        {
+          "specifier": "react-router",
+          "line": 16,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/ui/button",
+          "line": 17,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/ui/input",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 26,
+          "type": "import"
+        },
+        {
+          "specifier": "../contexts/GameContext",
+          "line": 27,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\Logout.tsx",
+      "sizeBytes": 1186,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 6,
+          "type": "import"
+        },
+        {
+          "specifier": "react-router",
+          "line": 7,
+          "type": "import"
+        },
+        {
+          "specifier": "../contexts/GameContext",
+          "line": 8,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\pages\\Map.tsx",
+      "sizeBytes": 22949,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 16,
+          "type": "import"
+        },
+        {
+          "specifier": "../contexts/GameContext",
+          "line": 17,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "../utils/distance-scaffold",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "../types/game",
+          "line": 20,
+          "type": "import"
+        },
+        {
+          "specifier": "../utils/truckDrivingEngine",
+          "line": 21,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "cities",
+        "city",
+        "distance",
+        "hub"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\Market.tsx",
+      "sizeBytes": 18774,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 17,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "../contexts/GameContext",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "../contexts/JobMarketContext",
+          "line": 20,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/market/FreightOfferCard",
+          "line": 21,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/market/MarketFilters",
+          "line": 22,
+          "type": "import"
+        },
+        {
+          "specifier": "../utils/distanceCalculator",
+          "line": 23,
+          "type": "import"
+        },
+        {
+          "specifier": "../utils/countryMapping",
+          "line": 24,
+          "type": "import"
+        },
+        {
+          "specifier": "../utils/jobGenerator",
+          "line": 25,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "cities",
+        "city",
+        "distance",
+        "hub",
+        "cargo"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\Migration.tsx",
+      "sizeBytes": 2276,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 13,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/migration/MigrationTabs",
+          "line": 14,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/migration/AppwriteMigrationPanel",
+          "line": 15,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/migration/SupabaseMigrationPanel",
+          "line": 16,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 17,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\pages\\MigrationTasks.tsx",
+      "sizeBytes": 4523,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 13,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/admin/MigrationTaskForm",
+          "line": 14,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/admin/MigrationTaskList",
+          "line": 15,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/admin/MigrationTaskDetailsModal",
+          "line": 16,
+          "type": "import"
+        },
+        {
+          "specifier": "react-router",
+          "line": 17,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 18,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\Profile.tsx",
+      "sizeBytes": 21747,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 6,
+          "type": "import"
+        },
+        {
+          "specifier": "../contexts/GameContext",
+          "line": 7,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\Registration.tsx",
+      "sizeBytes": 11629,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 5,
+          "type": "import"
+        },
+        {
+          "specifier": "react-router",
+          "line": 6,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/ui/button",
+          "line": 7,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/ui/input",
+          "line": 8,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/ui/card",
+          "line": 9,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 10,
+          "type": "import"
+        },
+        {
+          "specifier": "../contexts/GameContext",
+          "line": 11,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\ResetPassword.tsx",
+      "sizeBytes": 12344,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 14,
+          "type": "import"
+        },
+        {
+          "specifier": "react-router",
+          "line": 15,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/ui/input",
+          "line": 16,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/ui/button",
+          "line": 17,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 18,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\pages\\Settings.tsx",
+      "sizeBytes": 14796,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 6,
+          "type": "import"
+        },
+        {
+          "specifier": "../contexts/GameContext",
+          "line": 7,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 8,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\pages\\Staff.tsx",
+      "sizeBytes": 43905,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 17,
+          "type": "import"
+        },
+        {
+          "specifier": "react-router",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "../contexts/GameContext",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/staff/DriverCompactCard",
+          "line": 36,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/staff/CompanyBenefitsModal",
+          "line": 37,
+          "type": "import"
+        },
+        {
+          "specifier": "../utils/hubUtils",
+          "line": 38,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "city",
+        "hub"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\StaffHiring.tsx",
+      "sizeBytes": 25284,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "react-router",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "../contexts/GameContext",
+          "line": 20,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 21,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/modals/HireConfirmModal",
+          "line": 22,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "cities",
+        "hub"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\StorageManagement.tsx",
+      "sizeBytes": 22613,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 5,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 6,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/admin/DataImporter",
+          "line": 7,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\TestDistance.tsx",
+      "sizeBytes": 570,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 5,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/test/DistanceTest",
+          "line": 6,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "distance"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\Trailers.tsx",
+      "sizeBytes": 7467,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 5,
+          "type": "import"
+        },
+        {
+          "specifier": "../contexts/GameContext",
+          "line": 6,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 7,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trailer",
+        "trailers",
+        "city",
+        "hub"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\Trucks.tsx",
+      "sizeBytes": 1826,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 16,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\UsedTruckPrototype.tsx",
+      "sizeBytes": 10182,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 16,
+          "type": "import"
+        },
+        {
+          "specifier": "react-router",
+          "line": 17,
+          "type": "import"
+        },
+        {
+          "specifier": "../contexts/GameContext",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 19,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "seed",
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\UserManagement.tsx",
+      "sizeBytes": 13526,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 6,
+          "type": "import"
+        },
+        {
+          "specifier": "../contexts/GameContext",
+          "line": 7,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 8,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\pages\\UserSettings.tsx",
+      "sizeBytes": 25058,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 6,
+          "type": "import"
+        },
+        {
+          "specifier": "../contexts/GameContext",
+          "line": 7,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\VehicleMarket.tsx",
+      "sizeBytes": 67739,
+      "heavy": true,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "react-router",
+          "line": 20,
+          "type": "import"
+        },
+        {
+          "specifier": "../contexts/GameContext",
+          "line": 21,
+          "type": "import"
+        },
+        {
+          "specifier": "../data/trailers",
+          "line": 29,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/market/TruckCard",
+          "line": 30,
+          "type": "import"
+        },
+        {
+          "specifier": "../data/trucks",
+          "line": 31,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/market/VehicleSpecsSelector",
+          "line": 32,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/trailer/TrailerTechnicalSpecs",
+          "line": 33,
+          "type": "import"
+        },
+        {
+          "specifier": "../utils/vehicleTypeUtils",
+          "line": 34,
+          "type": "import"
+        },
+        {
+          "specifier": "../engines/hubCapacityEngine",
+          "line": 35,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/market/ConfirmPurchaseHubInfo",
+          "line": 36,
+          "type": "import"
+        },
+        {
+          "specifier": "../engines/UsedTruckGenerator",
+          "line": 37,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "city",
+        "hub",
+        "hubs",
+        "cargo"
+      ]
+    },
+    {
+      "filePath": "src\\pages\\WelcomeBack.tsx",
+      "sizeBytes": 6597,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "react",
+          "line": 17,
+          "type": "import"
+        },
+        {
+          "specifier": "../contexts/GameContext",
+          "line": 18,
+          "type": "import"
+        },
+        {
+          "specifier": "lucide-react",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "../components/levels/LevelBadge",
+          "line": 20,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "hub"
+      ]
+    },
+    {
+      "filePath": "src\\types\\game.ts",
+      "sizeBytes": 2609,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "city",
+        "distance",
+        "hub",
+        "cargo"
+      ]
+    },
+    {
+      "filePath": "src\\types\\gameWorld.ts",
+      "sizeBytes": 2371,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "cities",
+        "distance",
+        "distances",
+        "worlds",
+        "cargo"
+      ]
+    },
+    {
+      "filePath": "src\\types\\incomingDelivery.ts",
+      "sizeBytes": 1485,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\utils\\cargoTrailerCompatibility.ts",
+      "sizeBytes": 17761,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "city",
+        "seed",
+        "cargo",
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\utils\\ClockTicker.ts",
+      "sizeBytes": 3661,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "./gameClock",
+          "line": 23,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\utils\\companyLevel.ts",
+      "sizeBytes": 4535,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "hub",
+        "hubs",
+        "seed"
+      ]
+    },
+    {
+      "filePath": "src\\utils\\countryFlags.ts",
+      "sizeBytes": 9433,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "cities",
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\utils\\countryMapping.ts",
+      "sizeBytes": 63094,
+      "heavy": true,
+      "imports": [],
+      "matchedKeywords": [
+        "cities",
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\utils\\countryNames.ts",
+      "sizeBytes": 446,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "./countryMapping",
+          "line": 15,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "cities",
+        "city"
+      ]
+    },
+    {
+      "filePath": "src\\utils\\distance-scaffold.ts",
+      "sizeBytes": 41188,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "cities",
+        "city",
+        "distance"
+      ]
+    },
+    {
+      "filePath": "src\\utils\\distanceCalculator.ts",
+      "sizeBytes": 13507,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "./distance-scaffold",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "./distances.json",
+          "line": 22,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "cities",
+        "city",
+        "distance",
+        "distances"
+      ]
+    },
+    {
+      "filePath": "src\\utils\\ensureCollectionName.ts",
+      "sizeBytes": 1334,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\utils\\hubUtils.ts",
+      "sizeBytes": 2500,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "../data/hubLevels",
+          "line": 12,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "hub",
+        "hubs"
+      ]
+    },
+    {
+      "filePath": "src\\utils\\incidentEngine.ts",
+      "sizeBytes": 5932,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "distance",
+        "seed"
+      ]
+    },
+    {
+      "filePath": "src\\utils\\incomingDeliveryUtils.ts",
+      "sizeBytes": 6142,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "../types/incomingDelivery",
+          "line": 19,
+          "type": "import"
+        },
+        {
+          "specifier": "./gameTime",
+          "line": 20,
+          "type": "import"
+        },
+        {
+          "specifier": "./gameClock",
+          "line": 21,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "cargo",
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\utils\\jobGenerator.ts",
+      "sizeBytes": 62882,
+      "heavy": true,
+      "imports": [
+        {
+          "specifier": "./distanceCalculator",
+          "line": 6,
+          "type": "import"
+        },
+        {
+          "specifier": "./cargoTrailerCompatibility",
+          "line": 12,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trailer",
+        "cities",
+        "city",
+        "distance",
+        "hub",
+        "seed",
+        "cargo"
+      ]
+    },
+    {
+      "filePath": "src\\utils\\maintenanceEngine.ts",
+      "sizeBytes": 3785,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers"
+      ]
+    },
+    {
+      "filePath": "src\\utils\\pendingTasks.ts",
+      "sizeBytes": 3524,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "city",
+        "hub",
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\utils\\selectedHubStorage.ts",
+      "sizeBytes": 1334,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "hub",
+        "hubs"
+      ]
+    },
+    {
+      "filePath": "src\\utils\\skillsDatabase.ts",
+      "sizeBytes": 32933,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "city",
+        "distance",
+        "cargo"
+      ]
+    },
+    {
+      "filePath": "src\\utils\\skillSimulator.ts",
+      "sizeBytes": 15353,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "./skillsDatabase",
+          "line": 107,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "distance",
+        "cargo"
+      ]
+    },
+    {
+      "filePath": "src\\utils\\specsFetcher.ts",
+      "sizeBytes": 5497,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "city",
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\utils\\supabaseWorld.ts",
+      "sizeBytes": 3470,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "../lib/supabaseClient",
+          "line": 23,
+          "type": "import"
+        },
+        {
+          "specifier": "@supabase/supabase-js",
+          "line": 25,
+          "type": "import"
+        },
+        {
+          "specifier": "../lib/supabaseClient",
+          "line": 31,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": []
+    },
+    {
+      "filePath": "src\\utils\\truckDrivingEngine.ts",
+      "sizeBytes": 22074,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "./incidentEngine",
+          "line": 78,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "city",
+        "distance",
+        "distances",
+        "hub"
+      ]
+    },
+    {
+      "filePath": "src\\utils\\usedTrucksStorage.ts",
+      "sizeBytes": 4164,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "seed",
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\utils\\vehicleAvailability.ts",
+      "sizeBytes": 7616,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers"
+      ]
+    },
+    {
+      "filePath": "src\\utils\\vehiclePurchaseUtils.ts",
+      "sizeBytes": 5281,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "./vehicleTypeUtils",
+          "line": 18,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers"
+      ]
+    },
+    {
+      "filePath": "src\\utils\\vehicleTypeUtils.ts",
+      "sizeBytes": 12203,
+      "heavy": false,
+      "imports": [],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers",
+        "city",
+        "payload"
+      ]
+    },
+    {
+      "filePath": "src\\utils\\worldStorage.ts",
+      "sizeBytes": 2062,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "../types/gameWorld",
+          "line": 6,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "worlds"
+      ]
+    },
+    {
+      "filePath": "src\\utils\\__tests__\\incomingDeliveryUtils.test.ts",
+      "sizeBytes": 2249,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "../incomingDeliveryUtils",
+          "line": 10,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "truck",
+        "trucks",
+        "trailer",
+        "trailers"
+      ]
+    },
+    {
+      "filePath": "src\\utils\\__tests__\\manifestAdmin.test.ts",
+      "sizeBytes": 1900,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "assert",
+          "line": 13,
+          "type": "import"
+        },
+        {
+          "specifier": "../../data/game-rules-engines",
+          "line": 14,
+          "type": "import"
+        }
+      ],
+      "matchedKeywords": [
+        "manifest"
+      ]
+    },
+    {
+      "filePath": "tailwind.config.js",
+      "sizeBytes": 2744,
+      "heavy": false,
+      "imports": [
+        {
+          "specifier": "tailwindcss",
+          "line": 1,
+          "type": "dynamic-import"
+        },
+        {
+          "specifier": "tailwindcss-animate",
+          "line": 91,
+          "type": "require"
+        }
+      ],
+      "matchedKeywords": []
+    }
+  ],
+  "config": {
+    "heavyFileThresholdBytes": 51200,
+    "fileExtensions": [
+      ".ts",
+      ".tsx",
+      ".js",
+      ".jsx",
+      ".json"
+    ],
+    "excludeDirs": [
+      "node_modules",
+      ".git",
+      "dist",
+      "build",
+      "out",
+      ".next"
+    ],
+    "worldKeywords": [
+      "truck",
+      "trucks",
+      "trailer",
+      "trailers",
+      "cities",
+      "city",
+      "distance",
+      "distances",
+      "hub",
+      "hubs",
+      "seed",
+      "seeders",
+      "manifest",
+      "worlds",
+      "assets/worlds",
+      "cargo",
+      "payload"
+    ]
+  }
+}

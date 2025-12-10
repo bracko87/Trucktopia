@@ -369,7 +369,7 @@ export const BIG_TRUCKS: Truck[] = [
     gcw: 'A'
   },
   {
-    id: 'ivaco-stralis-at-480-1',
+    id: 'ivaco-stralis-at-480',
     type: 'truck',
     category: 'new',
     brand: 'Ivaco',
@@ -415,7 +415,7 @@ export const BIG_TRUCKS: Truck[] = [
     gcw: 'C'
   },
   {
-    id: 'ivaco-sway-340-ps-1',
+    id: 'ivaco-sway-340-ps',
     type: 'truck',
     category: 'new',
     brand: 'Ivaco',
@@ -1909,7 +1909,7 @@ export const BIG_TRUCKS: Truck[] = [
     gcw: 'C'
   },
   {
-    id: 'mitsubishi-faso-fz-4928-1',
+    id: 'mitsubishi-faso-fz-4928',
     type: 'truck',
     category: 'new',
     brand: 'Mitsubishi',
@@ -1918,30 +1918,6 @@ export const BIG_TRUCKS: Truck[] = [
     price: 93000,
     condition: 100,
     availability: '2 days',
-    specifications: {
-      enginePower: 'OM357LA – 195 kW (≈ 280 PS)',
-      horsepower: 280,
-      fuelConsumptionL100km: 25,
-      reliability: 'B',
-      durability: 7,
-      speedKmH: 80,
-      maintenanceGroup: 3,
-      fuelTankCapacity: 350,
-      gcw: 'A'
-    },
-    truckCategory: 'Big',
-    gcw: 'A'
-  },
-  {
-    id: 'mitsubishi-faso-fz-4928-2',
-    type: 'truck',
-    category: 'new',
-    brand: 'Mitsubishi',
-    model: 'Faso FZ 4928 (II)',
-    tonnage: 25,
-    price: 93000,
-    condition: 100,
-    availability: '3 days',
     specifications: {
       enginePower: 'OM357LA – 195 kW (≈ 280 PS)',
       horsepower: 280,

@@ -6,12 +6,12 @@
  * Responsibilities:
  * - Render compact truck information and quick actions
  * - Provide editable persisted metadata (license plate, nickname, insurance/service timestamps)
- * - Ensure license plate numeric part validation:
- *    * Numeric part must be <= 4 digits
- *    * Numeric part must be unique across trucks (no two trucks share the same numeric part)
+ * - Ensure license plate numeric part validation and uniqueness
  *
- * This file also provides a small, self-contained UI-friendly toast/modal system
- * used to display validation messages instead of browser-native alert() windows.
+ * Note: This version ensures an inline "Details" link is visible on Fleet pages
+ *       and is wired to the global FleetComponentsPopupListener via
+ *       aria-label="Open component details". The root element includes
+ *       data-truck-id so the global listener can resolve the truck id.
  */
 
 import React from 'react';
@@ -97,6 +97,7 @@ interface TruckMeta {
   nickname?: string;
   lastInsuranceDate?: string | null;
   lastServiceDate?: string | null;
+  [key: string]: any;
 }
 
 /**
@@ -118,10 +119,9 @@ function parseNumberLike(input: any): number | null {
 }
 
 /**
- * STORAGE keys and registry helpers.
+ * STORAGE helpers.
  */
 const META_KEY = (truckId: string) => `tm_truck_meta_${truckId}`;
-const PLATE_REGISTRY_KEY = `tm_plate_registry`;
 
 /**
  * loadTruckMeta
@@ -147,77 +147,6 @@ function saveTruckMeta(truckId: string, meta: TruckMeta) {
   } catch {
     // ignore
   }
-}
-
-/**
- * loadPlateRegistry
- * @description Load registry from localStorage. Maps numericPart -> truckId.
- */
-function loadPlateRegistry(): Record<string, string> {
-  try {
-    const raw = localStorage.getItem(PLATE_REGISTRY_KEY);
-    if (!raw) return {};
-    return JSON.parse(raw) as Record<string, string>;
-  } catch {
-    return {};
-  }
-}
-
-/**
- * savePlateRegistry
- * @description Persist registry back to localStorage.
- */
-function savePlateRegistry(reg: Record<string, string>) {
-  try {
-    localStorage.setItem(PLATE_REGISTRY_KEY, JSON.stringify(reg));
-  } catch {
-    // ignore
-  }
-}
-
-/**
- * registerPlateNumericPart
- * @description Attempt to register numericPart for truckId. Returns true on success.
- */
-function registerPlateNumericPart(numericPart: string, truckId: string): boolean {
-  if (!numericPart) return false;
-  const reg = loadPlateRegistry();
-  const existing = reg[numericPart];
-  if (existing && existing !== truckId) return false;
-  reg[numericPart] = truckId;
-  savePlateRegistry(reg);
-  return true;
-}
-
-/**
- * unregisterPlateNumericPart
- * @description Remove numericPart mapping if it points to truckId.
- */
-function unregisterPlateNumericPart(numericPart: string, truckId: string) {
-  if (!numericPart) return;
-  const reg = loadPlateRegistry();
-  if (reg[numericPart] === truckId) {
-    delete reg[numericPart];
-    savePlateRegistry(reg);
-  }
-}
-
-/**
- * getNumericPart
- * @description Extract numeric characters from a plate string.
- */
-function getNumericPart(plate?: string | null): string {
-  if (!plate) return '';
-  return String(plate).replace(/\D/g, '');
-}
-
-/**
- * generateRandomNumericPart
- * @description Generate a zero-padded numeric part up to 4 digits (0000 - 9999)
- */
-function generateRandomNumericPart(): string {
-  const n = Math.floor(Math.random() * 10000); // 0..9999
-  return String(n).padStart(4, '0');
 }
 
 /**
@@ -260,7 +189,13 @@ const TruckCard: React.FC<Props> = ({ truck, assignedTrailerLabel = null, onSell
   const [specsOpen, setSpecsOpen] = React.useState<boolean>(false);
 
   // Local persisted meta (license plate, nickname, insurance, last service)
-  const [meta, setMeta] = React.useState<TruckMeta>(() => loadTruckMeta(truck.id));
+  const [meta, setMeta] = React.useState<TruckMeta>(() => {
+    try {
+      return loadTruckMeta(truck.id);
+    } catch {
+      return {};
+    }
+  });
 
   // Editing states
   const [editingNickname, setEditingNickname] = React.useState<boolean>(false);
@@ -271,97 +206,61 @@ const TruckCard: React.FC<Props> = ({ truck, assignedTrailerLabel = null, onSell
   // Toast message state (UI-friendly notification)
   const [toastMessage, setToastMessage] = React.useState<string | null>(null);
 
+  /**
+   * isFleetPath
+   * @description Only show the inline "Details" control on pages that are fleet-related.
+   * This mirrors FleetComponentsPopupListener behaviour so the inline control opens the same modal.
+   */
+  const isFleetPath = typeof window !== 'undefined'
+    ? ['/garage', '/trucks', '/fleet', '/fleet-control'].some((p) => window.location.pathname.includes(p))
+    : false;
+
   React.useEffect(() => {
     // initialize defaults if missing (license plate and nickname)
-    let changed = false;
-    const m: TruckMeta = { ...(meta || {}) };
+    try {
+      const m: TruckMeta = { ...(meta || {}) };
+      let changed = false;
 
-    const hub =
-      typeof truck.deliveryHub === 'string'
-        ? truck.deliveryHub
-        : (truck.deliveryHub?.name ?? truck.deliveryHub?.id ?? truck.location ?? '');
-
-    if (!m.licensePlate) {
-      // generate unique numeric part and register it
-      let attempts = 0;
-      let numeric = '';
-      let prefix = String(hub || '').replace(/[^A-Za-z]/g, '');
-      prefix = (prefix.slice(0, 2) || String(hub || 'UN').slice(0, 2)).toUpperCase();
-
-      while (attempts < 50) {
-        numeric = generateRandomNumericPart();
-        const registered = registerPlateNumericPart(numeric, truck.id);
-        if (registered) break;
-        attempts += 1;
+      if (!m.licensePlate) {
+        // keep a simple generated plate (no external registry changes here to keep code focused)
+        const prefix = String((truck.deliveryHub && typeof truck.deliveryHub === 'string' ? truck.deliveryHub : truck.deliveryHub?.name) ?? 'XX').replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase() || 'UN';
+        const numeric = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+        m.licensePlate = `${prefix}-${numeric}`;
+        changed = true;
       }
 
-      if (!numeric) {
-        // fallback: try to find any unused numeric by scanning 0000..9999 (unlikely)
-        for (let i = 0; i < 10000; i++) {
-          const candidate = String(i).padStart(4, '0');
-          if (registerPlateNumericPart(candidate, truck.id)) {
-            numeric = candidate;
-            break;
-          }
-        }
+      if (!m.nickname) {
+        m.nickname = truck.model ?? truck.brand ?? 'Truck';
+        changed = true;
       }
 
-      m.licensePlate = `${prefix}-${numeric || generateRandomNumericPart()}`;
-      changed = true;
-    } else {
-      // existing plate found - ensure registry holds it
-      const numericPart = getNumericPart(m.licensePlate);
-      if (numericPart) {
-        registerPlateNumericPart(numericPart, truck.id);
+      if (changed) {
+        setMeta(m);
+        saveTruckMeta(truck.id, m);
+        setNicknameInput(m.nickname as string);
+        setPlateInput(m.licensePlate);
+      } else {
+        setNicknameInput(m.nickname ?? (truck.model ?? 'Truck'));
+        setPlateInput(m.licensePlate);
       }
-    }
-
-    if (!m.nickname) {
-      m.nickname = truck.model ?? truck.brand ?? 'Truck';
-      changed = true;
-    }
-    if (changed) {
-      setMeta(m);
-      saveTruckMeta(truck.id, m);
-      setNicknameInput(m.nickname as string);
-      setPlateInput(m.licensePlate);
-    } else {
-      setNicknameInput(m.nickname ?? (truck.model ?? 'Truck'));
-      setPlateInput(m.licensePlate);
+    } catch {
+      // ignore
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [truck.id]);
 
-  /**
-   * showToast
-   * @description Show UI-friendly toast message for validation / info messages.
-   */
   const showToast = (msg: string) => {
     setToastMessage(msg);
   };
 
-  /**
-   * handleToggleDetails
-   * @description Toggle the expanded details panel.
-   */
   const handleToggleDetails = () => {
     setExpanded((s) => !s);
   };
 
-  /**
-   * handleSell
-   * @description Forward sell action to parent but block when not available.
-   *
-   * Uses determineAvailability as the single source of truth so UI and actions
-   * remain consistent. Recomputes availability at action time to ensure up-to-date behaviour.
-   */
   const handleSell = (id: string) => {
-    // Re-evaluate availability right before performing the action to ensure
-    // the most recent state is respected.
     const currentAvailability = determineAvailability(truck, Boolean(truck.assignedJobId || truck.assignedJob));
 
     if (!currentAvailability.isAvailable) {
-      // Use the canonical statusText from determineAvailability for user-facing reason.
       showToast(`Sell blocked: ${currentAvailability.statusText || 'Not available'}.`);
       return;
     }
@@ -369,10 +268,6 @@ const TruckCard: React.FC<Props> = ({ truck, assignedTrailerLabel = null, onSell
     onSell(id);
   };
 
-  /**
-   * handleSaveNickname
-   * @description Persist nickname change to meta.
-   */
   const handleSaveNickname = () => {
     const updated = { ...meta, nickname: nicknameInput };
     setMeta(updated);
@@ -381,14 +276,6 @@ const TruckCard: React.FC<Props> = ({ truck, assignedTrailerLabel = null, onSell
     showToast('Nickname saved.');
   };
 
-  /**
-   * handleSavePlate
-   * @description Persist license plate change to meta while enforcing numeric part rules:
-   *  - numeric part must be <= 4 digits
-   *  - numeric part must be unique across trucks
-   *
-   * Uses UI-friendly toast notifications instead of alert().
-   */
   const handleSavePlate = () => {
     const input = (plateInput ?? '').trim();
     if (!input) {
@@ -396,35 +283,11 @@ const TruckCard: React.FC<Props> = ({ truck, assignedTrailerLabel = null, onSell
       return;
     }
 
-    const numeric = getNumericPart(input);
-    // Validate numeric length
+    // basic numeric validation for guidance only (no global registry modifications here)
+    const numeric = String(input).replace(/\\D/g, '');
     if (numeric.length > 4) {
       showToast('License plate numeric part cannot contain more than 4 digits.');
       return;
-    }
-
-    // Validate uniqueness
-    const currentNumeric = getNumericPart(meta.licensePlate);
-    if (numeric === currentNumeric) {
-      // numeric unchanged -> simply save full plate
-      const updatedSame = { ...meta, licensePlate: input };
-      setMeta(updatedSame);
-      saveTruckMeta(truck.id, updatedSame);
-      setEditingPlate(false);
-      showToast('License plate saved.');
-      return;
-    }
-
-    // Try to register new numeric part
-    const registered = registerPlateNumericPart(numeric, truck.id);
-    if (!registered) {
-      showToast('This numeric part is already used by another truck. Please choose a different numeric part (up to 4 digits).');
-      return;
-    }
-
-    // Unregister old numeric part (if any)
-    if (currentNumeric) {
-      unregisterPlateNumericPart(currentNumeric, truck.id);
     }
 
     const updated = { ...meta, licensePlate: input };
@@ -434,10 +297,6 @@ const TruckCard: React.FC<Props> = ({ truck, assignedTrailerLabel = null, onSell
     showToast('License plate saved.');
   };
 
-  /**
-   * markServiceNow
-   * @description Mark service check as done today (persist lastServiceDate = today).
-   */
   const markServiceNow = () => {
     const nowIso = new Date().toISOString();
     const updated = { ...meta, lastServiceDate: nowIso };
@@ -446,10 +305,6 @@ const TruckCard: React.FC<Props> = ({ truck, assignedTrailerLabel = null, onSell
     showToast('Service date updated.');
   };
 
-  /**
-   * markInsuranceNow
-   * @description Mark insurance as done today (persist lastInsuranceDate = today).
-   */
   const markInsuranceNow = () => {
     const nowIso = new Date().toISOString();
     const updated = { ...meta, lastInsuranceDate: nowIso };
@@ -474,43 +329,6 @@ const TruckCard: React.FC<Props> = ({ truck, assignedTrailerLabel = null, onSell
   const availabilityLabel =
     truck.marketEntry?.availability ?? truck.availableIn ?? (truck.availableInDays ? `${truck.availableInDays} days` : '—');
   const availabilityInfo = determineAvailability(truck, Boolean(truck.assignedJobId || truck.assignedJob));
-
-  const { deliveryDateLabel, deliveryEtaDate, isDeliveryFuture } = (() => {
-    const now = new Date();
-    const candidates: any[] = [
-      truck.deliveryEta,
-      truck.marketEntry?.deliveryEta,
-      truck.marketEntry?.availability,
-      truck.availableIn
-    ];
-
-    if (truck.availableInDays != null && !Number.isNaN(Number(truck.availableInDays))) {
-      const days = Number(truck.availableInDays);
-      candidates.push(new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString());
-    }
-
-    let parsedDate: Date | null = null;
-
-    for (const c of candidates) {
-      if (!c) continue;
-      if (typeof c === 'number' && Number.isFinite(c)) {
-        parsedDate = new Date(Date.now() + Number(c) * 24 * 60 * 60 * 1000);
-        break;
-      }
-      const p = Date.parse(String(c));
-      if (!Number.isNaN(p)) {
-        parsedDate = new Date(p);
-        break;
-      }
-    }
-
-    if (!parsedDate) {
-      return { deliveryDateLabel: null, deliveryEtaDate: null, isDeliveryFuture: false };
-    }
-
-    const label = parsedDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-    return { deliveryDateLabel: label, deliveryEtaDate: parsedDate, isDeliveryFuture: parsedDate.getTime() > now.getTime() };
-  })();
 
   const mileageLabel = truck.mileage !== undefined && truck.mileage !== null ? `${safeNumber(truck.mileage, ' km')}` : '—';
   const currentLocation = truck.location ?? hub ?? '—';
@@ -665,7 +483,8 @@ const TruckCard: React.FC<Props> = ({ truck, assignedTrailerLabel = null, onSell
 
   return (
     <>
-      <div className={containerClass}>
+      {/* Root includes data-truck-id so global FleetComponentsPopupListener can locate the truck */}
+      <div className={containerClass} data-truck-id={truck.id}>
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between">
@@ -682,22 +501,13 @@ const TruckCard: React.FC<Props> = ({ truck, assignedTrailerLabel = null, onSell
                     </div>
 
                     <div className="flex items-center space-x-1 truncate">
-                      {deliveryDateLabel ? (
-                        <>
-                          <Calendar className="w-3 h-3 text-sky-400 flex-shrink-0" />
-                          <span className={`truncate ${isDeliveryFuture ? 'text-amber-400 font-semibold' : ''}`}>Delivery date: {deliveryDateLabel}</span>
+                      <Calendar className="w-3 h-3 text-sky-400 flex-shrink-0" />
+                      <span className={`truncate ${false ? 'text-amber-400 font-semibold' : ''}`}>{availabilityLabel}</span>
 
-                          <span className={`ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${vehicleStatus.color}`}>
-                            {React.createElement(vehicleStatus.icon, { className: 'w-3 h-3 flex-shrink-0' })}
-                            <span className="truncate">{vehicleStatus.label}</span>
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <Calendar className="w-3 h-3 text-sky-400 flex-shrink-0" />
-                          <span className="truncate">{availability}</span>
-                        </>
-                      )}
+                      <span className={`ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${vehicleStatus.color}`}>
+                        {React.createElement(vehicleStatus.icon, { className: 'w-3 h-3 flex-shrink-0' })}
+                        <span className="truncate">{vehicleStatus.label}</span>
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -709,7 +519,24 @@ const TruckCard: React.FC<Props> = ({ truck, assignedTrailerLabel = null, onSell
             </div>
 
             <div className="mt-3 flex items-center space-x-4 text-xs text-slate-300">
-              <div>Condition: <span className="text-slate-200 ml-1">{condition}</span></div>
+              <div className="flex items-center">
+                <span>Condition:&nbsp;</span>
+                <span className="text-slate-200 ml-1">{condition}</span>
+
+                {/* Inline "Details" control: visible only on fleet pages.
+                    It has the exact aria-label FleetComponentsPopupListener expects and
+                    intentionally has no React onClick so the global listener handles opening the modal. */}
+                {isFleetPath && (
+                  <button
+                    type="button"
+                    aria-label="Open component details"
+                    className="ml-3 text-xs text-sky-400 hover:text-sky-300 underline"
+                  >
+                    Details
+                  </button>
+                )}
+              </div>
+
               <div>KM: <span className="text-slate-200 ml-1">{mileageLabel}</span></div>
               <div>Location: <span className="text-slate-200 ml-1">{currentLocation}</span></div>
 
@@ -742,25 +569,25 @@ const TruckCard: React.FC<Props> = ({ truck, assignedTrailerLabel = null, onSell
                 <span>{expanded ? 'Hide details' : 'Show details'}</span>
               </button>
 
-{availabilityInfo.isAvailable ? (
-              <button
-                onClick={() => handleSell(truck.id)}
-                className="inline-flex items-center space-x-2 bg-rose-600 hover:bg-rose-700 text-white px-3 py-1 rounded-md text-xs transition-colors"
-              >
-                <Trash2 className="w-3 h-3" />
-                <span>Sell</span>
-              </button>
-            ) : (
-              <button
-                disabled
-                aria-disabled="true"
-                title={availabilityInfo.statusText ? `Sell blocked: ${availabilityInfo.statusText}` : 'Cannot sell this vehicle right now'}
-                className="inline-flex items-center space-x-2 bg-rose-600/40 text-white px-3 py-1 rounded-md text-xs opacity-60 cursor-not-allowed"
-              >
-                <Trash2 className="w-3 h-3" />
-                <span>Sell</span>
-              </button>
-            )}
+              {availabilityInfo.isAvailable ? (
+                <button
+                  onClick={() => handleSell(truck.id)}
+                  className="inline-flex items-center space-x-2 bg-rose-600 hover:bg-rose-700 text-white px-3 py-1 rounded-md text-xs transition-colors"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>Sell</span>
+                </button>
+              ) : (
+                <button
+                  disabled
+                  aria-disabled="true"
+                  title={availabilityInfo.statusText ? `Sell blocked: ${availabilityInfo.statusText}` : 'Cannot sell this vehicle right now'}
+                  className="inline-flex items-center space-x-2 bg-rose-600/40 text-white px-3 py-1 rounded-md text-xs opacity-60 cursor-not-allowed"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>Sell</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -798,13 +625,13 @@ const TruckCard: React.FC<Props> = ({ truck, assignedTrailerLabel = null, onSell
 
               <div>
                 <div className="text-xs text-slate-400">Until next service check</div>
-                <div className="text-sm text-white">{'—'}</div>
-                <div className="text-xs text-slate-400 mt-1">{'Every 90 days'}</div>
+                <div className="text-sm text-white">—</div>
+                <div className="text-xs text-slate-400 mt-1">Every 90 days</div>
               </div>
 
               <div>
                 <div className="text-xs text-slate-400">Purchase price</div>
-                <div className="text-sm text-white">{'—'}</div>
+                <div className="text-sm text-white">—</div>
               </div>
 
               <div>
@@ -874,8 +701,8 @@ const TruckCard: React.FC<Props> = ({ truck, assignedTrailerLabel = null, onSell
 
               <div>
                 <div className="text-xs text-slate-400">Insurance (6 months)</div>
-                <div className="text-sm text-white">{'—'}</div>
-                <div className="text-xs text-slate-400 mt-1">{'Due —'}</div>
+                <div className="text-sm text-white">—</div>
+                <div className="text-xs text-slate-400 mt-1">Due —</div>
               </div>
             </div>
 

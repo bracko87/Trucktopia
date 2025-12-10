@@ -1,12 +1,16 @@
 /**
  * Sidebar.tsx
  *
- * Professional retractable sidebar with Football Manager 2024 style navigation.
+ * Main application sidebar with navigation.
  *
  * Responsibilities:
  * - Render the main application sidebar with navigation items.
  * - Provide a collapse toggle and status area.
- * - Include the new "Infrastructure" navigation entry.
+ * - Reserve a logo placeholder (id="sidebar-logo-placeholder") immediately to the left
+ *   of the TRUCKTOPIA title so a logo/image can be uploaded or swapped in later without changing layout.
+ *
+ * Notes:
+ * - This file is written in TypeScript and follows the project's component principles.
  */
 
 import React from 'react';
@@ -25,11 +29,14 @@ import {
   ChevronRight,
   LogOut,
   Shield,
-  Server,
-  List
+  Server
 } from 'lucide-react';
 import { GamePage } from '../../types/game';
 
+/**
+ * NavItem
+ * @description Structure for navigation items rendered in the sidebar.
+ */
 interface NavItem {
   id: GamePage;
   label: string;
@@ -41,7 +48,10 @@ interface NavItem {
 /**
  * Sidebar
  *
- * @description Main application sidebar. Renders navigation and company status.
+ * @description Main application sidebar. Renders navigation, header toggle and company status.
+ * The header contains a small logo placeholder (id="sidebar-logo-placeholder") to the left
+ * of the TRUCKTOPIA title — the placeholder is intentionally empty and transparent so the
+ * current visible icon (e.g. the blue "TM" badge) is removed while preserving layout.
  */
 const Sidebar: React.FC = () => {
   const { gameState, setCurrentPage, toggleSidebar } = useGame();
@@ -91,7 +101,6 @@ const Sidebar: React.FC = () => {
       description: 'Active Contracts',
       path: '/jobs'
     },
-    // New: Infrastructure nav entry, placed after My Jobs
     {
       id: 'infrastructure' as GamePage,
       label: 'Infrastructure',
@@ -119,14 +128,25 @@ const Sidebar: React.FC = () => {
       icon: <Settings className="w-5 h-5" />,
       description: 'Account & Game Settings',
       path: '/user-settings'
-    },
+    }
   ];
 
+  /**
+   * handleNavigation
+   * @description Navigate to the selected path and update current page in game state.
+   * @param item NavItem
+   */
   const handleNavigation = (item: NavItem) => {
     navigate(item.path);
     setCurrentPage(item.id);
   };
 
+  /**
+   * isActive
+   * @description Check if a path matches the current location pathname.
+   * @param path string
+   * @returns boolean
+   */
   const isActive = (path: string) => location.pathname === path;
 
   const sidebarWidth = gameState.sidebarCollapsed ? 'w-20' : 'w-64';
@@ -137,19 +157,32 @@ const Sidebar: React.FC = () => {
       <div className="p-4 border-b border-slate-700 flex items-center justify-between">
         {!gameState.sidebarCollapsed && (
           <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-blue-800 rounded-lg flex items-center justify-center">
-              <Warehouse className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-sm font-bold text-white leading-tight">TRUCK</h1>
-              <h1 className="text-sm font-bold text-white leading-tight">MANAGER</h1>
+            <div className="flex items-center space-x-2">
+              {/* 
+                Logo placeholder preserved for layout stability.
+                - id="sidebar-logo-placeholder" allows future DOM/React replacement.
+                - The element is intentionally empty and transparent to remove any default/decorative icon.
+                - Keep dimensions identical so the title alignment does not change.
+              */}
+              <div
+                id="sidebar-logo-placeholder"
+                className="w-8 h-8 flex-shrink-0 rounded-md"
+                title="Logo placeholder — replace this element with your uploaded logo"
+                aria-hidden="true"
+                style={{ backgroundColor: 'transparent' }}
+              />
+              <div>
+                <h1 className="text-base font-bold text-white leading-tight uppercase">TRUCKTOPIA</h1>
+              </div>
             </div>
           </div>
         )}
+
         <button
           onClick={toggleSidebar}
           className="p-1.5 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 transition-colors"
           aria-label="Toggle sidebar"
+          title="Toggle sidebar"
         >
           {gameState.sidebarCollapsed ? (
             <ChevronRight className="w-4 h-4 text-slate-300" />
@@ -168,9 +201,7 @@ const Sidebar: React.FC = () => {
               key={item.id as string}
               onClick={() => handleNavigation(item)}
               className={`w-full flex items-center p-3 rounded-lg transition-all duration-200 ${
-                active
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                active ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-300 hover:bg-slate-800 hover:text-white'
               }`}
             >
               <div className="flex items-center space-x-3">
@@ -194,9 +225,7 @@ const Sidebar: React.FC = () => {
               setCurrentPage('admin-dashboard' as GamePage);
             }}
             className={`w-full flex items-center p-3 rounded-lg transition-all duration-200 ${
-              location.pathname === '/admin'
-                ? 'bg-purple-600 text-white shadow-lg'
-                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              location.pathname === '/admin' ? 'bg-purple-600 text-white shadow-lg' : 'text-slate-300 hover:bg-slate-800 hover:text-white'
             }`}
           >
             <div className="flex items-center space-x-3">
@@ -232,28 +261,15 @@ const Sidebar: React.FC = () => {
         </div>
       </nav>
 
-      {/* Company Status - Only show when expanded */}
-      {!gameState.sidebarCollapsed && gameState.company && (
-        <div className="p-4 border-t border-slate-700">
-          <div className="bg-slate-800 rounded-lg p-3">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-slate-300">Company Level</span>
-              <span className="text-xs bg-blue-600 text-white px-2 py-1 rounded-full capitalize">
-                {gameState.company.level}
-              </span>
-            </div>
-            <div className="text-xs text-slate-400 mb-1">
-              {gameState.company.name}
-            </div>
-            <div className="w-full bg-slate-700 rounded-full h-1.5">
-              <div
-                className="bg-blue-500 h-1.5 rounded-full transition-all duration-500"
-                style={{ width: '35%' }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Company Status removed intentionally
+          Rationale:
+          - The small boxed "Company Level" UI and inline level badge were removed
+            to meet the product request to hide the Company Level output for all users.
+          - The original implementation duplicated small progress UI in multiple places
+            (inline badges + boxed summary). To deterministically ensure it's not shown,
+            we removed the boxed summary here. LevelBadge and LevelBox components are
+            disabled elsewhere to avoid leftover snippets.
+      */}
     </aside>
   );
 };

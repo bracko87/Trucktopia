@@ -6,13 +6,16 @@
  * Responsibilities:
  * - Render a public landing page for unauthenticated users.
  * - Render a compact WelcomeBack page for authenticated users (single-source of truth).
+ * - Provide a canonical link to the full /reset-password page (no in-page modal).
  *
  * Notes:
- * - This file now conditionally renders the landing or the welcome-back experience
- *   using the GameContext authentication state.
+ * - This file avoids runtime side-effects and keeps the same visual layout.
+ * - The ResetPassword form is served on its own route (/reset-password). Home no longer
+ *   imports or references PasswordResetForm to avoid runtime ReferenceErrors.
  */
 
 import React from 'react';
+import { Link } from 'react-router';
 import Hero from './home/Hero';
 import StatsBar from './home/StatsBar';
 import FeaturesGrid from './home/FeaturesGrid';
@@ -26,8 +29,11 @@ import WelcomeBack from './WelcomeBack';
 
 /**
  * Home
- * @description Root page component for the app's landing and dashboard entrance.
- *              Renders WelcomeBack for authenticated users and the full landing for guests.
+ *
+ * Root page component: renders WelcomeBack for authenticated users
+ * and the full landing for guests. Provides a canonical link to the reset page.
+ *
+ * @returns React.ReactElement
  */
 const Home: React.FC = () => {
   const { gameState } = useGame();
@@ -38,7 +44,6 @@ const Home: React.FC = () => {
     return <WelcomeBack />;
   }
 
-  // Public landing (long-scroll) for unauthenticated users
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-slate-100 flex flex-col">
       {/* Hero (cinematic background + CTAs / compact company card when authenticated) */}
@@ -68,7 +73,7 @@ const Home: React.FC = () => {
         <section aria-labelledby="info-tabs" className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <h2 id="info-tabs" className="text-2xl font-bold text-white">Information</h2>
-            <div className="text-sm text-slate-400 hidden sm:block">Helpful resources & notes</div>
+            <div className="text-sm text-slate-400 hidden sm:block">Helpful resources &amp; notes</div>
           </div>
           <InfoTabs />
         </section>
@@ -79,7 +84,7 @@ const Home: React.FC = () => {
           <FeaturesGrid />
         </section>
 
-        {/* Game facts — white cards for screenshot */}
+        {/* Game facts */}
         <section aria-labelledby="game-facts" className="mb-10">
           <h2 id="game-facts" className="text-2xl font-bold text-white mb-4">Game Facts</h2>
           <GameFactsGrid />
@@ -107,7 +112,7 @@ const Home: React.FC = () => {
             adapts — making strategic choices matter.
           </p>
 
-          <div className="mt-6 flex flex-col sm:flex-row gap-3">
+          <div className="mt-6 flex flex-col sm:flex-row gap-3 items-center">
             <a
               href="/user-settings"
               className="inline-flex items-center justify-center bg-white text-slate-900 px-4 py-2 rounded-lg hover:bg-slate-100 transition-colors"
@@ -115,6 +120,7 @@ const Home: React.FC = () => {
             >
               Account Settings
             </a>
+
             <a
               href="/dashboard"
               className="inline-flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
@@ -122,6 +128,19 @@ const Home: React.FC = () => {
             >
               Open Dashboard
             </a>
+
+            {/*
+              Change Password CTA:
+              - Use a react-router Link so navigation is handled client-side and does not perform a full page reload.
+              - This avoids server round-trips during client navigation in dev environments.
+            */}
+            <Link
+              to="/reset-password"
+              className="inline-flex items-center justify-center bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg"
+              aria-label="Open reset password page"
+            >
+              Change Password
+            </Link>
           </div>
         </section>
       </main>
