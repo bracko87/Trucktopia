@@ -116,6 +116,17 @@ import CompanyPersistenceSync from './components/Boot/CompanyPersistenceSync';
 import StaffFiredListener from './components/StaffFiredListener';
 
 /**
+ * NOTE:
+ * ComponentWearEngine implements the runtime wear engine as a React UI-less component
+ * (it listens to 'truckLiveUpdate' and 'componentWear:trigger' CustomEvents).
+ * To ensure it runs in the browser we must mount it inside the app. We import it
+ * from the engines folder and mount it alongside other background helpers.
+ */
+import ComponentWearEngine from './engines/ComponentWearEngine';
+
+// ExposeGameState helper is already imported above
+
+/**
  * App
  * @description Root application component: mounts providers, layout and routing.
  */
@@ -183,6 +194,11 @@ function App() {
 
             {/* Mount the Used Truck Generator engine so it runs daily and provides offers */}
             <UsedTruckGenerator />
+
+            {/* Mount ComponentWearEngine so wear logic is active in the browser.
+                This engine listens to 'truckLiveUpdate' and 'componentWear:trigger' events
+                and persists component state to localStorage / emits incidents. */}
+            <ComponentWearEngine />
 
             {/* Company persistence sync: ensure in-memory company changes are persisted to localStorage */}
             <CompanyPersistenceSync />
