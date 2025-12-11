@@ -904,10 +904,46 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
             sessionStorage.setItem('tm_current_user', normalized);
             userStorage.saveUserGameState(normalized, { isAuthenticated: true, company: null, sidebarCollapsed: false });
             setGameState({ isAuthenticated: true, currentPage: 'dashboard', company: null, sidebarCollapsed: false, currentUser: normalized });
+            // Attempt background notify to server to create app rows (best-effort)
+            (async () => {
+              try {
+                await fetch('/.netlify/functions/create-user', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ email: normalized, userId: signupBody?.user?.id ?? null })
+                });
+              } catch (e) {
+                // ignore: best-effort
+              }
+            })();
             return { success: true, message: 'Registered with Supabase but local save failed. You may sign in nonetheless.' };
           }
 
-          // Normal success path
+          // Normal success path: attempt to create application rows in DB via Netlify function (best-effort)
+          (async () => {
+            try {
+              const resp = await fetch('/.netlify/functions/create-user', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: normalized, userId: signupBody?.user?.id ?? null, username: normalized.split('@')[0] })
+              });
+              if (!resp.ok) {
+                // log, but do not fail registration
+                const text = await resp.text().catch(() => null);
+                // eslint-disable-next-line no-console
+                console.warn('[GameContext.register] create-user function returned non-ok', resp.status, text);
+              } else {
+                // optional: read response for diagnostics during dev
+                const js = await resp.json().catch(() => null);
+                // eslint-disable-next-line no-console
+                console.info('[GameContext.register] create-user function response', js);
+              }
+            } catch (e) {
+              // eslint-disable-next-line no-console
+              console.warn('[GameContext.register] create-user function failed', e);
+            }
+          })();
+
           sessionStorage.setItem('tm_current_user', normalized);
           userStorage.saveUserGameState(normalized, { isAuthenticated: true, company: null, sidebarCollapsed: false });
           setGameState({ isAuthenticated: true, currentPage: 'dashboard', company: null, sidebarCollapsed: false, currentUser: normalized });
@@ -1007,6 +1043,11 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
    * createCompany
    *
    * Ensures new companies have defaults (including reputation = 0) and persists them.
+   *
+   * Additional responsibilities added:
+   * - After persisting the company, asynchronously ensure truck components exist in Supabase
+   *   for any newly created trucks/trailers by calling rpc_initialize_truck_components via the
+   *   initializeTruckComponents helper. This operation is best-effort and non-blocking.
    */
   const createCompany = (company: Company) => {
     if (!gameState.currentUser) {
@@ -1037,6 +1078,53 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         userStorage.saveUserGameState(gameState.currentUser, { isAuthenticated: true, company: updated, sidebarCollapsed: gameState.sidebarCollapsed });
       }
       setGameState(prev => ({ ...prev, company: updated }));
+
+      /**
+       * Initialize truck components in Supabase (best-effort, non-blocking).
+       *
+       * Rationale:
+       * - When a company is created/updated with trucks/trailers we should ensure the
+       *   canonical per-truck component rows exist in Supabase so subsequent wear syncs
+       *   and RPCs operate on a complete set of components.
+       *
+       * Implementation notes:
+       * - We dynamically import the initialize helper to avoid requiring server-only libs at module init.
+       * - Each truck/trailer id is passed to the helper. The RPC itself is idempotent (ON CONFLICT DO NOTHING),
+       *   so calling it multiple times is safe.
+       */
+      (async () => {
+        try {
+          if (typeof window === 'undefined') return;
+          const mod = await import('../utils/initializeTruckComponents');
+          // helper signature: initializeTruckComponents(truckId: string): Promise<any>
+          const init = (mod && (mod.initializeTruckComponents ?? mod.default)) as ((truckId: string) => Promise<any>) | undefined;
+          if (typeof init !== 'function') {
+            // helper not available (dev mode / not implemented) — skip silently
+            return;
+          }
+
+          const trucksArr = Array.isArray(updated.trucks) ? updated.trucks : [];
+          const trailersArr = Array.isArray(updated.trailers) ? updated.trailers : [];
+          const ids = [
+            ...trucksArr.map((t: any) => String(t?.id ?? t?._id ?? '').trim()).filter(Boolean),
+            ...trailersArr.map((t: any) => String(t?.id ?? t?._id ?? '').trim()).filter(Boolean)
+          ];
+
+          // initialize sequentially to avoid spamming the RPC (small companies are common)
+          for (const id of ids) {
+            try {
+              await init(id);
+            } catch (e) {
+              // best-effort: log and continue
+              // eslint-disable-next-line no-console
+              console.warn('[createCompany] initializeTruckComponents failed for', id, e);
+            }
+          }
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.warn('[createCompany] dynamic initialize import failed', e);
+        }
+      })();
     } catch (err) {
       console.error('createCompany error', err);
     }
