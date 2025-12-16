@@ -44,6 +44,8 @@ import ManifestSynchronizer from './components/ManifestSynchronizer';
 
 // Bootstrap: ensure canonical in-game time seeded before any background engines mount
 import GameClockBootstrap from './components/Boot/GameClockBootstrap';
+// New: server-clock bootstrap — mounts the client hook that syncs UI clock to server DB
+import ServerClockBootstrap from './components/Boot/ServerClockBootstrap';
 
 // New: Fleet components popup listener (captures inline "More Details" clicks on Fleet pages)
 import FleetComponentsPopupListener from './components/fleet/FleetComponentsPopupListener';
@@ -202,6 +204,9 @@ function App() {
 
             {/* Company persistence sync: ensure in-memory company changes are persisted to localStorage */}
             <CompanyPersistenceSync />
+
+            {/* Server clock bootstrap: ensure the client clock is synced to the authoritative DB time */}
+            <ServerClockBootstrap />
 
             {/* Fleet components popup listener: intercepts "More Details" clicks on Fleet pages and opens the components-only modal */}
             <FleetComponentsPopupListener />

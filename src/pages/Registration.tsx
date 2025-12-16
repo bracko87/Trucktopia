@@ -1,5 +1,7 @@
 /**
  * Modern Registration Page with Football Manager 2024 inspired design
+ *
+ * Updated branding: page title uses TRUCKTOPIA
  */
 
 import { useState } from 'react'
@@ -71,7 +73,7 @@ export default function Registration() {
               <Truck className="h-7 w-7 text-white" />
             </div>
             <div className="text-left">
-              <h1 className="text-xl font-bold text-white leading-tight">TRUCK MANAGER</h1>
+              <h1 className="text-xl font-bold text-white leading-tight">TRUCKTOPIA</h1>
               <p className="text-yellow-500 text-sm font-medium">SIMULATOR 2024</p>
             </div>
           </div>

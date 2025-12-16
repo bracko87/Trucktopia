@@ -1,7 +1,7 @@
 /**
  * Login.tsx
  *
- * Login page for Truck Manager.
+ * Login page for Trucktopia.
  *
  * Responsibilities:
  * - Render the login form and handle sign-in flow.
@@ -167,7 +167,7 @@ export default function Login(): JSX.Element {
               <Truck className="h-7 w-7 text-white" />
             </div>
             <div className="text-left">
-              <h1 className="text-xl font-bold text-white leading-tight">TRUCK MANAGER</h1>
+              <h1 className="text-xl font-bold text-white leading-tight">TRUCKTOPIA</h1>
               <p className="text-yellow-500 text-sm font-medium">SIMULATOR 2024</p>
             </div>
           </div>

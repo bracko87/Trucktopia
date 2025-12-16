@@ -69,7 +69,7 @@ const Footer: React.FC = () => {
     <footer className="bg-slate-800 border-t border-slate-700 px-6 py-4">
       <div className="flex items-center justify-between text-sm text-slate-400">
         <div className="flex items-center space-x-6">
-          <span>© 2024 Truck Manager Simulator</span>
+          <span>© 2024 Trucktopia Simulator</span>
           <span>•</span>
           <span>Season 2024</span>
           <span>•</span>

@@ -57,7 +57,7 @@ const Hero: React.FC<HeroProps> = ({ authenticated = false, company }) => {
             </div>
 
             <h1 className="text-5xl sm:text-6xl font-extrabold text-white leading-tight">
-              Truck Manager — Build your logistics empire
+              Trucktopia — Build your logistics empire
             </h1>
 
             <p className="mt-4 text-lg text-slate-300 max-w-2xl">

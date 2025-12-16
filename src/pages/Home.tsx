@@ -73,14 +73,14 @@ const Home: React.FC = () => {
         <section aria-labelledby="info-tabs" className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <h2 id="info-tabs" className="text-2xl font-bold text-white">Information</h2>
-            <div className="text-sm text-slate-400 hidden sm:block">Helpful resources &amp; notes</div>
+            <div className="text-sm text-slate-400 hidden sm:block">Helpful resources & notes</div>
           </div>
           <InfoTabs />
         </section>
 
         {/* Features */}
         <section aria-labelledby="features" className="mb-10">
-          <h2 id="features" className="text-2xl font-bold text-white mb-4">Why Truck Manager?</h2>
+          <h2 id="features" className="text-2xl font-bold text-white mb-4">Why Trucktopia?</h2>
           <FeaturesGrid />
         </section>
 

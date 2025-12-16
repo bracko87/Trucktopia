@@ -5,7 +5,7 @@
  *
  * Responsibilities:
  * - Render the top application header including sidebar toggle and company info.
- * - Display the current user's company name as the title when available (fallback: "Truck Manager").
+ * - Display the current user's company name as the title when available (fallback: "Trucktopia").
  * - Prepend a non-bold label "Company Name:" immediately before the company name title.
  * - Show the user's display name, then the company's main hub (city) and country (friendly name + flag emoji)
  *   in the subtitle for all players.
@@ -77,7 +77,7 @@ function countryCodeToFlagEmoji(code?: string): string {
  *
  * @description Top navigation header. The primary title displays the user's
  * company name when available (gameState.company?.name). Falls back to the static
- * application title "Truck Manager".
+ * application title "Trucktopia".
  *
  * The subtitle shows the current username (with icon), hub name (with icon)
  * and country (friendly name + flag emoji). Adds "Company Main Hub:" non-bold label
@@ -103,9 +103,9 @@ const Header: React.FC = () => {
    * titleText
    *
    * @description Compute the header title string. Prefer the company name when present
-   * to provide a personalized title; fall back to the static "Truck Manager".
+   * to provide a personalized title; fall back to the static "Trucktopia".
    */
-  const titleText = gameState.company?.name || 'Truck Manager';
+  const titleText = gameState.company?.name || 'Trucktopia';
 
   /**
    * resolveUserName

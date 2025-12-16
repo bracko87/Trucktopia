@@ -12,11 +12,18 @@
  * - Ensure SUPABASE_URL and SUPABASE_SERVICE_ROLE are set in your Netlify site settings.
  */
 
+/* eslint-disable no-console */
 const fetch = global.fetch || require('node-fetch');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE;
 
+/**
+ * jsonResponse
+ * @description Helper to build Netlify JSON responses.
+ * @param {number} status HTTP status code
+ * @param {object} body JSON-serializable body
+ */
 const jsonResponse = (status, body) => {
   return {
     statusCode: status,
@@ -49,7 +56,6 @@ exports.handler = async function handler() {
         }
       });
 
-      // If upstream produced an HTML error (403, etc.), don't forward HTML; throw instead.
       if (!usersRes.ok) {
         throw new Error(`Supabase admin users request failed: ${usersRes.status} ${usersRes.statusText}`);
       }
@@ -112,11 +118,46 @@ exports.handler = async function handler() {
       console.warn('supabase-stats: companies fetch error', e.message);
     }
 
-    // 3) Active today: best-effort (we attempt to use auth.users created_at or last_sign_in if available).
+    // 3) Total trucks (all worlds, purchased or leased)
+    //    Query the trucks table via PostgREST with Prefer: count=exact
+    let totalTrucks = null;
+    try {
+      const trucksRes = await fetch(`${SUPABASE_URL}/rest/v1/trucks?select=id`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE}`,
+          apikey: SUPABASE_SERVICE_ROLE,
+          Accept: 'application/json',
+          Prefer: 'count=exact'
+        }
+      });
+
+      if (!trucksRes.ok) {
+        throw new Error(`Supabase trucks request failed: ${trucksRes.status} ${trucksRes.statusText}`);
+      }
+
+      const contentRange = trucksRes.headers.get('content-range') || trucksRes.headers.get('x-total-count');
+      if (contentRange) {
+        const parts = contentRange.split('/');
+        const lastPart = parts[parts.length - 1];
+        const parsed = parseInt(lastPart, 10);
+        if (!Number.isNaN(parsed)) totalTrucks = parsed;
+      } else {
+        // fallback: parse body length if small
+        const trucksJson = await trucksRes.json().catch(() => null);
+        if (Array.isArray(trucksJson)) {
+          totalTrucks = trucksJson.length;
+        }
+      }
+    } catch (e) {
+      totalTrucks = null;
+      console.warn('supabase-stats: trucks fetch error', e.message);
+    }
+
+    // 4) Active today: best-effort (we attempt to use auth.users created_at or last_sign_in if available).
     //    If we cannot get it reliably, return null and explain in the client.
     let activeToday = null;
     try {
-      // We'll attempt to query auth.users with a created_at filter for today (ISO date).
       const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
       const activeRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users?created_at=gte.${today}`, {
         method: 'GET',
@@ -145,12 +186,13 @@ exports.handler = async function handler() {
       console.warn('supabase-stats: activeToday fetch error', e.message);
     }
 
-    // 4) Storage used: we don't compute real storage here; leave as null or supplied if you want.
+    // 5) Storage used: we don't compute real storage here; leave as null or supplied if you want.
     const storageUsed = null;
 
     return jsonResponse(200, {
       totalUsers,
       usersWithCompanies,
+      totalTrucks,
       activeToday,
       storageUsed,
       error: null

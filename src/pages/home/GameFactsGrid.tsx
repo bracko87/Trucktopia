@@ -74,10 +74,10 @@ const GameFactsGrid: React.FC = () => {
       icon: <Award className="w-5 h-5" />
     },
     {
-      title: 'Persistence',
-      value: 'Save / Load',
-      description: 'Company state persists locally and can be migrated between systems.',
-      icon: <Box className="w-5 h-5" />
+      title: 'Contract Variety',
+      value: 'Multiple Contract Types',
+      description: 'Work on contracts across delivery systems: standard freight, express, refrigerated, multi-stop and oversized loads.',
+      icon: <Package className="w-5 h-5" />
     },
     {
       title: 'Play in Minutes',

@@ -39,7 +39,7 @@ const InfoTabs: React.FC = () => {
       content: (
         <div className="text-sm text-slate-300 space-y-2">
           <p>
-            Truck Manager is a logistics simulation where you buy vehicles, hire staff,
+            Trucktopia is a logistics simulation where you buy vehicles, hire staff,
             take contracts and expand hubs. Balance maintenance, payroll and market risk
             to grow a profitable operation.
           </p>
@@ -57,12 +57,18 @@ const InfoTabs: React.FC = () => {
       content: (
         <div className="text-sm text-slate-300 space-y-2">
           <p>
-            Join the community to share strategies, liveries and mod ideas. Find
-            community-driven challenges and leaderboards to compare progress.
+            Discuss strategies, game rules, and mechanics with the community.
+            Join challenges, track leaderboards, and stay connected with other players.
           </p>
           <p>
-            We recommend creating a profile and visiting the forums to ask questions
-            or suggest features.
+            <a
+              href="https://discord.gg/TRUCKTOPIA"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-400 hover:text-blue-300 underline"
+            >
+              Join our Discord Channel
+            </a>
           </p>
         </div>
       )
@@ -74,31 +80,14 @@ const InfoTabs: React.FC = () => {
       content: (
         <div className="text-sm text-slate-300 space-y-2">
           <p>
-            Need help? Check the FAQ in settings or open a support ticket. Common
-            issues such as import/export, save sync and UI glitches are documented.
+            Need help? Check the game manual, visit our Discord community, or explore the FAQ in settings.
           </p>
           <p>
-            For migration and backups, use the Migration page available in the admin
-            or settings area.
+            You can also contact us directly using the support form in game settings.
           </p>
         </div>
       )
     },
-    {
-      key: 'changelog',
-      title: 'Changelog',
-      icon: <GitBranch className="w-5 h-5" />,
-      content: (
-        <div className="text-sm text-slate-300 space-y-2">
-          <p className="font-medium text-white">Version 1.0 — Initial public release</p>
-          <ul className="list-disc list-inside text-slate-400">
-            <li>Core simulation, fleet management and market system</li>
-            <li>Staff hiring, experience and promotions</li>
-            <li>Save/load and migration helpers</li>
-          </ul>
-        </div>
-      )
-    }
   ];
 
   const [active, setActive] = React.useState<InfoTabKey>('overview');
@@ -135,8 +124,13 @@ const InfoTabs: React.FC = () => {
       </div>
 
       <div>
-        {/* Tab list */}
-        <div role="tablist" aria-label="Information tabs" className="flex gap-2 mb-4" onKeyDown={handleKeyDown}>
+        {/* Tab list - stretch each tab equally across the available width */}
+        <div
+          role="tablist"
+          aria-label="Information tabs"
+          className="flex gap-2 mb-4 w-full"
+          onKeyDown={handleKeyDown}
+        >
           {tabs.map((t, i) => {
             const isActive = t.key === active;
             return (
@@ -148,7 +142,7 @@ const InfoTabs: React.FC = () => {
                 aria-controls={`panel-${t.key}`}
                 id={`tab-${t.key}`}
                 onClick={() => setActive(t.key)}
-                className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                className={`flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                   isActive
                     ? 'bg-slate-700 text-white border border-slate-600'
                     : 'bg-slate-700/40 text-slate-300 hover:bg-slate-700/60'

@@ -51,7 +51,7 @@ const FeaturesGrid: React.FC = () => {
         icon={<Truck className="w-6 h-6 text-amber-400" />}
       />
       <FeatureCard
-        title="European Transport Network"
+        title="Worldwide Transport Network"
         description="Take freight contracts across different countries with dynamic markets and realistic delivery constraints."
         icon={<Map className="w-6 h-6 text-green-400" />}
       />
