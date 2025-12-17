@@ -1,19 +1,17 @@
 /**
- * Distance calculator utility with Haversine formula, pre-computed JSON, and optional Google Maps integration.
+ * Distance calculator utility with Haversine formula, pre-computed JSON, optional Google Maps
+ * and server-side Supabase fallback (via Netlify function).
  *
- * Strategy (production-friendly, fast, and accurate):
- * 1) Pre-computed JSON matrix (distances.json) for instant lookup when available.
- * 2) Haversine straight-line distance if both cities have coordinates.
- * 3) Estimation fallback if unknown.
- * 4) Optional: Google Maps (Distance Matrix) to fetch precise driving distance on demand.
- *    - Results are cached in localStorage with TTL and reused synchronously by getDistance.
+ * Strategy:
+ * 1) Cached online driving distance (localStorage) if warmed previously.
+ * 2) Pre-computed distances.json for instant lookup.
+ * 3) Query serverless endpoint (/.netlify/functions/distance or /api/distance) to fetch Supabase row and cache it.
+ * 4) Google Maps (JS or REST) paths (unchanged).
+ * 5) Haversine with a multiplier fallback when no driving distance is available.
  *
  * Notes:
- * - We DO NOT hardcode API keys. If you want online driving distances:
- *   a) Load Google Maps JS (e.g., via your GoogleMapsLoader) so window.google.maps.DistanceMatrixService is available, or
- *   b) Inject a key at runtime: globalThis.__GOOGLE_MAPS_API_KEY__ = '...';
- * - Calling Google from the browser exposes a key; ensure referrer restrictions and billing safeguards.
- * - For maximum security, proxy requests via your backend and keep the key server-side.
+ * - warmDistance now accepts an optional kmOverride to directly cache a value.
+ * - When serverless endpoint returns km we cache it immediately so getDistance() can use it synchronously later.
  */
 
 import { cityCoords, hasCoordinates } from './distance-scaffold';
@@ -36,26 +34,9 @@ const distanceMatrix: DistanceMatrix = distancesData as DistanceMatrix;
  * Config options for optional online distance fetching.
  */
 interface OnlineDistanceOptions {
-  /**
-   * Enable or disable online fetching (Google Distance Matrix).
-   * Default: false (safe by default).
-   */
   enableOnline?: boolean;
-  /**
-   * Time-to-live (hours) for cached online distances in localStorage.
-   * Default: 336 hours (14 days).
-   */
   cacheTTLHours?: number;
-  /**
-   * If true and Google JS API is available (window.google), we prefer using the JS client
-   * instead of HTTP REST (avoids CORS and is the recommended browser approach).
-   * Default: true.
-   */
   preferGoogleJsApi?: boolean;
-  /**
-   * Region bias for city names (improves geocoding on Google side). Example: 'eu'
-   * This is a hint; Google may still resolve globally.
-   */
   regionBias?: string;
 }
 
@@ -71,6 +52,7 @@ const onlineOptions: Required<OnlineDistanceOptions> = {
 
 /**
  * Small utility to update online options at runtime.
+ * @param options Partial online options
  */
 export function setOnlineDistanceOptions(options: OnlineDistanceOptions = {}): void {
   Object.assign(onlineOptions, options);
@@ -85,6 +67,7 @@ export function getOnlineDistanceOptions(): Readonly<Required<OnlineDistanceOpti
 
 /**
  * Convert degrees to radians.
+ * @param degrees degrees
  */
 function toRad(degrees: number): number {
   return (degrees * Math.PI) / 180;
@@ -111,6 +94,8 @@ function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 /**
  * Key construction used for localStorage caching.
  * We store cached distances both directions (A|B and B|A) for O(1) lookup.
+ * @param a origin
+ * @param b destination
  */
 function pairKey(a: string, b: string): string {
   return `${a}__|__${b}`;
@@ -156,6 +141,8 @@ const memCache: Record<string, CacheEntry> = { ...loadCache() };
 /**
  * Try to read a cached driving distance for a city pair (either direction).
  * Returns number if found and not expired; otherwise null.
+ * @param a origin
+ * @param b destination
  */
 function getCachedDrivingDistance(a: string, b: string): number | null {
   const now = Date.now();
@@ -175,6 +162,9 @@ function getCachedDrivingDistance(a: string, b: string): number | null {
 
 /**
  * Write a cache entry for both directions.
+ * @param a origin
+ * @param b destination
+ * @param km kilometers
  */
 function putCachedDrivingDistance(a: string, b: string, km: number): void {
   const now = Date.now();
@@ -192,19 +182,77 @@ function round1(n: number): number {
 }
 
 /**
- * Optional: Fetch precise driving distance using Google Maps Distance Matrix.
- * Returns kilometers, or null if not available or failed.
- *
- * This function DOES NOT change the synchronous getDistance behavior directly.
- * Instead, on success it caches the result so future getDistance() calls can use it synchronously.
+ * Haversine multiplier applied when no driving distance is available.
+ * This is a pragmatic approximation until authoritative driving distances are used.
  */
-export async function warmDistance(fromCity: string, toCity: string): Promise<number | null> {
-  if (!onlineOptions.enableOnline) return null;
+const HAVERSINE_MULTIPLIER = 1.7;
+
+/**
+ * Optional: Fetch precise driving distance using Google Maps Distance Matrix,
+ * or the serverless Supabase-backed endpoint first (Netlify function).
+ *
+ * warmDistance now supports an optional override km param; when provided the value
+ * is cached immediately.
+ *
+ * @param fromCity origin
+ * @param toCity destination
+ * @param kmOverride optional kilometers to cache immediately
+ * @returns kilometers or null
+ */
+export async function warmDistance(
+  fromCity: string,
+  toCity: string,
+  kmOverride?: number
+): Promise<number | null> {
+  if (!onlineOptions.enableOnline) {
+    // If online fetches disabled, only honor override.
+    if (typeof kmOverride === 'number') {
+      putCachedDrivingDistance(fromCity, toCity, kmOverride);
+      return kmOverride;
+    }
+    return null;
+  }
+
   if (!fromCity || !toCity) return null;
+
+  // direct override - cache and return
+  if (typeof kmOverride === 'number') {
+    putCachedDrivingDistance(fromCity, toCity, kmOverride);
+    return kmOverride;
+  }
+
+  // Special case: same city -> local delivery estimate
   if (fromCity === toCity) {
     const km = Math.floor(Math.random() * 28) + 5;
     putCachedDrivingDistance(fromCity, toCity, km);
     return km;
+  }
+
+  // 0) Try serverless Supabase-backed endpoint(s) first (same-origin).
+  //    This keeps your Supabase service role key server-side.
+  if (typeof window !== 'undefined') {
+    try {
+      const endpoints = ['/api/distance', '/.netlify/functions/distance'];
+      for (const base of endpoints) {
+        try {
+          const url = `${base}?from=${encodeURIComponent(fromCity)}&to=${encodeURIComponent(toCity)}`;
+          // fetch same-origin serverless function
+          const res = await fetch(url, { method: 'GET' });
+          if (!res.ok) continue;
+          const json = await res.json();
+          const km = Number(json?.km);
+          if (Number.isFinite(km)) {
+            putCachedDrivingDistance(fromCity, toCity, km);
+            return km;
+          }
+        } catch {
+          // try next endpoint
+          continue;
+        }
+      }
+    } catch {
+      // continue to Google/REST fallback
+    }
   }
 
   // 1) Prefer Google JS API if available (no CORS issues).
@@ -226,7 +274,6 @@ export async function warmDistance(fromCity: string, toCity: string): Promise<nu
     (globalThis as any).__GOOGLE_MAPS_API_KEY__ ||
     (globalThis as any).__GMAPS_KEY__ ||
     '';
-
   if (apiKey) {
     try {
       const km = await getDrivingDistanceViaRest(fromCity, toCity, apiKey, onlineOptions.regionBias);
@@ -244,6 +291,8 @@ export async function warmDistance(fromCity: string, toCity: string): Promise<nu
 
 /**
  * Google Maps JS API path (uses window.google.maps.DistanceMatrixService).
+ * @param fromCity
+ * @param toCity
  */
 async function getDrivingDistanceViaGoogleJs(fromCity: string, toCity: string): Promise<number | null> {
   return new Promise((resolve) => {
@@ -315,10 +364,13 @@ async function getDrivingDistanceViaRest(
  * Resolution order:
  * - If a cached online (driving) distance exists and is fresh -> use it for best realism.
  * - If present in precomputed distances.json -> return it.
- * - If both cities have coordinates -> Haversine straight-line distance.
+ * - If both cities have coordinates -> Haversine straight-line distance (scaled by a multiplier).
  * - Otherwise -> estimate across categories.
- * 
+ *
  * IMPORTANT: Returns null for distances over 3500km (unrealistic routes)
+ *
+ * @param fromCity origin
+ * @param toCity destination
  */
 export function getDistance(fromCity: string, toCity: string): number | null {
   if (!fromCity || !toCity) return null;
@@ -344,13 +396,14 @@ export function getDistance(fromCity: string, toCity: string): number | null {
     return distance <= 3500 ? distance : null;
   }
 
-  // 3) Try Haversine calculation if both cities have coordinates
+  // 3) Try Haversine calculation if both cities have coordinates.
+  // Apply a multiplier to better approximate driving distance.
   if (hasCoordinates(fromCity) && hasCoordinates(toCity)) {
     const coords1 = cityCoords[fromCity];
     const coords2 = cityCoords[toCity];
     const distance = haversineDistance(coords1.lat, coords1.lon, coords2.lat, coords2.lon);
-    const rounded = round1(distance);
-    return rounded <= 3500 ? rounded : null;
+    const adjusted = round1(distance * HAVERSINE_MULTIPLIER);
+    return adjusted <= 3500 ? adjusted : null;
   }
 
   // 4) Estimate distance based on region heuristics

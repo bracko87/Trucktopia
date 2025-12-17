@@ -63,9 +63,9 @@ const GameFactsGrid: React.FC = () => {
       icon: <Globe className="w-5 h-5" />
     },
     {
-      title: 'Persistence',
-      value: 'Save / Load',
-      description: 'Company state persists locally and can be migrated between systems.',
+      title: 'Realistic Time Simulation',
+      value: 'Dynamic day/night & schedule',
+      description: 'World clock advances with configurable speed and running state.',
       icon: <Box className="w-5 h-5" />
     }
   ];
