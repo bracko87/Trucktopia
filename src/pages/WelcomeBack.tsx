@@ -17,6 +17,7 @@
 import React from 'react';
 import { useGame } from '../contexts/GameContext';
 import { Truck, Building, Users, DollarSign, Clock } from 'lucide-react';
+import LevelBadge from '../components/levels/LevelBadge';
 
 interface SummaryCardProps {
   title: string;
@@ -65,18 +66,11 @@ const WelcomeHero: React.FC<{ company: any }> = ({ company }) => {
               <span className="inline-flex items-center px-3 py-1 rounded-full bg-slate-700 text-slate-300 text-sm">
                 <Building className="w-4 h-4 mr-2" /> HQ: {hubName}
               </span>
-              <span className="inline-flex items-center px-3 py-1 rounded-full bg-slate-700 text-slate-300 text-sm">
-                <Truck className="w-4 h-4 mr-2" /> Level: {companyLevel}
-              </span>
+{'              '}<LevelBadge company={company} />
             </div>
           </div>
 
-          <div className="flex items-center space-x-6 text-right">
-            <div>
-              <div className="text-sm text-slate-400">Company Balance</div>
-              <div className="text-2xl font-bold text-green-400">${Number(balance).toLocaleString()}</div>
-            </div>
-          </div>
+
         </div>
       </div>
     </header>

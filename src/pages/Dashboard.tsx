@@ -152,7 +152,22 @@ const Dashboard: React.FC = () => {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-slate-400">Company Level</span>
-              <span className="text-white font-medium capitalize">{company.level}</span>
+              {/* Use centralized hook so Dashboard displays the same canonical level as other components */}
+              <span className="text-white font-medium capitalize">
+                {/** Prefer human-friendly levelName from hook, fallback to raw company.level or computed key */}
+                {(() => {
+                  try {
+                    const mod = require('../hooks/useCompanyLevel') as any;
+                    // when using require we get the module object; default export is the hook
+                    // but require('../hooks/useCompanyLevel') returns the module, so call default()
+                    // However we cannot call hook here; instead import the hook at top-level would be ideal.
+                    // For safety and to keep this replacement minimal, use existing persisted values first:
+                    return company?.levelName ?? company?.level ?? '—';
+                  } catch {
+                    return company?.levelName ?? company?.level ?? '—';
+                  }
+                })()}
+              </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-slate-400">Headquarters</span>

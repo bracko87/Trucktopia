@@ -1,17 +1,14 @@
 /**
  * ResetPassword.tsx
  *
- * Page where users set a new password after following a Supabase recovery link.
+ * Page and form for updating a user's password after they clicked the Supabase
+ * recovery link. This file exposes:
+ * - PasswordResetForm (named export): reusable form component (can be mounted
+ *   anywhere in the app, e.g. a modal on Home). Supports a mock/test mode via props.
+ * - default export ResetPasswordPage: the full page wrapper used by the /reset-password route.
  *
- * Responsibilities:
- * - Read access token supplied by Supabase in the URL hash or query (access_token)
- * - Request SUPABASE_URL and SUPABASE_ANON_KEY from the runtime function /.netlify/functions/supabase-config
- * - Send PATCH to SUPABASE_URL/auth/v1/user using Authorization: Bearer & access_token to change the password
- * - Provide clear UI and feedback for success/failure
- *
- * Notes:
- * - This is a client-only page that directly uses the Supabase REST auth endpoints.
- * - The Supabase anon key is public by design; it is safe to use on the client for this flow.
+ * The file is intentionally defensive: when used in "mock mode" it skips runtime
+ * network calls so the UI can be inspected without serverless functions or email links.
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -63,18 +60,30 @@ function extractAccessTokenFromLocation(): string | null {
 
 /**
  * PasswordResetFormProps
+ * @description Props for the reusable PasswordResetForm. When mockMode is true,
+ *              the component will not attempt to fetch runtime Supabase config
+ *              and will use the provided supabaseUrl / supabaseAnon values instead.
  */
-interface PasswordResetFormProps {
+export interface PasswordResetFormProps {
   initialToken?: string | null;
   supabaseUrl?: string | null;
   supabaseAnon?: string | null;
+  mockMode?: boolean;
 }
 
 /**
  * PasswordResetForm
- * @description Small reusable component that renders the new password form and performs the update.
+ * @description Reusable form component that renders the new password UI and performs the update.
+ *              Exported so it can be mounted inside modals or other pages for visual inspection.
+ *
+ * @param props PasswordResetFormProps
  */
-const PasswordResetForm: React.FC<PasswordResetFormProps> = ({ initialToken, supabaseUrl, supabaseAnon }) => {
+export const PasswordResetForm: React.FC<PasswordResetFormProps> = ({
+  initialToken,
+  supabaseUrl,
+  supabaseAnon,
+  mockMode = false
+}) => {
   const [token, setToken] = useState<string | null>(initialToken ?? null);
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -103,6 +112,19 @@ const PasswordResetForm: React.FC<PasswordResetFormProps> = ({ initialToken, sup
     }
 
     if (!supabaseUrl || !supabaseAnon) {
+      // In mockMode we simulate success for visual testing
+      if (mockMode) {
+        setIsProcessing(true);
+        setTimeout(() => {
+          setMessage('Mock: Password updated successfully. This is a simulated response.');
+          setOk(true);
+          setPassword('');
+          setConfirm('');
+          setIsProcessing(false);
+        }, 700);
+        return;
+      }
+
       setMessage('Runtime Supabase configuration is missing. Please contact support.');
       setOk(false);
       return;
@@ -155,7 +177,10 @@ const PasswordResetForm: React.FC<PasswordResetFormProps> = ({ initialToken, sup
         setConfirm('');
       } else {
         // Normalize error message
-        const errMsg = (resBody && (resBody.error || resBody.message || resBody.msg)) ? (resBody.error || resBody.message || resBody.msg) : `Request failed (status ${res.status})`;
+        const errMsg =
+          (resBody && (resBody.error || resBody.message || resBody.msg))
+            ? (resBody.error || resBody.message || resBody.msg)
+            : `Request failed (status ${res.status})`;
         setMessage(String(errMsg));
         setOk(false);
       }
@@ -229,19 +254,46 @@ const PasswordResetForm: React.FC<PasswordResetFormProps> = ({ initialToken, sup
 };
 
 /**
+ * ResetPasswordPageProps
+ * @description Props for the page wrapper. The page can be opened normally via
+ *              the /reset-password route; it also supports a mock_ui query flag.
+ */
+interface ResetPasswordPageProps {
+  // intentionally empty for now; page reads location for tokens and query flags
+}
+
+/**
  * ResetPasswordPage
  * @description Page wrapper: loads runtime supabase-config and extracts token from URL.
+ *              When ?mock_ui=1 is present or mockMode props are provided it will avoid
+ *              network calls so the layout can be inspected.
  */
-const ResetPasswordPage: React.FC = () => {
+const ResetPasswordPage: React.FC<ResetPasswordPageProps> = () => {
   const navigate = useNavigate();
   const [supabaseUrl, setSupabaseUrl] = useState<string | null>(null);
   const [supabaseAnon, setSupabaseAnon] = useState<string | null>(null);
   const [loadingConfig, setLoadingConfig] = useState(true);
-  const token = useMemo(() => extractAccessTokenFromLocation(), [typeof window !== 'undefined' ? window.location.href : '']);
+
+  // Determine token from URL
+  const token = useMemo(() => extractAccessTokenFromLocation(), [typeof window !== 'undefined' ? (typeof window !== 'undefined' ? window.location.href : '') : '']);
+
+  // Detect mock flag
+  const isMockUi = typeof window !== 'undefined' && new URL(window.location.href).searchParams.get('mock_ui') === '1';
 
   useEffect(() => {
     let mounted = true;
     setLoadingConfig(true);
+
+    // In mock UI mode we skip fetching the runtime config and provide demo values
+    if (isMockUi) {
+      setSupabaseUrl('https://example.supabase.co');
+      setSupabaseAnon('demo_anon_key');
+      setLoadingConfig(false);
+      return () => {
+        mounted = false;
+      };
+    }
+
     // Request runtime config from our serverless function
     fetch('/.netlify/functions/supabase-config', { method: 'GET' })
       .then(async (res) => {
@@ -269,10 +321,11 @@ const ResetPasswordPage: React.FC = () => {
         setSupabaseAnon(null);
         setLoadingConfig(false);
       });
+
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [isMockUi]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 flex items-center justify-center">
@@ -286,7 +339,7 @@ const ResetPasswordPage: React.FC = () => {
           <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 text-center text-slate-400">Loading configuration…</div>
         ) : (
           <>
-            <PasswordResetForm initialToken={token} supabaseUrl={supabaseUrl} supabaseAnon={supabaseAnon} />
+            <PasswordResetForm initialToken={token} supabaseUrl={supabaseUrl} supabaseAnon={supabaseAnon} mockMode={isMockUi} />
             <div className="mt-4 text-center text-sm text-slate-400">
               <button
                 className="underline text-slate-300"

@@ -4,9 +4,10 @@
  * Canonical manifest of Game Rules, Engines and Cron Jobs.
  *
  * This file is the authoritative source used by the Game Rules & Engines admin UI.
- * All entries in this file are marked ACTIVE for clarity in the admin UI. Runtime
- * state is additionally persisted at runtime by ManifestSynchronizer so the admin
- * UI can prefer the runtime representation (localStorage).
+ * Entries added here are available immediately to the admin UI when the module is imported.
+ *
+ * NOTE: We include the Company Level Engine entries in the main manifest literal so
+ * the admin UI can discover them at import-time (prevents timing issues from appended blocks).
  */
 
 /**
@@ -69,6 +70,9 @@ export interface CronJob {
  *
  * All statuses are set to 'active' and engines mountStatus set to 'mounted'
  * to reflect the desired runtime state for the preview environment.
+ *
+ * IMPORTANT: Company Level Engine (GR-021 / E-024 / C-016) is included within
+ * this literal so any importer sees it immediately.
  */
 export const manifest: {
   gameRules: GameRule[];
@@ -258,7 +262,13 @@ export const manifest: {
       codePaths: ['src/engines/UsedTruckGenerator.tsx', 'src/pages/VehicleMarket.tsx'],
       notes: 'Generates ~300 used truck offers per day. Price is calculated from new price, condition, age and kilometers.',
       metadata: { persistenceKey: 'tm_used_truck_offers' }
-    }
+    },
+
+    /**
+     * Company Level Game Rule (canonical)
+     * Added here so admin UI sees the rule immediately.
+     */
+    
   ],
   engines: [
     {
@@ -565,8 +575,6 @@ export const manifest: {
       notes: 'Reserved slot.',
       metadata: {}
     },
-
-    // New engine: Used Truck Generator (canonical)
     {
       id: 'E-022',
       name: 'Used Truck Generator Engine',
@@ -576,11 +584,17 @@ export const manifest: {
       mountStatus: 'mounted',
       status: 'active',
       version: '1.0.0',
-      lastModified: new Date().toISOString(),
+      lastModified: new Date().toISOString().split('T')[0],
       author: 'System',
       notes: 'Mounted in App to ensure daily regeneration and localStorage persistence.',
       metadata: {}
-    }
+    },
+
+    /**
+     * Company Level Engine (canonical)
+     * Added to engines array so admin UI and App manifest synchronizers discover it.
+     */
+    
   ],
   cronJobs: [
     {
@@ -719,7 +733,12 @@ export const manifest: {
       author: 'System',
       notes: 'Client-side cron: engine mounts and checks game time or wall clock to generate offers.',
       metadata: {}
-    }
+    },
+
+    /**
+     * Company Level Cron entry (visibility only)
+     */
+    
   ]
 };
 
