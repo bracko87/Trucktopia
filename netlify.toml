@@ -1,7 +1,7 @@
 # netlify.toml
-# Netlify configuration: keep function headers and only the minimal safe redirects.
-# SPA wildcard rewrites will be served from /public/_redirects (recommended).
-# This file intentionally contains only explicit known-route rewrites (safe list).
+# This file configures Netlify to add CORS headers at the edge for function requests.
+# Purpose: ensure OPTIONS preflight and all function responses include Access-Control-Allow-* headers.
+# Place this file in the repository root (next to package.json) and trigger a redeploy.
 
 [[headers]]
   for = "/.netlify/functions/*"
@@ -12,19 +12,3 @@
     Access-Control-Max-Age = "86400"
     Vary = "Origin"
     Access-Control-Allow-Credentials = "true"
-
-# Safe explicit SPA rewrites (only known app routes).
-[[redirects]]
-  from = "/market"
-  to = "/index.html"
-  status = 200
-
-[[redirects]]
-  from = "/company"
-  to = "/index.html"
-  status = 200
-
-[[redirects]]
-  from = "/jobs"
-  to = "/index.html"
-  status = 200
