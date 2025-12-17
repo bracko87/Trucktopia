@@ -1,14 +1,11 @@
-# netlify.toml
-# This file configures Netlify to add CORS headers at the edge for function requests.
-# Purpose: ensure OPTIONS preflight and all function responses include Access-Control-Allow-* headers.
-# Place this file in the repository root (next to package.json) and trigger a redeploy.
+[build]
+  # Build command used by your project. Adjust if your repo uses a different command.
+  command = "npm run build"
+  # Directory where Netlify will look for serverless functions
+  functions = "netlify/functions"
+  # The folder that contains your built site (adjust if different; replace "dist" with "public" if needed)
+  publish = "dist"
 
-[[headers]]
-  for = "/.netlify/functions/*"
-  [headers.values]
-    Access-Control-Allow-Origin = "https://sider.ai"
-    Access-Control-Allow-Methods = "GET, POST, OPTIONS"
-    Access-Control-Allow-Headers = "Content-Type, Authorization, apikey, Prefer, Origin"
-    Access-Control-Max-Age = "86400"
-    Vary = "Origin"
-    Access-Control-Allow-Credentials = "true"
+[dev]
+  # Local Netlify Dev config (optional)
+  functions = "netlify/functions"
