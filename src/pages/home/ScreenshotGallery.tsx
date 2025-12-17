@@ -32,8 +32,8 @@ interface ScreenshotItem {
  */
 const ScreenshotGallery: React.FC = () => {
   const images: ScreenshotItem[] = [
-    { src: 'https://i.ibb.co/XxKfn78F/snep-1.png', alt: 'Truck overview', caption: 'Vehicle Market' },
-    { src: 'https://i.ibb.co/m5R14cJq/snep-2.png', alt: 'Truck in garage', caption: 'Truck card' },
+    { src: 'https://pub-cdn.sider.ai/u/U0KAH9N4VLX/web-coder/68fe87c0584c7e7f606af31d/resource/6d87e5e4-3c79-428d-813d-674254180873.jpg', alt: 'Truck overview', caption: 'Fleet overview' },
+    { src: 'https://pub-cdn.sider.ai/u/U0KAH9N4VLX/web-coder/68fe87c0584c7e7f606af31d/resource/056f37b3-3d07-45d1-810b-0a57d05d5f5e.jpg', alt: 'Truck in garage', caption: 'Garage & maintenance' },
     { src: 'https://pub-cdn.sider.ai/u/U0KAH9N4VLX/web-coder/68fe87c0584c7e7f606af31d/resource/7d42a86b-03ff-428a-9824-4db7b0275355.jpg', alt: 'Truck on highway', caption: 'Long-haul deliveries' },
     { src: 'https://pub-cdn.sider.ai/u/U0KAH9N4VLX/web-coder/68fe87c0584c7e7f606af31d/resource/adc0a620-455a-49fe-a86b-dd9a3b99c731.jpg', alt: 'Cargo loading', caption: 'Cargo & loading' },
     { src: 'https://pub-cdn.sider.ai/u/U0KAH9N4VLX/web-coder/68fe87c0584c7e7f606af31d/resource/18489a1d-8da9-473d-952b-1acc504d5fd7.jpg', alt: 'Urban delivery', caption: 'City routes' },
