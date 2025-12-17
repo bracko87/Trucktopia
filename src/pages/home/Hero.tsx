@@ -61,7 +61,7 @@ const Hero: React.FC<HeroProps> = ({ authenticated = false, company }) => {
             </h1>
 
             <p className="mt-4 text-lg text-slate-300 max-w-2xl">
-              Manage fleets, hire professionals, and deliver cargo across Europe.
+              Manage fleets, hire professionals, and deliver cargo worldwide.
               Real markets, strategic upgrades and real-time operations — start growing today.
             </p>
 
