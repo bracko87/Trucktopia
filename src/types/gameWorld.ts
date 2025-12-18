@@ -1,98 +1,56 @@
 /**
- * Game World Configuration Interface
- * Defines the structure for different game worlds
+ * gameWorld.ts
+ *
+ * Single-world shim utilities.
+ *
+ * Purpose:
+ * - After switching to a single-world architecture we keep a tiny shim so other
+ *   modules that import these helpers keep functioning without world-specific behaviour.
  */
 
+/**
+ * GameWorldConfig
+ * @description Minimal typed shape for world-like config (kept for compatibility).
+ */
 export interface GameWorldConfig {
   id: string;
-  name: string;
-  description: string;
-  region: string;
-  currency: string;
-  enabled: boolean;
-  features: {
-    hasCustomTrucks: boolean;
-    hasCustomTrailers: boolean;
-    hasCustomCargo: boolean;
-    hasCustomCities: boolean;
-  };
-  dataSources: {
-    cities: string;
-    distances: string;
-    cargo: string;
-    jobs: string;
-    vehicles: string;
-  };
+  name?: string;
+  enabled?: boolean;
+  [key: string]: any;
 }
 
 /**
- * Available game worlds
+ * GAME_WORLDS
+ * @description Single default manifest kept for compatibility.
  */
 export const GAME_WORLDS: Record<string, GameWorldConfig> = {
-  'euro-asia': {
-    id: 'euro-asia',
-    name: 'Euro-Asia Transport',
-    description: 'Transport across Europe and Asia continents',
-    region: 'Europe & Asia',
-    currency: 'EUR',
-    enabled: true,
-    features: {
-      hasCustomTrucks: true,
-      hasCustomTrailers: true,
-      hasCustomCargo: true,
-      hasCustomCities: true
-    },
-    dataSources: {
-      cities: '/data/euro-asia/cities.json',
-      distances: '/data/euro-asia/distances.json',
-      cargo: '/data/euro-asia/cargo.json',
-      jobs: '/data/euro-asia/jobs.json',
-      vehicles: '/data/euro-asia/vehicles.json'
-    }
-  },
-  'america': {
-    id: 'america',
-    name: 'American Trucking',
-    description: 'Cross-country transport across North and South America',
-    region: 'Americas',
-    currency: 'USD',
-    enabled: false, // Not enabled yet
-    features: {
-      hasCustomTrucks: true,
-      hasCustomTrailers: true,
-      hasCustomCargo: true,
-      hasCustomCities: true
-    },
-    dataSources: {
-      cities: '/data/america/cities.json',
-      distances: '/data/america/distances.json',
-      cargo: '/data/america/cargo.json',
-      jobs: '/data/america/jobs.json',
-      vehicles: '/data/america/vehicles.json'
-    }
+  default: {
+    id: 'default',
+    name: 'Default',
+    enabled: true
   }
 };
 
 /**
- * Get current active game world
+ * getCurrentWorld
+ * @description Returns the single world id used by the app. No-op shim.
  */
 export function getCurrentWorld(): string {
-  return localStorage.getItem('tm_current_world') || 'euro-asia';
+  return 'default';
 }
 
 /**
- * Set current active game world
+ * setCurrentWorld
+ * @description No-op setter kept for compatibility with existing imports.
  */
-export function setCurrentWorld(worldId: string): void {
-  if (GAME_WORLDS[worldId] && GAME_WORLDS[worldId].enabled) {
-    localStorage.setItem('tm_current_world', worldId);
-  }
+export function setCurrentWorld(_: string): void {
+  // intentionally no-op in single-world mode
 }
 
 /**
- * Get current world configuration
+ * getWorldConfig
+ * @description Returns the default world configuration.
  */
 export function getWorldConfig(): GameWorldConfig {
-  const currentWorld = getCurrentWorld();
-  return GAME_WORLDS[currentWorld];
+  return GAME_WORLDS.default;
 }

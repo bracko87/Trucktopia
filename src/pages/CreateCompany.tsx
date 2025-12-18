@@ -1,16 +1,24 @@
 /**
- * Company Creation Page with Complete Country List and Real Flags
+ * CreateCompany.tsx
+ *
+ * Company Creation Page (single-world mode)
+ *
+ * Responsibilities:
+ * - Provide UI to create a company without any game world selection.
+ * - Keep hub/country/city selection and financial summary.
+ * - This file was simplified to remove game world selection as the app now uses a single world.
  */
+
+/** @fileoverview Create company page (single-world). */
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useGame } from '../contexts/GameContext';
-import { Company, HubLocation } from '../types/game';
+import { Company } from '../types/game';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { Truck, Building, MapPin, DollarSign, CheckCircle, Globe } from 'lucide-react';
+import { Truck, Building, MapPin, DollarSign, CheckCircle } from 'lucide-react';
 
 interface Country {
   code: string;
@@ -18,11 +26,14 @@ interface Country {
   cities: string[];
 }
 
+/**
+ * CreateCompany
+ * @description Page component to create a new company. World selection removed — single global world.
+ */
 const CreateCompany: React.FC = () => {
   const navigate = useNavigate();
-  const { createCompany, gameState } = useGame();
+  const { createCompany } = useGame();
   const [formData, setFormData] = useState({
-    gameWorld: 'euro-asia',
     companyName: '',
     hubCountry: '',
     hubCity: ''
@@ -105,8 +116,11 @@ const CreateCompany: React.FC = () => {
   ].sort((a, b) => a.name.localeCompare(b.name)); // Alphabetical sorting
 
   const selectedCountry = countries.find(country => country.name === formData.hubCountry);
-  const selectedCity = selectedCountry?.cities.find(city => city === formData.hubCity);
 
+  /**
+   * handleSubmit
+   * @description Validate input and create a new company. No world assigned.
+   */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -131,10 +145,10 @@ const CreateCompany: React.FC = () => {
       employees: 1,
       founded: new Date(),
       hub: {
-        id: formData.hubCity.toLowerCase().replace(/\\s+/g, '-'),
+        id: formData.hubCity.toLowerCase().replace(/\s+/g, '-'),
         name: formData.hubCity,
         country: formData.hubCountry,
-        region: 'euro-asia',
+        region: 'global', // single-world mode uses global region
         capacity: 5,
         level: 1,
         cost: hubCost
@@ -145,18 +159,18 @@ const CreateCompany: React.FC = () => {
     };
 
     createCompany(newCompany);
-    
+
     setTimeout(() => {
       setIsLoading(false);
       navigate('/dashboard');
-    }, 1500);
+    }, 1200);
   };
 
   const handleChange = (field: string, value: string) => {
     setFormData(prev => ({
       ...prev,
       [field]: value,
-      ...(field === 'hubCountry' && { hubCity: '' }) // Reset city when country changes
+      ...(field === 'hubCountry' && { hubCity: '' })
     }));
   };
 
@@ -173,41 +187,17 @@ const CreateCompany: React.FC = () => {
               <p className="text-yellow-500 text-sm font-medium">SIMULATOR 2024</p>
             </div>
           </div>
-          
+
           <CardTitle className="text-2xl font-bold text-white">
             Create Your Company
           </CardTitle>
           <CardDescription className="text-slate-400">
-            Establish your logistics empire in the Euro-Asia region
+            Establish your logistics empire
           </CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-6">
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Game World Selection */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-300 flex items-center gap-2">
-                <Globe className="h-4 w-4 text-yellow-500" />
-                Game World
-              </label>
-              <Select value={formData.gameWorld} onValueChange={(value) => handleChange('gameWorld', value)}>
-                <SelectTrigger className="bg-slate-700 border-slate-600 text-white focus:border-yellow-500">
-                  <SelectValue placeholder="Select game world" />
-                </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-600">
-                  <SelectItem value="euro-asia" className="text-white hover:bg-slate-700">
-                    Euro-Asia
-                  </SelectItem>
-                  <SelectItem value="americas" disabled className="text-slate-500">
-                    Americas (Coming Soon)
-                  </SelectItem>
-                  <SelectItem value="africa" disabled className="text-slate-500">
-                    Africa (Coming Soon)
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
             {/* Company Name */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-300 flex items-center gap-2">
@@ -230,25 +220,18 @@ const CreateCompany: React.FC = () => {
                 <MapPin className="h-4 w-4 text-yellow-500" />
                 Hub Country
               </label>
-              <Select value={formData.hubCountry} onValueChange={(value) => handleChange('hubCountry', value)}>
-                <SelectTrigger className="bg-slate-700 border-slate-600 text-white focus:border-yellow-500">
-                  <SelectValue placeholder="Select your hub country" />
-                </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-600 max-h-60">
-                  {countries.map((country) => (
-                    <SelectItem key={country.code} value={country.name} className="text-white hover:bg-slate-700">
-                      <div className="flex items-center space-x-3">
-                        <img 
-                          src={`https://flagcdn.com/w40/${country.code}.png`} 
-                          alt={`${country.name} flag`}
-                          className="w-6 h-4 object-cover rounded"
-                        />
-                        <span>{country.name}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <select
+                value={formData.hubCountry}
+                onChange={(e) => handleChange('hubCountry', e.target.value)}
+                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+              >
+                <option value="">Select your hub country</option>
+                {countries.map((country) => (
+                  <option key={country.code} value={country.name}>
+                    {country.name}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* Hub City */}
@@ -258,23 +241,23 @@ const CreateCompany: React.FC = () => {
                   <MapPin className="h-4 w-4 text-yellow-500" />
                   Hub City
                 </label>
-                <Select value={formData.hubCity} onValueChange={(value) => handleChange('hubCity', value)}>
-                  <SelectTrigger className="bg-slate-700 border-slate-600 text-white focus:border-yellow-500">
-                    <SelectValue placeholder="Select your hub city" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-600 max-h-60">
-                    {selectedCountry.cities.map((city) => (
-                      <SelectItem key={city} value={city} className="text-white hover:bg-slate-700">
-                        {city}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <select
+                  value={formData.hubCity}
+                  onChange={(e) => handleChange('hubCity', e.target.value)}
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                >
+                  <option value="">Select your hub city</option>
+                  {selectedCountry.cities.map((city) => (
+                    <option key={city} value={city}>
+                      {city}
+                    </option>
+                  ))}
+                </select>
               </div>
             )}
 
             {/* Financial Summary */}
-            {selectedCity && (
+            {formData.hubCity && (
               <div className="bg-slate-700/50 rounded-lg p-4 border border-slate-600">
                 <h3 className="font-semibold text-white mb-3 flex items-center gap-2">
                   <DollarSign className="h-4 w-4 text-yellow-500" />
@@ -298,8 +281,8 @@ const CreateCompany: React.FC = () => {
             )}
 
             {/* Submit Button */}
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               disabled={isLoading || !formData.companyName || !formData.hubCountry || !formData.hubCity}
               className="w-full bg-gradient-to-r from-yellow-600 to-yellow-700 hover:from-yellow-700 hover:to-yellow-800 text-white font-bold py-3 text-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
