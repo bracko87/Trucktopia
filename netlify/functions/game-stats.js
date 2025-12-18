@@ -18,12 +18,15 @@ export async function handler() {
     const { count: totalUsers, error: usersError } = await supabase
       .from('users')
       .select('id', { count: 'exact', head: true });
+
     if (usersError) throw usersError;
 
-    // 2️⃣ Count total trucks (all rows)
+    // 2️⃣ Count total active trucks
     const { count: totalTrucks, error: trucksError } = await supabase
       .from('trucks')
-      .select('id', { count: 'exact', head: true }); // <-- no filter
+      .select('id', { count: 'exact', head: true })
+      .eq('is_active', true); // only active trucks
+
     if (trucksError) throw trucksError;
 
     return {

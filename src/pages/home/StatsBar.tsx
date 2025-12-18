@@ -2,24 +2,19 @@
  * StatsBar.tsx
  *
  * File-level:
- * Compact stats row that shows aggregated counts (users, trucks, jobs).
- * This variant performs automatic background fetches from a serverless endpoint
- * (/.netlify/functions/supabase-stats) and retries silently using exponential
- * backoff. In non-production (dev) environments the component will not call
- * the remote endpoint and will display local/fallback values only.
+ * Compact stats row that shows aggregated counts (users, trucks, jobs, cities).
+ * - Prefers serverless endpoints when running in production-like environments.
+ * - Falls back silently to local/company data when server endpoints are not available.
  *
  * Responsibilities:
  * - Fetch remote counts automatically on mount (production only).
- * - Retry in background with exponential backoff (no buttons / no visible diagnostics).
- * - Prefer serverless endpoint (requires SUPABASE_SERVICE_ROLE for full counts).
- *
- * Notes:
- * - This file contains only data-loading changes; layout & visuals are unchanged.
- * - Production detection uses NODE_ENV where available and falls back to hostname checks.
+ * - Fetch persisted total-jobs via /.netlify/functions/total-jobs when remote stats missing.
+ * - Fetch total cities via /.netlify/functions/cities-count.
+ * - Retry remote stats with exponential backoff (silent).
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Users, Truck, Briefcase } from 'lucide-react';
+import { Users, Truck, Briefcase, MapPin } from 'lucide-react';
 import { useGame } from '../../contexts/GameContext';
 
 /**
@@ -90,14 +85,13 @@ function isProductionEnv(): boolean {
   const host = window.location.hostname || '';
   // Adjust this hostname check to include your actual production domain(s) if needed.
   const prodHosts = ['localhost']; // keep localhost default safe; override below if needed
-  // If you want immediate production detection by domain, add them to prodHosts in deployment.
   return Boolean(prodHosts.includes(host) || host.endsWith('.netlify.app') || host.endsWith('your-production-domain.com'));
 }
 
 /**
  * StatsBar
- * @description Fetches global stats automatically and renders three stat cards (users, trucks, jobs).
- *              Automatic background retries will happen silently — no UI retry buttons or diagnostic messages.
+ * @description Fetches global stats automatically and renders stat cards (users, trucks, jobs, cities).
+ *              Automatic background retries will happen silently — no UI buttons or diagnostic messages.
  *              Remote fetch only runs in production as determined by isProductionEnv().
  */
 const StatsBar: React.FC = () => {
@@ -106,6 +100,14 @@ const StatsBar: React.FC = () => {
 
   const [remote, setRemote] = useState<StatsShape | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+
+  // server-stored jobs fallback (fetched from /.netlify/functions/total-jobs)
+  const [serverJobs, setServerJobs] = useState<number | null>(null);
+  const [serverJobsLoading, setServerJobsLoading] = useState<boolean>(false);
+
+  // server-side cities count
+  const [serverCities, setServerCities] = useState<number | null>(null);
+  const [serverCitiesLoading, setServerCitiesLoading] = useState<boolean>(false);
 
   // retry state (kept internal only)
   const attemptsRef = useRef<number>(0);
@@ -186,10 +188,76 @@ const StatsBar: React.FC = () => {
   }, [remote, scheduleRetry, prod]);
 
   /**
-   * renderNumber
-   * @description Prefer remote values (production); fall back to company-local when possible.
+   * fetchServerJobs
+   * @description Fetch the persisted/generated total jobs value from our serverless function.
    */
-  const renderNumber = (remoteValue?: number | null, fallback?: number | undefined) => {
+  const fetchServerJobs = useCallback(async () => {
+    setServerJobsLoading(true);
+    try {
+      const res = await fetch('/.netlify/functions/total-jobs', { credentials: 'same-origin' });
+      if (!res.ok) throw new Error('fetch failed');
+      const json = await res.json();
+      if (json && typeof json.totalJobs === 'number') {
+        setServerJobs(json.totalJobs);
+      } else {
+        setServerJobs(null);
+      }
+    } catch {
+      setServerJobs(null);
+    } finally {
+      setServerJobsLoading(false);
+    }
+  }, []);
+
+  /**
+   * fetchServerCities
+   * @description Fetch total cities count from serverless function that queries Supabase.
+   */
+  const fetchServerCities = useCallback(async () => {
+    setServerCitiesLoading(true);
+    try {
+      const res = await fetch('/.netlify/functions/cities-count', { credentials: 'same-origin' });
+      if (!res.ok) throw new Error('fetch failed');
+      const json = await res.json();
+      if (json && typeof json.totalCities === 'number') {
+        setServerCities(json.totalCities);
+      } else {
+        setServerCities(null);
+      }
+    } catch {
+      setServerCities(null);
+    } finally {
+      setServerCitiesLoading(false);
+    }
+  }, []);
+
+  // Fetch serverJobs when needed: only if we do not have remote totalJobs
+  useEffect(() => {
+    if (!prod) return;
+    if (typeof remote?.totalJobs === 'number') return;
+    // Try to load server-stored jobs metric
+    fetchServerJobs().catch(() => {
+      /* silent */
+    });
+  }, [prod, remote?.totalJobs, fetchServerJobs]);
+
+  // Always attempt to fetch cities count in production
+  useEffect(() => {
+    if (!prod) return;
+    fetchServerCities().catch(() => {
+      /* silent */
+    });
+  }, [prod, fetchServerCities]);
+
+  /**
+   * renderNumber
+   * @description Prefer remote values (production); fall back to server-stored number only when explicitly allowed
+   *              (this prevents the jobs number from leaking into other metrics).
+   * @param remoteValue value from remote stats endpoint
+   * @param fallback local/company fallback
+   * @param allowServerJobsFallback when true, use serverJobs as an intermediate fallback
+   */
+  const renderNumber = (remoteValue?: number | null, fallback?: number | undefined, allowServerJobsFallback = false) => {
     // If not production, prefer fallback/local values immediately.
     if (!prod) {
       if (typeof fallback === 'number') return fallback.toLocaleString();
@@ -198,20 +266,44 @@ const StatsBar: React.FC = () => {
 
     if (loading && !remote) return '…';
     if (typeof remoteValue === 'number') return remoteValue.toLocaleString();
+
+    // If this metric is allowed to use the serverJobs fallback (only for jobs),
+    // prefer server-stored jobs when present.
+    if (allowServerJobsFallback) {
+      if (!loading && typeof serverJobs === 'number') return serverJobs.toLocaleString();
+      if (serverJobsLoading) return '…';
+    }
+
     if (typeof fallback === 'number') return fallback.toLocaleString();
     return '—';
   };
 
-  const totalUsers = renderNumber(remote?.totalUsers);
+  const totalUsers = renderNumber(remote?.totalUsers, undefined);
   const totalTrucks = renderNumber(remote?.totalTrucks, Array.isArray(company?.trucks) ? company!.trucks!.length : undefined);
-  const totalJobs = renderNumber(remote?.totalJobs);
+  // Note: remote?.totalJobs preferred; serverJobs used as fallback (persisted on server). Only jobs are allowed to use serverJobs fallback.
+  const totalJobs = renderNumber(remote?.totalJobs, undefined, true);
+
+  // For cities: prefer serverCities when available; fallback to company.hubs length if present
+  const renderCities = () => {
+    if (!prod) {
+      const local = Array.isArray(company?.hubs) ? company!.hubs!.length : undefined;
+      if (typeof local === 'number') return local.toLocaleString();
+      return '—';
+    }
+    if (serverCitiesLoading) return '…';
+    if (typeof serverCities === 'number') return serverCities.toLocaleString();
+    return '—';
+  };
+
+  const totalCities = renderCities();
 
   return (
     <div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <StatCard icon={<Users className="w-6 h-6 text-blue-400" />} label="Total User Accounts" value={totalUsers} ariaLabel="Total user accounts" />
         <StatCard icon={<Truck className="w-6 h-6 text-amber-400" />} label="Total Trucks (active in game)" value={totalTrucks} ariaLabel="Total trucks (active in game)" />
         <StatCard icon={<Briefcase className="w-6 h-6 text-green-400" />} label="Total Jobs (open / global)" value={totalJobs} ariaLabel="Total jobs" />
+        <StatCard icon={<MapPin className="w-6 h-6 text-indigo-400" />} label="In-game Cities" value={totalCities} ariaLabel="Total in-game cities" />
       </div>
       {/* Intentionally no diagnostic or retry UI: background fetch/retry only */}
     </div>
