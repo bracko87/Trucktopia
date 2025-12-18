@@ -7,23 +7,36 @@ export const handler = async () => {
     const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!SUPABASE_URL || !SERVICE_KEY) {
-      return { statusCode: 500, body: JSON.stringify({ error: 'Missing SUPABASE env vars' }) };
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: 'Missing Supabase env vars' }),
+      };
     }
 
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
-    // Count all rows in public.users
-    const { count, error } = await supabase
+    // ✅ Fetch all rows (IDs only)
+    const { data, error } = await supabase
       .from('users')
-      .select('id', { count: 'exact', head: true });
+      .select('id');
 
     if (error) {
-      return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: error.message }),
+      };
     }
 
-    return { statusCode: 200, body: JSON.stringify({ totalUsers: count }) };
-
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        totalUsers: Array.isArray(data) ? data.length : 0,
+      }),
+    };
   } catch (err) {
-    return { statusCode: 500, body: JSON.stringify({ error: String(err) }) };
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: String(err) }),
+    };
   }
 };
