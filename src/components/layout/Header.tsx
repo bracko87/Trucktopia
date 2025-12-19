@@ -105,6 +105,10 @@ const Header: React.FC = () => {
    * @description Compute the header title string. Prefer the company name when present
    * to provide a personalized title; fall back to the static "Trucktopia".
    */
+  /**
+   * titleText
+   * Prioritize the name from the company object (which is synced from DB)
+   */
   const titleText = gameState.company?.name || 'Trucktopia';
 
   /**

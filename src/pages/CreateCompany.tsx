@@ -165,15 +165,17 @@ const CreateCompany: React.FC = () => {
     try {
       const { currentUser } = gameState;
       if (currentUser) {
+        // We pass 'company_name' explicitly to overwrite the dummy one
         await fetch('/.netlify/functions/update-company', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             email: currentUser,
-            name: formData.companyName,
+            company_name: formData.companyName, 
             hub_name: formData.hubCity,
             hub_country: formData.hubCountry,
-            capital: remainingCapital
+            capital: remainingCapital,
+            balance: remainingCapital
           })
         });
       }
