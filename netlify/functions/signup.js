@@ -26,17 +26,13 @@ exports.handler = async (event) => {
       user_metadata: { username, ...metadata }
     });
 
-    if (authError) {
-      console.error("Auth Error:", authError);
-      throw new Error(`Auth Creation Failed: ${authError.message}`);
-    }
+    if (authError) throw new Error(`Auth Creation Failed: ${authError.message}`);
     authUser = authData.user;
     log.push(`Auth User Created: ${authUser.id}`);
 
     // --- 2. Create User Profile ---
     log.push("Step 2: Creating Public User Profile");
-    // We use upsert here in case a trigger already created a row, to avoid "duplicate key" errors
-    const { data: profileData, error: profileError } = await supabase
+    const { error: profileError } = await supabase
       .from('users')
       .upsert({
         id: authUser.id,
@@ -45,110 +41,55 @@ exports.handler = async (event) => {
         name: username || email.split('@')[0],
         email_normalized: email.toLowerCase(),
         data: {}
-      }, { onConflict: 'id' })
-      .select()
-      .single();
+      }, { onConflict: 'id' });
 
-    if (profileError) {
-      console.error("Profile Error:", profileError);
-      throw new Error(`Profile Creation Failed: ${profileError.message}`);
-    }
-    log.push("Profile Created/Verified");
+    if (profileError) throw new Error(`Profile Creation Failed: ${profileError.message}`);
 
-    // --- 3. Create Startup Company ---
+    // --- 3. Create Company (Initial State: "Seed") ---
     log.push("Step 3: Creating Company");
-    // Note: If this fails, it's likely a column name issue (e.g. owner_id vs user_id)
+    
+    const companyPayload = {
+      owner_id: authUser.id,
+      name: `${username || 'New'}'s Logistics`, // Placeholder until CreateCompany.tsx updates it
+      email: email.toLowerCase(),
+      capital: 10000,
+      balance: 10000,
+      level: 'seed',           // As requested
+      reputation: 0,           // As requested
+      hub_name: 'Pending',
+      hub_country: 'Pending',
+      hub_region: 'Global',
+      trucks: 0,
+      trailers: 0,
+      employees: 0,
+      jobs_done: 0,
+      data: {}
+    };
+
     const { data: companyData, error: companyError } = await supabase
       .from('companies')
-      .insert([{
-        owner_id: authUser.id, // Trying owner_id first
-        name: `${username || 'New'}'s Logistics`,
-        capital: 10000,
-        email: email.toLowerCase()
-      }])
-      .select()
-      .single();
+      .insert([companyPayload])
+      .select().single();
 
-    if (companyError) {
-      console.error("Company Error:", companyError);
-      // Try fallback column name if owner_id failed
-      log.push("Retrying company creation with 'user_id' column...");
-      const { data: companyDataRetry, error: companyErrorRetry } = await supabase
-        .from('companies')
-        .insert([{
-          user_id: authUser.id, 
-          name: `${username || 'New'}'s Logistics`,
-          capital: 10000
-        }])
-        .select()
-        .single();
-      
-      if (companyErrorRetry) {
-        throw new Error(`Company Creation Failed: ${companyErrorRetry.message}`);
-      }
-      var finalCompany = companyDataRetry;
-    } else {
-      var finalCompany = companyData;
-    }
-    log.push(`Company Created: ${finalCompany.id}`);
+    if (companyError) throw new Error(`Company Creation Failed: ${companyError.message}`);
 
-    // --- 4. Link Company back to User ---
+    const companyId = companyData.id;
+    log.push(`Company Created: ${companyId}`);
+
+    // --- 4. Link Company to User ---
     log.push("Step 4: Linking Company to User");
-    const { error: linkError } = await supabase
-      .from('users')
-      .update({ company_id: finalCompany.id })
-      .eq('id', authUser.id);
-
-    if (linkError) {
-      console.error("Link Error:", linkError);
-      throw new Error(`Linking Failed: ${linkError.message}`);
-    }
-    log.push("Company Linked");
-
-    // --- 5. Create Main Hub ---
-    log.push("Step 5: Creating Main Hub");
-    const { error: hubError } = await supabase
-      .from('hubs')
-      .insert([{
-        company_id: finalCompany.id,
-        name: 'Main Operations Center',
-        country: 'Germany',
-        region: 'global',
-        level: 1,
-        capacity: 5,
-        is_main: true
-      }]);
-
-    if (hubError) {
-      console.error("Hub Error:", hubError);
-      // We don't throw here to at least let the user log in if only the hub failed
-      log.push(`Hub Warning: ${hubError.message}`);
-    } else {
-      log.push("Hub Created");
-    }
+    await supabase.from('users').update({ company_id: companyId }).eq('id', authUser.id);
 
     return {
       statusCode: 200,
-      body: JSON.stringify({
-        success: true,
-        user: authUser,
-        company: finalCompany,
-        log: log
-      })
+      body: JSON.stringify({ success: true, user: authUser, company: companyData, log: log })
     };
 
   } catch (error) {
     console.error('Signup Process Failed:', error);
-    
-    // Rollback only if it was an auth-only account with no data
-    // (If the profile was created, we might want to keep it for debugging)
-
     return {
       statusCode: 500,
-      body: JSON.stringify({ 
-        error: error.message,
-        log: log 
-      })
+      body: JSON.stringify({ error: error.message, log: log })
     };
   }
 };

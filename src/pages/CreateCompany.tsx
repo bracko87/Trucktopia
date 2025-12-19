@@ -158,7 +158,28 @@ const CreateCompany: React.FC = () => {
       logo: null
     };
 
+    // 1. Update Local State
     createCompany(newCompany);
+
+    // 2. Sync to Supabase
+    try {
+      const { currentUser } = gameState;
+      if (currentUser) {
+        await fetch('/.netlify/functions/update-company', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: currentUser,
+            name: formData.companyName,
+            hub_name: formData.hubCity,
+            hub_country: formData.hubCountry,
+            capital: remainingCapital
+          })
+        });
+      }
+    } catch (err) {
+      console.warn('Supabase sync failed, continuing with local state', err);
+    }
 
     setTimeout(() => {
       setIsLoading(false);

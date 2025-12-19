@@ -76,7 +76,9 @@ const Dashboard: React.FC = () => {
         </div>
         <div className="text-right">
           <div className="text-sm text-slate-400">Company Balance</div>
-          <div className="text-2xl font-bold text-green-400">${company.capital.toLocaleString()}</div>
+          <div className="text-2xl font-bold text-green-400">
+            ${(company.balance ?? company.capital).toLocaleString()}
+          </div>
         </div>
       </div>
 
