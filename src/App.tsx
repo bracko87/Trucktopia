@@ -197,6 +197,9 @@ function App() {
             {/* Mount the Used Truck Generator engine so it runs daily and provides offers */}
             <UsedTruckGenerator />
 
+            {/* Company persistence sync: ensure in-memory company changes are persisted to localStorage */}
+            <CompanyPersistenceSync />
+
             {/* Mount ComponentWearEngine so wear logic is active in the browser.
                 This engine listens to 'truckLiveUpdate' and 'componentWear:trigger' events
                 and persists component state to localStorage / emits incidents. */}

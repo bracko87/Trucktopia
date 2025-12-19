@@ -6,46 +6,25 @@ exports.handler = async (event) => {
 
   const { email, name, hub_name, hub_country, capital } = JSON.parse(event.body);
 
-  const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
   try {
-    // Update the company record for this user
     const { data, error } = await supabase
       .from('companies')
-      .update({ 
-        name: name,
-        hub_name: hub_name,
-        hub_country: hub_country,
-        balance: capital,
+      .update({
+        name,
+        hub_name,
+        hub_country,
         capital: capital,
-        updated_at: new Date().toISOString()
+        balance: capital, // Sync balance with the new capital
+        level: 'seed'      // Explicitly set to seed as requested
       })
-      .eq('email', email.toLowerCase())
-      .select();
+      .eq('email', email.toLowerCase());
 
     if (error) throw error;
 
-    // Also update/create the main hub record
-    if (data && data[0]) {
-      await supabase.from('hubs').upsert({
-        company_id: data[0].id,
-        name: hub_name,
-        country: hub_country,
-        is_main: true
-      });
-    }
-
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ success: true, company: data[0] })
-    };
+    return { statusCode: 200, body: JSON.stringify({ success: true }) };
   } catch (error) {
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: error.message })
-    };
+    return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
   }
 };
