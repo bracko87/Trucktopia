@@ -1,14 +1,22 @@
 
 const { createClient } = require('@supabase/supabase-js');
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
-
+/**
+ * update-company
+ * 
+ * This function completes the company setup by:
+ * 1. Updating the 'companies' table (name, hub info, capital).
+ * 2. Creating an entry in the 'hubs' table.
+ */
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Method Not Allowed' };
   }
+
+  const supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
 
   try {
     const { email, company_name, hub_name, hub_country, capital, balance } = JSON.parse(event.body);
@@ -17,18 +25,21 @@ exports.handler = async (event) => {
       return { statusCode: 400, body: JSON.stringify({ error: 'Email is required' }) };
     }
 
-    // 1. Find the company ID first
+    console.log(`[update-company] Processing update for ${email}...`);
+
+    // 1. Get the company record first to get the ID
     const { data: company, error: fetchError } = await supabase
       .from('companies')
       .select('id')
-      .eq('email', email)
+      .eq('email', email.toLowerCase())
       .single();
 
     if (fetchError || !company) {
-      return { statusCode: 404, body: JSON.stringify({ error: 'Company not found' }) };
+      return { statusCode: 404, body: JSON.stringify({ error: 'Company not found for this email' }) };
     }
 
-    // 2. Update the company table (Overwrite dummy name and Pending values)
+    // 2. Update the main company record
+    // We explicitly map 'company_name' to the 'name' column
     const { error: updateError } = await supabase
       .from('companies')
       .update({
@@ -36,41 +47,43 @@ exports.handler = async (event) => {
         hub_name: hub_name,
         hub_country: hub_country,
         capital: capital,
-        balance: balance,
+        balance: balance || capital,
         updated_at: new Date().toISOString()
       })
       .eq('id', company.id);
 
     if (updateError) throw updateError;
 
-    // 3. Create the Hub in public.hubs
-    // We assume the table 'hubs' exists with these columns
+    // 3. Create the Hub in the 'hubs' table
+    // We use an upsert or check to prevent duplicates
     const { error: hubError } = await supabase
       .from('hubs')
-      .insert([
-        {
-          company_id: company.id,
-          name: hub_name,
-          country: hub_country,
-          level: 1,
-          is_main: true
-        }
-      ]);
+      .upsert({
+        company_id: company.id,
+        name: hub_name,
+        city: hub_name,
+        country: hub_country,
+        level: 1,
+        is_main: true
+      }, { onConflict: 'company_id, name' });
 
-    // Note: If hub already exists, we might get an error, but for "Create Company" 
-    // it should be a fresh insert. We ignore conflicts for now to keep it simple.
+    if (hubError) {
+      console.warn('[update-company] Hub creation warning (might already exist):', hubError.message);
+    }
 
     return {
       statusCode: 200,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: 'Company and Hub updated successfully' }),
+      body: JSON.stringify({ 
+        success: true, 
+        message: 'Company and Hub updated successfully',
+        companyId: company.id 
+      }),
     };
   } catch (error) {
-    console.error('Update Company Error:', error);
+    console.error('[update-company] Error:', error.message);
     return {
       statusCode: 500,
       body: JSON.stringify({ error: error.message }),
     };
   }
 };
-

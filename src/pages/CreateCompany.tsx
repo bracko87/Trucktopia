@@ -163,14 +163,13 @@ const CreateCompany: React.FC = () => {
 
     // 2. Sync to Supabase
     try {
-      const { currentUser } = gameState;
-      if (currentUser) {
-        // We pass 'company_name' explicitly to overwrite the dummy one
-        await fetch('/.netlify/functions/update-company', {
+      const email = gameState.currentUser || sessionStorage.getItem('tm_current_user');
+      if (email) {
+        const response = await fetch('/.netlify/functions/update-company', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            email: currentUser,
+            email: email.toLowerCase(),
             company_name: formData.companyName, 
             hub_name: formData.hubCity,
             hub_country: formData.hubCountry,
@@ -178,6 +177,11 @@ const CreateCompany: React.FC = () => {
             balance: remainingCapital
           })
         });
+        
+        if (!response.ok) {
+          const errData = await response.json();
+          console.error('Failed to update company in DB:', errData);
+        }
       }
     } catch (err) {
       console.warn('Supabase sync failed, continuing with local state', err);

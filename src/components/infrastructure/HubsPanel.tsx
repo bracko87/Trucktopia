@@ -251,6 +251,16 @@ const HubsPanel: React.FC = () => {
 
     if (Array.isArray(gameState?.company?.hubs) && gameState.company.hubs.length > 0) {
       rawHubs = gameState.company.hubs;
+    } else if (gameState?.company?.hub_name && gameState.company.hub_name !== 'Pending') {
+      // Fallback: Create a virtual hub object from the company's main hub columns
+      rawHubs = [{
+        id: 'main-hub',
+        name: gameState.company.hub_name,
+        city: gameState.company.hub_name,
+        country: gameState.company.hub_country,
+        level: 1,
+        isMain: true
+      }];
     } else if (gameState?.company?.hub && typeof gameState.company.hub === 'object') {
       rawHubs = [gameState.company.hub];
     } else if (Array.isArray(gameState?.infrastructure?.hubs) && gameState.infrastructure.hubs.length > 0) {
