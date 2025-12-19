@@ -4,9 +4,7 @@ const { createClient } = require('@supabase/supabase-js');
 /**
  * update-company
  * 
- * This function completes the company setup by:
- * 1. Updating the 'companies' table (name, hub info, capital).
- * 2. Creating an entry in the 'hubs' table.
+ * Aggressive update function to overwrite signup defaults.
  */
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -20,27 +18,17 @@ exports.handler = async (event) => {
 
   try {
     const { email, company_name, hub_name, hub_country, capital, balance } = JSON.parse(event.body);
+    const cleanEmail = String(email || '').toLowerCase().trim();
 
-    if (!email) {
+    if (!cleanEmail) {
       return { statusCode: 400, body: JSON.stringify({ error: 'Email is required' }) };
     }
 
-    console.log(`[update-company] Processing update for ${email}...`);
+    console.log(`[update-company] Updating ${cleanEmail} to Name: ${company_name}, Hub: ${hub_name}`);
 
-    // 1. Get the company record first to get the ID
-    const { data: company, error: fetchError } = await supabase
-      .from('companies')
-      .select('id')
-      .eq('email', email.toLowerCase())
-      .single();
-
-    if (fetchError || !company) {
-      return { statusCode: 404, body: JSON.stringify({ error: 'Company not found for this email' }) };
-    }
-
-    // 2. Update the main company record
-    // We explicitly map 'company_name' to the 'name' column
-    const { error: updateError } = await supabase
+    // 1. Update the 'companies' table directly by email
+    // This overwrites the dummy name and 'Pending' statuses
+    const { data: updatedCompanies, error: updateError } = await supabase
       .from('companies')
       .update({
         name: company_name,
@@ -50,37 +38,43 @@ exports.handler = async (event) => {
         balance: balance || capital,
         updated_at: new Date().toISOString()
       })
-      .eq('id', company.id);
+      .eq('email', cleanEmail)
+      .select();
 
     if (updateError) throw updateError;
+    if (!updatedCompanies || updatedCompanies.length === 0) {
+      console.error(`[update-company] No company found with email: ${cleanEmail}`);
+      return { statusCode: 404, body: JSON.stringify({ error: 'Company record not found' }) };
+    }
 
-    // 3. Create the Hub in the 'hubs' table
-    // We use an upsert or check to prevent duplicates
+    const companyId = updatedCompanies[0].id;
+
+    // 2. Create/Update Hub record
     const { error: hubError } = await supabase
       .from('hubs')
       .upsert({
-        company_id: company.id,
+        company_id: companyId,
         name: hub_name,
         city: hub_name,
         country: hub_country,
         level: 1,
         is_main: true
-      }, { onConflict: 'company_id, name' });
+      });
 
     if (hubError) {
-      console.warn('[update-company] Hub creation warning (might already exist):', hubError.message);
+      console.warn('[update-company] Hub creation error:', hubError.message);
     }
 
     return {
       statusCode: 200,
       body: JSON.stringify({ 
         success: true, 
-        message: 'Company and Hub updated successfully',
-        companyId: company.id 
+        message: 'Database sync complete',
+        id: companyId
       }),
     };
   } catch (error) {
-    console.error('[update-company] Error:', error.message);
+    console.error('[update-company] Fatal Error:', error.message);
     return {
       statusCode: 500,
       body: JSON.stringify({ error: error.message }),

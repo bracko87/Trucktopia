@@ -165,6 +165,8 @@ const CreateCompany: React.FC = () => {
     try {
       const email = gameState.currentUser || sessionStorage.getItem('tm_current_user');
       if (email) {
+        console.log('Attempting DB Sync for:', email, formData.companyName);
+        // We MUST await this to prevent the browser from canceling the request on navigation
         const response = await fetch('/.netlify/functions/update-company', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -178,19 +180,21 @@ const CreateCompany: React.FC = () => {
           })
         });
         
+        const result = await response.json();
         if (!response.ok) {
-          const errData = await response.json();
-          console.error('Failed to update company in DB:', errData);
+          console.error('Database update failed:', result.error);
+          alert('Warning: Could not save company to cloud. It will stay local-only for now.');
+        } else {
+          console.log('Database updated successfully:', result);
         }
       }
     } catch (err) {
-      console.warn('Supabase sync failed, continuing with local state', err);
+      console.warn('Network error during Supabase sync:', err);
     }
 
-    setTimeout(() => {
-      setIsLoading(false);
-      navigate('/dashboard');
-    }, 1200);
+    // Only navigate after the database operation is complete
+    setIsLoading(false);
+    navigate('/dashboard');
   };
 
   const handleChange = (field: string, value: string) => {

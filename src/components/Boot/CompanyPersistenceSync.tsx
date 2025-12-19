@@ -22,8 +22,12 @@ const CompanyPersistenceSync: React.FC = () => {
         if (getRes.ok) {
           const dbData = await getRes.json();
           if (dbData && dbData.id) {
-            // Update local state with DB values (Balance, Level, Name)
-            // We preserve local arrays (trucks, staff) for now to avoid wipes
+            // IGNORE if the database is still in a "Pending" state to avoid overwriting fresh local creation
+            if (dbData.hub_name === 'Pending') {
+              console.log('Sync skipped: Database record is still in Pending state.');
+              return;
+            }
+
             const updatedCompany = {
               ...gameState.company,
               name: dbData.name,
