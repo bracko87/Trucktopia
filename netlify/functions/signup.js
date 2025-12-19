@@ -1,11 +1,20 @@
 
-const { createClient } = require('@supabase/supabase-js');
-
 /**
  * signup.js
- * Backend function to handle secure user registration using Service Role.
- * This bypasses RLS and triggers, preventing Error 500 failures.
+ * 
+ * Enhanced Netlify function for full user initialization.
+ * Bypasses RLS/Triggers using Service Role.
+ * 
+ * Flow:
+ * 1. Create Auth User
+ * 2. Create public.users row
+ * 3. Create public.companies row (Startup)
+ * 4. Update users.company_id
+ * 5. Create public.hubs row (Main Hub)
  */
+
+const { createClient } = require('@supabase/supabase-js');
+
 exports.handler = async (event) => {
   // Only allow POST
   if (event.httpMethod !== 'POST') {
@@ -14,15 +23,16 @@ exports.handler = async (event) => {
 
   const { email, password, username, metadata } = JSON.parse(event.body);
 
-  // Initialize Supabase with SERVICE_ROLE_KEY
   const supabase = createClient(
     process.env.SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE_KEY
   );
 
+  let authUser = null;
+
   try {
-    // 1. Create user in Auth (Admin mode)
-    const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
+    // --- 1. Create Auth User ---
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
@@ -30,40 +40,81 @@ exports.handler = async (event) => {
     });
 
     if (authError) throw authError;
+    authUser = authData.user;
 
-    // 2. Insert into public.users table
-    // Note: We do NOT include world_id here to support the "Single World" move.
-    const { data: profile, error: profileError } = await supabase
+    // --- 2. Create User Profile (public.users) ---
+    const { data: profileData, error: profileError } = await supabase
       .from('users')
-      .insert([
-        {
-          id: authUser.user.id,
-          email: email,
-          username: username || email.split('@')[0],
-          created_at: new Date().toISOString(),
-          // Ensure we don't send world_id/region data if it causes 500s
-        }
-      ])
+      .insert([{
+        id: authUser.id, // Linking to Auth ID
+        auth_user_id: authUser.id,
+        email: email.toLowerCase(),
+        name: username || email.split('@')[0],
+        email_normalized: email.toLowerCase(),
+        data: {}
+      }])
       .select()
       .single();
 
-    if (profileError) {
-      // Rollback: Delete the auth user if the profile creation fails
-      await supabase.auth.admin.deleteUser(authUser.user.id);
-      throw profileError;
-    }
+    if (profileError) throw profileError;
+
+    // --- 3. Create Startup Company (public.companies) ---
+    // Note: We create a generic company. The user can rename it later in the UI.
+    const { data: companyData, error: companyError } = await supabase
+      .from('companies')
+      .insert([{
+        owner_id: profileData.id,
+        name: `${username || 'New'}'s Logistics`,
+        capital: 10000, // Starter capital
+        email: email.toLowerCase(),
+        created_at: new Date().toISOString()
+      }])
+      .select()
+      .single();
+
+    if (companyError) throw companyError;
+
+    // --- 4. Link Company to User ---
+    const { error: linkError } = await supabase
+      .from('users')
+      .update({ company_id: companyData.id })
+      .eq('id', profileData.id);
+
+    if (linkError) throw linkError;
+
+    // --- 5. Create Main Hub (public.hubs) ---
+    // Defaulting to a central hub location since this is "Single World"
+    const { error: hubError } = await supabase
+      .from('hubs')
+      .insert([{
+        company_id: companyData.id,
+        name: 'Main Operations Center',
+        country: 'Germany', // Default startup country
+        region: 'global',
+        level: 1,
+        capacity: 5,
+        is_main: true
+      }]);
+
+    if (hubError) throw hubError;
 
     return {
       statusCode: 200,
       body: JSON.stringify({
-        message: 'Registration successful',
-        user: authUser.user,
-        profile: profile
+        success: true,
+        user: authUser,
+        company: companyData
       })
     };
 
   } catch (error) {
-    console.error('Registration Error:', error.message);
+    console.error('Signup Process Failed:', error);
+
+    // Rollback: If we created an auth user but the DB failed, delete the auth user
+    if (authUser) {
+      await supabase.auth.admin.deleteUser(authUser.id);
+    }
+
     return {
       statusCode: 500,
       body: JSON.stringify({ error: error.message })
