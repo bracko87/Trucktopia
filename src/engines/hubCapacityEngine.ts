@@ -179,7 +179,10 @@ export function getHubCapacityInfo(company: any, hubRef: any): HubCapacityInfo {
     resolvedHub = null;
   }
 
-  const { level, maxAllowed } = getHubMaxAllowed(resolvedHub);
+  const { level, maxAllowed: rawMax } = getHubMaxAllowed(resolvedHub);
+  // Ensure a minimum of 10 slots if the hub is valid but level is missing
+  const maxAllowed = rawMax > 0 ? rawMax : 10;
+  
   const assignedCount = countAssignedVehicles(company, hubId);
   const isFull = assignedCount >= maxAllowed;
 

@@ -84,7 +84,7 @@ function isProductionEnv(): boolean {
   if (typeof window === 'undefined') return false;
   const host = window.location.hostname || '';
   // Adjust this hostname check to include your actual production domain(s) if needed.
-  const prodHosts = ['localhost', 'www.trucktopia.org', 'trucktopia.org'];
+  const prodHosts = ['localhost']; // keep localhost default safe; override below if needed
   return Boolean(prodHosts.includes(host) || host.endsWith('.netlify.app') || host.endsWith('your-production-domain.com'));
 }
 

@@ -346,7 +346,7 @@ const PurchaseButton: React.FC<Props> = ({ item, label = 'Purchase', onDone, con
               <button
                 type="button"
                 onClick={handleConfirm}
-                disabled={loading || hubInfo.assignedCount >= hubInfo.maxAllowed}
+                disabled={loading || (hubInfo.maxAllowed > 0 && hubInfo.assignedCount >= hubInfo.maxAllowed)}
                 className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm disabled:opacity-60"
               >
                 {loading ? 'Processing…' : 'Confirm Purchase'}

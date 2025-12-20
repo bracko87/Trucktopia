@@ -1603,7 +1603,8 @@ const VehicleMarket: React.FC = () => {
                           setPurchaseError('Please select a delivery hub.');
                           return;
                         }
-                        if (hubInfoForModal.assignedCount >= hubInfoForModal.maxAllowed) {
+                        // Only block if maxAllowed is a positive number and we are actually over capacity
+                        if (hubInfoForModal.maxAllowed > 0 && hubInfoForModal.assignedCount >= hubInfoForModal.maxAllowed) {
                           setPurchaseError('Selected hub is at capacity. Choose a different hub or free up space.');
                           return;
                         }
