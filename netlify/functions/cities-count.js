@@ -2,19 +2,15 @@
  * netlify/functions/cities-count.js
  *
  * File-level:
- * Serverless function that returns the total number of rows in the public.cities table.
- *
- * Responsibilities:
- * - Use SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY from environment.
- * - Call Supabase REST endpoint for public.cities and return the count (best-effort).
- * - Never expose SERVICE_ROLE key to clients (this function runs server-side).
+ * Fetches the total number of rows from the public.cities table using 
+ * high-performance PostgREST count headers.
  */
 
 const fetch = require('node-fetch');
 
 /**
  * handler
- * @description Netlify lambda handler that returns { totalCities: number | null }
+ * @description Netlify lambda handler that returns { totalCities: number }
  */
 module.exports.handler = async function () {
   try {
@@ -24,55 +20,52 @@ module.exports.handler = async function () {
     if (!SUPABASE_URL || !SERVICE_KEY) {
       return {
         statusCode: 500,
-        body: JSON.stringify({ error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variable', totalCities: null })
+        body: JSON.stringify({ error: 'Missing environment variables', totalCities: 0 })
       };
     }
 
     const restBase = SUPABASE_URL.replace(/\/$/, '') + '/rest/v1';
-    const url = `${restBase}/cities?select=id`; // fetch ids; we'll count array length
 
-    const res = await fetch(url, {
+    // Query 'cities' table with count=exact preference
+    // We use Range: 0-0 to only get the headers and avoid downloading row data
+    const response = await fetch(`${restBase}/cities?select=id`, {
       method: 'GET',
       headers: {
-        Authorization: `Bearer ${SERVICE_KEY}`,
-        apikey: SERVICE_KEY,
-        Accept: 'application/json'
+        'apikey': SERVICE_KEY,
+        'Authorization': `Bearer ${SERVICE_KEY}`,
+        'Prefer': 'count=exact',
+        'Range': '0-0'
       }
     });
 
-    if (!res.ok) {
-      return {
-        statusCode: 200,
-        body: JSON.stringify({ totalCities: null })
-      };
-    }
-
-    // Try to use header totals if available (Content-Range)
-    const cr = res.headers.get('content-range') || res.headers.get('x-total-count');
-    if (cr) {
-      try {
-        const raw = cr;
-        const total = raw.includes('/') ? Number(raw.split('/')[1]) : Number(raw);
-        if (!Number.isNaN(total)) {
-          return { statusCode: 200, body: JSON.stringify({ totalCities: total }) };
-        }
-      } catch {
-        // fall through to body parse
+    const contentRange = response.headers.get('content-range');
+    let total = 0;
+    
+    if (contentRange) {
+      // PostgREST content-range looks like: "0-0/452" -> 452 is the total
+      const parts = contentRange.split('/');
+      if (parts.length > 1) {
+        total = parseInt(parts[1], 10) || 0;
       }
+    } else {
+      // Fallback: if header is missing, attempt a simple count select
+      const data = await response.json().catch(() => []);
+      total = Array.isArray(data) ? data.length : 0;
     }
 
-    // Fallback: parse body and count items
-    const json = await res.json().catch(() => null);
-    if (Array.isArray(json)) {
-      return { statusCode: 200, body: JSON.stringify({ totalCities: json.length }) };
-    }
-
-    // Unknown
-    return { statusCode: 200, body: JSON.stringify({ totalCities: null }) };
+    return {
+      statusCode: 200,
+      headers: { 
+        'Content-Type': 'application/json',
+        'Cache-Control': 'public, max-age=60'
+      },
+      body: JSON.stringify({ totalCities: total })
+    };
   } catch (err) {
+    console.error('Cities count error:', err);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: String(err), totalCities: null })
+      body: JSON.stringify({ error: String(err), totalCities: 0 })
     };
   }
 };

@@ -2,8 +2,11 @@
  * StatsBar.tsx
  *
  * File-level:
- * Fetches and displays global stats (Users, Trucks, Jobs, Cities).
- * Connects to three distinct Netlify functions for data.
+ * Displays global metrics on the home page.
+ * Fetches:
+ * 1. Users & Trucks from supabase-stats
+ * 2. Generated Jobs from total-jobs
+ * 3. Total rows in cities table from cities-count
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -12,7 +15,7 @@ import { useGame } from '../../contexts/GameContext';
 
 /**
  * StatCard
- * @description Individual stat item with icon and label.
+ * @description Visual card for a single metric.
  */
 const StatCard: React.FC<{ icon: React.ReactNode; label: string; value: string; ariaLabel?: string }> = ({ icon, label, value, ariaLabel }) => (
   <div className="bg-slate-800 rounded-2xl p-4 border border-slate-700 flex items-center space-x-4" aria-label={ariaLabel || label}>
@@ -28,7 +31,7 @@ const StatCard: React.FC<{ icon: React.ReactNode; label: string; value: string; 
 
 /**
  * StatsBar
- * @description Orchestrates fetching from Supabase Stats, Job Engine, and Cities Count.
+ * @description Orchestrates parallel fetching from Netlify endpoints.
  */
 const StatsBar: React.FC = () => {
   const { gameState } = useGame();
@@ -39,26 +42,23 @@ const StatsBar: React.FC = () => {
     trucks: number | null;
     jobs: number | null;
     cities: number | null;
-  }>(({
+  }>({
     users: null,
     trucks: null,
     jobs: null,
     cities: null
-  }));
+  });
 
   const [loading, setLoading] = useState(true);
 
-  /**
-   * loadAllStats
-   * @description Fetches data from multiple Netlify endpoints in parallel.
-   */
   const loadAllStats = useCallback(async () => {
     setLoading(true);
     try {
+      // Execute all fetches in parallel
       const [statsRes, jobsRes, citiesRes] = await Promise.all([
-        fetch('/.netlify/functions/supabase-stats').then(r => r.ok ? r.json() : null),
-        fetch('/.netlify/functions/total-jobs').then(r => r.ok ? r.json() : null),
-        fetch('/.netlify/functions/cities-count').then(r => r.ok ? r.json() : null)
+        fetch('/.netlify/functions/supabase-stats').then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch('/.netlify/functions/total-jobs').then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch('/.netlify/functions/cities-count').then(r => r.ok ? r.json() : null).catch(() => null)
       ]);
 
       setStats({
@@ -76,17 +76,19 @@ const StatsBar: React.FC = () => {
 
   useEffect(() => {
     loadAllStats();
+    // Refresh every 5 minutes
+    const interval = setInterval(loadAllStats, 300000);
+    return () => clearInterval(interval);
   }, [loadAllStats]);
 
   /**
    * displayValue
-   * @description Formats the number or provides a fallback/loading state.
+   * @description Formats the count with locale grouping or fallback string.
    */
-  const displayValue = (val: number | null, localFallback?: number) => {
-    if (val !== null) return val.toLocaleString();
-    if (loading) return '...';
-    if (typeof localFallback === 'number') return localFallback.toLocaleString();
-    return '0';
+  const displayValue = (val: number | null) => {
+    if (val !== null && typeof val === 'number') return val.toLocaleString();
+    if (loading) return '…';
+    return '—';
   };
 
   return (
@@ -100,7 +102,7 @@ const StatsBar: React.FC = () => {
       <StatCard 
         icon={<Truck className="w-6 h-6 text-amber-400" />} 
         label="Total Trucks (active in game)" 
-        value={displayValue(stats.trucks, company?.trucks?.length)} 
+        value={displayValue(stats.trucks)} 
         ariaLabel="Total trucks" 
       />
       <StatCard 
@@ -112,8 +114,8 @@ const StatsBar: React.FC = () => {
       <StatCard 
         icon={<MapPin className="w-6 h-6 text-indigo-400" />} 
         label="In-game Cities" 
-        value={displayValue(stats.cities, company?.hubs?.length)} 
-        ariaLabel="Total cities" 
+        value={displayValue(stats.cities)} 
+        ariaLabel="In-game Cities" 
       />
     </div>
   );
