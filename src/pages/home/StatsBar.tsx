@@ -2,11 +2,8 @@
  * StatsBar.tsx
  *
  * File-level:
- * Compact stats row that shows aggregated counts (users, trucks, jobs, cities).
- * 
- * Responsibilities:
- * - Fetch remote counts from Netlify functions.
- * - Provide local fallbacks from GameContext to ensure numbers are always visible.
+ * Fetches and displays global stats (Users, Trucks, Jobs, Cities).
+ * Connects to three distinct Netlify functions for data.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -15,7 +12,7 @@ import { useGame } from '../../contexts/GameContext';
 
 /**
  * StatCard
- * @description Tiny presentational card for one stat value.
+ * @description Individual stat item with icon and label.
  */
 const StatCard: React.FC<{ icon: React.ReactNode; label: string; value: string; ariaLabel?: string }> = ({ icon, label, value, ariaLabel }) => (
   <div className="bg-slate-800 rounded-2xl p-4 border border-slate-700 flex items-center space-x-4" aria-label={ariaLabel || label}>
@@ -31,7 +28,7 @@ const StatCard: React.FC<{ icon: React.ReactNode; label: string; value: string; 
 
 /**
  * StatsBar
- * @description Fetches global stats from Netlify functions and renders cards.
+ * @description Orchestrates fetching from Supabase Stats, Job Engine, and Cities Count.
  */
 const StatsBar: React.FC = () => {
   const { gameState } = useGame();
@@ -42,83 +39,80 @@ const StatsBar: React.FC = () => {
     trucks: number | null;
     jobs: number | null;
     cities: number | null;
-  }>({
+  }>(({
     users: null,
     trucks: null,
     jobs: null,
     cities: null
-  });
+  }));
 
   const [loading, setLoading] = useState(true);
 
   /**
-   * loadStats
-   * @description Call Netlify functions to get the latest global counts.
+   * loadAllStats
+   * @description Fetches data from multiple Netlify endpoints in parallel.
    */
-  const loadStats = useCallback(async () => {
+  const loadAllStats = useCallback(async () => {
     setLoading(true);
     try {
-      // Fetch user/truck/job stats
-      const statsRes = await fetch('/.netlify/functions/supabase-stats').then(r => r.ok ? r.json() : null);
-      // Fetch cities count
-      const citiesRes = await fetch('/.netlify/functions/cities-count').then(r => r.ok ? r.json() : null);
+      const [statsRes, jobsRes, citiesRes] = await Promise.all([
+        fetch('/.netlify/functions/supabase-stats').then(r => r.ok ? r.json() : null),
+        fetch('/.netlify/functions/total-jobs').then(r => r.ok ? r.json() : null),
+        fetch('/.netlify/functions/cities-count').then(r => r.ok ? r.json() : null)
+      ]);
 
       setStats({
         users: statsRes?.totalUsers ?? null,
         trucks: statsRes?.totalTrucks ?? null,
-        jobs: statsRes?.totalJobs ?? null,
+        jobs: jobsRes?.totalJobs ?? null,
         cities: citiesRes?.totalCities ?? null
       });
     } catch (err) {
-      console.error('Failed to load stats:', err);
+      console.error('Failed to load global stats:', err);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadStats();
-  }, [loadStats]);
+    loadAllStats();
+  }, [loadAllStats]);
 
   /**
-   * getValue
-   * @description Returns the remote value, or a local fallback, or a placeholder.
+   * displayValue
+   * @description Formats the number or provides a fallback/loading state.
    */
-  const getValue = (remote: number | null, local?: number) => {
-    if (remote !== null) return remote.toLocaleString();
-    if (loading && remote === null) return '...';
-    if (typeof local === 'number') return local.toLocaleString();
-    return '—';
+  const displayValue = (val: number | null, localFallback?: number) => {
+    if (val !== null) return val.toLocaleString();
+    if (loading) return '...';
+    if (typeof localFallback === 'number') return localFallback.toLocaleString();
+    return '0';
   };
-
-  // Local fallbacks from current company state
-  const localTrucks = Array.isArray(company?.trucks) ? company.trucks.length : 0;
-  const localCities = Array.isArray(company?.hubs) ? company.hubs.length : 1;
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
       <StatCard 
         icon={<Users className="w-6 h-6 text-blue-400" />} 
         label="Total User Accounts" 
-        value={getValue(stats.users)} 
+        value={displayValue(stats.users)} 
         ariaLabel="Total user accounts" 
       />
       <StatCard 
         icon={<Truck className="w-6 h-6 text-amber-400" />} 
         label="Total Trucks (active in game)" 
-        value={getValue(stats.trucks, localTrucks)} 
+        value={displayValue(stats.trucks, company?.trucks?.length)} 
         ariaLabel="Total trucks" 
       />
       <StatCard 
         icon={<Briefcase className="w-6 h-6 text-green-400" />} 
         label="Total Jobs (open / global)" 
-        value={getValue(stats.jobs)} 
+        value={displayValue(stats.jobs)} 
         ariaLabel="Total jobs" 
       />
       <StatCard 
         icon={<MapPin className="w-6 h-6 text-indigo-400" />} 
         label="In-game Cities" 
-        value={getValue(stats.cities, localCities)} 
+        value={displayValue(stats.cities, company?.hubs?.length)} 
         ariaLabel="Total cities" 
       />
     </div>
