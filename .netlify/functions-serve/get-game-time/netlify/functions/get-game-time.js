@@ -29,13 +29,11 @@ var handler = async (event, context) => {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     return {
       statusCode: 500,
-      body: JSON.stringify({
-        error: "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment variables"
-      })
+      body: JSON.stringify({ error: "Missing Supabase credentials" })
     };
   }
   try {
-    const url = `${SUPABASE_URL.replace(/\/$/, "")}/rest/v1/game_time?id=eq.1`;
+    const url = `${SUPABASE_URL.replace(/\/$/, "")}/rest/v1/game_time?id=eq.1&select=current_time,updated_at`;
     const resp = await fetch(url, {
       method: "GET",
       headers: {
@@ -44,47 +42,32 @@ var handler = async (event, context) => {
         Accept: "application/json"
       }
     });
-    if (!resp.ok) {
-      const text = await resp.text().catch(() => "");
-      return {
-        statusCode: resp.status,
-        body: JSON.stringify({
-          error: "Failed fetching game_time from Supabase",
-          status: resp.status,
-          body: text
-        })
-      };
-    }
     const data = await resp.json();
     if (!Array.isArray(data) || data.length === 0) {
-      return {
-        statusCode: 404,
-        body: JSON.stringify({ error: "game_time row not found (id=1)" })
-      };
+      return { statusCode: 404, body: JSON.stringify({ error: "game_time row not found" }) };
     }
     const row = data[0];
-    const currentTime = row.current_time ?? row.current_time_at ?? row.now ?? null;
-    if (!currentTime) {
-      return {
-        statusCode: 500,
-        body: JSON.stringify({ error: "game_time row exists but no current_time column found" })
-      };
-    }
-    const nowUtcMs = new Date(currentTime).getTime();
+    const dbGameTime = new Date(row.current_time).getTime();
+    const dbRealTime = new Date(row.updated_at).getTime();
+    const realNow = Date.now();
+    const elapsedMs = realNow - dbRealTime;
+    const projectedTimeMs = dbGameTime + elapsedMs;
     return {
       statusCode: 200,
+      headers: { "Content-Type": "application/json", "Cache-Control": "no-cache" },
       body: JSON.stringify({
-        current_time: new Date(currentTime).toISOString(),
-        nowUtcMs
+        nowUtcMs: projectedTimeMs,
+        debug: {
+          db_game_time: new Date(dbGameTime).toISOString(),
+          db_updated_at: new Date(dbRealTime).toISOString(),
+          elapsed_since_update_ms: elapsedMs
+        }
       })
     };
   } catch (err) {
     return {
       statusCode: 500,
-      body: JSON.stringify({
-        error: "Unexpected error while fetching game time",
-        message: String(err?.message ?? err)
-      })
+      body: JSON.stringify({ error: "Unexpected error", message: err.message })
     };
   }
 };

@@ -58,6 +58,7 @@ import GrantFundsToAllUsers from './components/admin/GrantFundsToAllUsers';
 import ForceGrantFundsToUser from './components/admin/ForceGrantFundsToUser';
 
 import { manifest as rulesManifest } from './data/game-rules-engines';
+import CompanyLevelEngine from './engines/CompanyLevelEngine';
 
 import './data/trailer-cleanup';
 import './data/trailer-additions';
@@ -172,6 +173,7 @@ function App() {
 
 
             {/* Mount background helpers (UI-less) to run side-effects and normalization */}
+            <CompanyLevelEngine />
             <MechanicSkillAssigner />
             <ClearPromotedSkills />
             <StaffIdAssigner />

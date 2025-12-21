@@ -606,13 +606,6 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       let needsPersist = false;
       const updatedCompany: any = { ...company };
 
-      // Enforce reputation = 0
-      const currentReputation = typeof company.reputation === 'number' ? company.reputation : Number(company.reputation ?? 0);
-      if (currentReputation !== 0) {
-        updatedCompany.reputation = 0;
-        needsPersist = true;
-      }
-
       // If admin user, enforce starting capital
       if (currentUser === ADMIN_ACCOUNT.email.toLowerCase()) {
         const currentCapital = typeof company.capital === 'number' ? company.capital : Number(company.capital ?? 0);
@@ -626,12 +619,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
       // Persist to storage for admin or regular user
       if (currentUser === ADMIN_ACCOUNT.email.toLowerCase()) {
-        // Ensure reputation stays 0 when persisting admin state and capital is enforced
-        updatedCompany.reputation = 0;
         userStorage.saveAdminState({ isAuthenticated: true, company: updatedCompany, sidebarCollapsed: gameState.sidebarCollapsed });
       } else {
-        // update both user record and per-user state
-        updatedCompany.reputation = 0;
         userStorage.updateUser(currentUser, { company: updatedCompany });
         userStorage.saveUserGameState(currentUser, { isAuthenticated: true, company: updatedCompany, sidebarCollapsed: gameState.sidebarCollapsed });
       }
@@ -1104,13 +1093,16 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
    *             New hires receive up to 3 skill cards (deterministic). Only those skill cards
    *             will have non-zero seeded progress; other declared skills are seeded to 0%.
    */
-  const hireStaff = (staff: Partial<any>, opts?: { deductCapital?: number }) => {
+  /**
+   * hireStaff
+   * @description Create a new staff member, update local state, and sync to Supabase via Netlify.
+   */
+  const hireStaff = async (staff: Partial<any>, opts?: { deductCapital?: number }) => {
     if (!gameState.currentUser || !gameState.company) {
       alert('Please login and create a company first');
       return;
     }
 
-    // Create a stable hireUid that will survive id remapping and be persisted with the staff entry.
     const hireUid = `hire-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
     const newStaff: any = {
@@ -1296,12 +1288,11 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       const updatedJobs = original.map(j => j.id === jobId ? { ...j, status: 'completed', progress: 100 } : j);
       const updatedCompany: any = { ...gameState.company, activeJobs: updatedJobs };
 
-      // If this job transitioned to completed now (was not completed before), apply reputation gain
+      // If this job transitioned to completed now, apply reputation gain
       if (targetJob && !alreadyCompleted) {
-        // Ensure numeric reputation
-        updatedCompany.reputation = typeof updatedCompany.reputation === 'number' ? updatedCompany.reputation : 0;
-        // Increase reputation by 0.10 per completed job
-        updatedCompany.reputation = Number((updatedCompany.reputation + 0.10).toFixed(2));
+        const currentRep = typeof updatedCompany.reputation === 'number' ? updatedCompany.reputation : 0;
+        // Gain 0.05% reputation per job, cap at 100%
+        updatedCompany.reputation = Math.min(100, Number((currentRep + 0.05).toFixed(2)));
       }
 
       // Update assigned driver statistics
@@ -1314,9 +1305,6 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
           return s;
         });
       }
-
-      // Persist but ensure reputation remains 0 in persistence (enforcement)
-      updatedCompany.reputation = 0;
 
       if (gameState.currentUser === ADMIN_ACCOUNT.email.toLowerCase()) userStorage.saveAdminState({ isAuthenticated: true, company: updatedCompany, sidebarCollapsed: gameState.sidebarCollapsed });
       else { userStorage.updateUser(gameState.currentUser, { company: updatedCompany }); userStorage.saveUserGameState(gameState.currentUser, { isAuthenticated: true, company: updatedCompany, sidebarCollapsed: gameState.sidebarCollapsed }); }
@@ -1332,10 +1320,14 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   const cancelJob = (jobId: string) => {
     if (!gameState.company || !gameState.currentUser) return;
     try {
-      const updated: any = { ...gameState.company, activeJobs: (gameState.company.activeJobs || []).map(j => j.id === jobId ? { ...j, status: 'cancelled' } : j) };
+      const currentRep = typeof gameState.company.reputation === 'number' ? gameState.company.reputation : 0;
+      const updated: any = { 
+        ...gameState.company, 
+        // Penalize cancellation: -0.10% reputation
+        reputation: Math.max(0, Number((currentRep - 0.10).toFixed(2))),
+        activeJobs: (gameState.company.activeJobs || []).map(j => j.id === jobId ? { ...j, status: 'cancelled' } : j) 
+      };
       updateStaffStatuses(updated);
-      // Ensure reputation remains 0
-      updated.reputation = 0;
       if (gameState.currentUser === ADMIN_ACCOUNT.email.toLowerCase()) userStorage.saveAdminState({ isAuthenticated: true, company: updated, sidebarCollapsed: gameState.sidebarCollapsed });
       else { userStorage.updateUser(gameState.currentUser, { company: updated }); userStorage.saveUserGameState(gameState.currentUser, { isAuthenticated: true, company: updated, sidebarCollapsed: gameState.sidebarCollapsed }); }
       setGameState(prev => ({ ...prev, company: updated }));

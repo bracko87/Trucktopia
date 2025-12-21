@@ -1,23 +1,8 @@
 /**
  * HubsPanel.tsx
  *
- * Presentational panel for the Infrastructure -> Hubs view.
- *
- * Responsibilities:
- * - Render company hubs as full-height single-column cards so each hub occupies
- *   the available horizontal width and can stretch vertically.
- * - Render pending "build-hub" tasks as grayed/disabled pending hub cards until
- *   the task completes (HubConstructionFinalizer or equivalent engine).
- * - Provide a Freight Market button on each hub that navigates to /market with
- *   the hub's country & city as query params.
- * - Listen for pending task updates via a window event (tm:pendingTasksUpdated)
- *   and re-read pending tasks from the shared pendingTasks util.
- *
- * Notes:
- * - This file is defensive: it looks for hubs in company.hubs, company.hub,
- *   infrastructure.hubs and top-level gameState.hubs and normalizes them.
- * - The UI and layout are kept consistent with existing styles (no major style
- *   changes). Only behaviour/flow additions are applied.
+ * Displays individual hub cards in a 2-column grid layout on larger screens.
+ * Includes per-hub capacity progress bars for vehicles and staff.
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -26,11 +11,9 @@ import { useGame } from '../../contexts/GameContext';
 import HubDetailsModal from './HubDetailsModal';
 import { getHubLevel } from '../../data/hubLevels';
 import { readTasks, PendingTask } from '../../utils/pendingTasks';
+import { getHubCapacityInfo } from '../../engines/hubCapacityEngine';
+import { Truck, Users } from 'lucide-react';
 
-/**
- * HubData
- * @description Minimal hub shape expected from game state. Accepts unknown fields.
- */
 interface HubData {
   id?: string;
   name?: string;
@@ -47,62 +30,82 @@ interface HubData {
 }
 
 /**
- * HubCardProps
- * @description Props for the visual hub card.
+ * CapacityBar
+ * @description Small reusable progress bar for hub card stats.
  */
-interface HubCardProps {
-  hub: HubData;
-  onSelect?: () => void;
-}
+const CapacityBar: React.FC<{ 
+  label: string; 
+  current: number; 
+  max: number; 
+  icon: React.ReactNode;
+  colorClass: string;
+}> = ({ label, current, max, icon, colorClass }) => {
+  const percentage = Math.min(100, Math.max(0, (current / max) * 100));
+  
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-[10px] uppercase tracking-wider font-semibold text-slate-400">
+        <div className="flex items-center gap-1.5">
+          {icon}
+          <span>{label}</span>
+        </div>
+        <span>{current} / {max}</span>
+      </div>
+      <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden border border-slate-700/50">
+        <div 
+          className={`h-full transition-all duration-500 ${colorClass}`} 
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
+    </div>
+  );
+};
 
-/**
- * HubCard
- * @description Visual, full-height hub card with Freight Market and Details actions.
- *
- * - Stays presentational: no side-effects here.
- */
-const HubCard: React.FC<HubCardProps> = ({ hub, onSelect }) => {
+const HubCard: React.FC<{ hub: HubData; onSelect?: () => void }> = ({ hub, onSelect }) => {
   const navigate = useNavigate();
+  const { gameState } = useGame() as any;
 
-  const title =
-    hub.name ||
-    hub.title ||
-    (hub.city ? `${hub.city} Hub` : `Hub ${hub.id ?? ''}`) ||
-    'Hub';
-
-  const level = typeof hub.level === 'number' ? hub.level : 1;
-  const levelInfo = getHubLevel(level);
-
-  const subtitleParts: string[] = [];
-  if (typeof levelInfo?.vehicleLimit === 'number') subtitleParts.push(`Capacity: ${levelInfo.vehicleLimit} vehicles`);
-  if (typeof levelInfo?.officeSpots === 'number') subtitleParts.push(`Staff spots: ${levelInfo.officeSpots}`);
-  const subtitle = subtitleParts.length ? subtitleParts.join(' • ') : (typeof hub.description === 'string' ? hub.description : undefined);
+  const title = hub.name || hub.title || (hub.city ? `${hub.city} Hub` : `Hub ${hub.id ?? ''}`) || 'Hub';
+  
+  // Calculate specific hub capacity using the engine
+  const capacity = useMemo(() => getHubCapacityInfo(gameState?.company, hub), [gameState?.company, hub]);
 
   return (
-    <div
-      className="w-full h-full text-left bg-slate-700 rounded-lg p-4 border border-slate-600 hover:shadow-sm hover:bg-slate-600 transition-all flex flex-col justify-between"
-      role="group"
-      aria-label={`Hub card ${title}`}
-    >
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="font-medium text-white">{title}</div>
-          <div className="text-xs text-slate-400 mt-1">Level {levelInfo.level}</div>
+    <div className="w-full h-full text-left bg-slate-700 rounded-lg p-5 border border-slate-600 hover:border-slate-500 transition-all flex flex-col justify-between group">
+      <div>
+        <div className="flex items-start justify-between mb-2">
+          <div>
+            <div className="font-bold text-white text-base group-hover:text-indigo-300 transition-colors">{title}</div>
+            <div className="text-[11px] font-mono text-slate-400">LEVEL {capacity.level} INFRASTRUCTURE</div>
+          </div>
+          {hub.isMain && (
+            <div className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-600 text-white uppercase">Main</div>
+          )}
         </div>
 
-        {hub.isMain && (
-          <div className="px-2 py-0.5 rounded text-xs font-semibold bg-indigo-600 text-white">
-            Main
-          </div>
-        )}
+        {/* Capacity Stats Section */}
+        <div className="mt-4 grid grid-cols-1 gap-4">
+          <CapacityBar 
+            label="Vehicle Fleet" 
+            current={capacity.assignedVehicles} 
+            max={capacity.maxVehicles} 
+            icon={<Truck className="w-3 h-3" />}
+            colorClass={capacity.assignedVehicles >= capacity.maxVehicles * 0.9 ? 'bg-rose-500' : 'bg-emerald-500'}
+          />
+          <CapacityBar 
+            label="Office Spots" 
+            current={capacity.assignedStaff} 
+            max={capacity.maxStaff} 
+            icon={<Users className="w-3 h-3" />}
+            colorClass={capacity.assignedStaff >= capacity.maxStaff * 0.9 ? 'bg-amber-500' : 'bg-indigo-500'}
+          />
+        </div>
       </div>
 
-      <div className="mt-3">
-        {subtitle && <div className="text-sm text-slate-400">{subtitle}</div>}
-      </div>
-
-      <div className="mt-4 flex items-center justify-between">
-        <div className="text-xs text-slate-400">{hub.countryCode ? hub.countryCode.toUpperCase() : ''}{hub.city ? ` • ${hub.city}` : ''}</div>
+      <div className="mt-6 flex items-center justify-between">
+        <div className="text-xs text-slate-400 font-medium italic">
+          {hub.countryCode ? hub.countryCode.toUpperCase() : ''}{hub.city ? ` • ${hub.city}` : ''}
+        </div>
         <div className="flex items-center space-x-2">
           <button
             type="button"
@@ -112,19 +115,16 @@ const HubCard: React.FC<HubCardProps> = ({ hub, onSelect }) => {
               if (hub.city) params.set('city', String(hub.city));
               navigate(`/market?${params.toString()}`);
             }}
-            className="text-xs px-3 py-1 rounded bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700"
-            aria-label={`Open Freight Market for ${title}`}
+            className="text-[11px] font-bold uppercase px-3 py-1.5 rounded bg-slate-800 border border-slate-600 text-slate-300 hover:bg-slate-600 hover:text-white transition-all"
           >
-            Freight Market
+            Market
           </button>
-
           <button
             type="button"
             onClick={onSelect}
-            className="text-xs px-3 py-1 rounded bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700"
-            aria-label={`Open details for ${title}`}
+            className="text-[11px] font-bold uppercase px-3 py-1.5 rounded bg-indigo-600 text-white hover:bg-indigo-500 transition-all shadow-sm"
           >
-            Details
+            Manage
           </button>
         </div>
       </div>
@@ -132,100 +132,39 @@ const HubCard: React.FC<HubCardProps> = ({ hub, onSelect }) => {
   );
 };
 
-/**
- * PendingHubCardProps
- * @description Props for a single pending hub build card.
- */
-interface PendingHubCardProps {
-  task: PendingTask;
-}
-
-/**
- * PendingHubCard
- * @description Presents a grayed-out hub card representing an in-progress build task.
- */
-const PendingHubCard: React.FC<PendingHubCardProps> = ({ task }) => {
-  const title = `${task.city} Hub (Pending)`;
+const PendingHubCard: React.FC<{ task: PendingTask }> = ({ task }) => {
+  const title = `${task.city} Hub`;
   const doneAt = new Date(task.completionGameMs).toLocaleString();
 
   return (
-    <div
-      className="w-full h-full text-left bg-slate-800/60 rounded-lg p-4 border border-slate-700 cursor-not-allowed opacity-70 flex flex-col justify-between"
-      aria-hidden="true"
-    >
+    <div className="w-full h-full text-left bg-slate-800/40 rounded-lg p-5 border border-slate-700 border-dashed opacity-60 flex flex-col justify-between">
       <div className="flex items-start justify-between">
         <div>
-          <div className="font-medium text-slate-300">{title}</div>
-          <div className="text-xs text-slate-400 mt-1">Level 1 (on completion)</div>
+          <div className="font-bold text-slate-400">{title}</div>
+          <div className="text-[10px] text-amber-500/80 font-bold uppercase mt-1">Under Construction...</div>
         </div>
-
-        <div className="px-2 py-0.5 rounded text-xs font-semibold bg-amber-600/20 text-amber-300">
-          Pending
-        </div>
+        <div className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-600/20 text-amber-500 uppercase">Pending</div>
       </div>
 
-      <div className="mt-3">
-        <div className="text-sm text-slate-400">Estimated Price</div>
-        <div className="text-lg font-bold text-amber-400">
-          {typeof task.estimatedPrice !== 'undefined' ? String(task.estimatedPrice) : '—'}
-        </div>
-      </div>
-
-      <div className="mt-4 flex items-center justify-between">
-        <div className="text-xs text-slate-400">Done at (game UTC)</div>
-        <div className="text-xs text-slate-200">{doneAt}</div>
+      <div className="mt-4 p-2 bg-slate-900/50 rounded border border-slate-700/50">
+        <div className="text-[10px] text-slate-500 uppercase font-bold">Estimated Handover</div>
+        <div className="text-xs text-slate-300 font-mono mt-0.5">{doneAt}</div>
       </div>
     </div>
   );
 };
 
-/**
- * normalizeSingleHub
- * @description Ensure a raw hub object has minimal id/name fallbacks.
- * @param raw raw hub object
- * @returns normalized HubData
- */
-function normalizeSingleHub(raw: any): HubData {
-  const h = raw ?? {};
-  return {
-    id: h.id ?? h.name ?? `hub-${Math.random().toString(36).slice(2, 9)}`,
-    name: h.name ?? h.title ?? (h.city ? `${h.city} Hub` : undefined),
-    title: h.title,
-    city: h.city,
-    countryCode: h.countryCode ?? (h.country ?? h.countryCode ?? undefined),
-    capacity: typeof h.capacity === 'number' ? h.capacity : undefined,
-    active: typeof h.active === 'boolean' ? h.active : undefined,
-    description: h.description ?? h.notes ?? undefined,
-    unlockedFacilities: Array.isArray(h.unlockedFacilities) ? h.unlockedFacilities : [],
-    level: typeof h.level === 'number' ? h.level : 1,
-    isMain: false,
-    ...h
-  };
-}
-
-/**
- * HubsPanel
- * @description Top-level panel rendering hubs in a single-column, full-height layout.
- * - Also displays pending build tasks as disabled cards until they complete.
- */
 const HubsPanel: React.FC = () => {
   const { gameState } = useGame() as any;
   const [selectedHub, setSelectedHub] = useState<HubData | null>(null);
   const [pendingBuilds, setPendingBuilds] = useState<PendingTask[]>([]);
 
-  /**
-   * reloadPendingBuilds
-   * @description Read pending tasks and keep in local state (filters build-hub).
-   */
   const reloadPendingBuilds = () => {
     try {
       const tasks = readTasks().filter((t) => t.type === 'build-hub');
       setPendingBuilds(tasks);
     } catch (e) {
-      // defensive: if pendingTasks util throws, swallow to avoid breaking UI
       setPendingBuilds([]);
-      // eslint-disable-next-line no-console
-      console.warn('[HubsPanel] failed to read pending tasks', e);
     }
   };
 
@@ -236,78 +175,36 @@ const HubsPanel: React.FC = () => {
     return () => window.removeEventListener('tm:pendingTasksUpdated', handler as EventListener);
   }, []);
 
-  /**
-   * hubsList
-   * @description Tolerant lookup for hubs. Priority:
-   *  1) company.hubs (array)
-   *  2) company.hub (single object) -> normalized into array
-   *  3) infrastructure.hubs (array)
-   *  4) top-level gameState.hubs (array)
-   */
   const hubsList: HubData[] = useMemo(() => {
     if (!gameState) return [];
-
     let rawHubs: any[] = [];
-
     if (Array.isArray(gameState?.company?.hubs) && gameState.company.hubs.length > 0) {
       rawHubs = gameState.company.hubs;
     } else if (gameState?.company?.hub_name && gameState.company.hub_name !== 'Pending') {
-      // Fallback: Create a virtual hub object from the company's main hub columns
-      rawHubs = [{
-        id: 'main-hub',
-        name: gameState.company.hub_name,
-        city: gameState.company.hub_name,
-        country: gameState.company.hub_country,
-        level: 1,
-        isMain: true
-      }];
-    } else if (gameState?.company?.hub && typeof gameState.company.hub === 'object') {
+      rawHubs = [{ id: 'main-hub', name: gameState.company.hub_name, city: gameState.company.hub_name, country: gameState.company.hub_country, level: 1, isMain: true }];
+    } else if (gameState?.company?.hub) {
       rawHubs = [gameState.company.hub];
-    } else if (Array.isArray(gameState?.infrastructure?.hubs) && gameState.infrastructure.hubs.length > 0) {
-      rawHubs = gameState.infrastructure.hubs;
-    } else if (Array.isArray(gameState?.hubs) && gameState.hubs.length > 0) {
-      rawHubs = gameState.hubs;
     } else {
       rawHubs = [];
     }
-
     const mainHubId = gameState?.company?.mainHubId ?? (rawHubs[0] ? String(rawHubs[0].id ?? rawHubs[0].name ?? '') : null);
-
-    return rawHubs.map((h: any) => {
-      const normalized = normalizeSingleHub(h);
-      normalized.level = typeof h.level === 'number' ? h.level : 1;
-      normalized.unlockedFacilities = Array.isArray(h.unlockedFacilities) ? h.unlockedFacilities : [];
-      normalized.isMain = mainHubId ? String(normalized.id) === String(mainHubId) : false;
-      return normalized;
-    });
+    return rawHubs.map((h: any) => ({ ...h, isMain: mainHubId ? String(h.id || h.name) === String(mainHubId) : false }));
   }, [gameState]);
 
   return (
-    <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 space-y-4 h-full flex flex-col">
-      {/* If no hubs and no pending builds, show friendly empty state */}
-      {hubsList.length === 0 && pendingBuilds.length === 0 ? (
-        <div className="bg-slate-700 rounded-lg p-4 border border-slate-600 text-slate-300">
-          No hubs found for your company.
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 items-stretch flex-1">
-          {/* Render pending builds first so the user sees upcoming hubs */}
-          {pendingBuilds.map((t) => (
-            <div key={t.id} className="flex">
-              <PendingHubCard task={t} />
-            </div>
-          ))}
-
-          {/* Render existing hubs */}
-          {hubsList.map((hub) => (
-            <div key={hub.id ?? hub.name} className="flex">
-              <HubCard hub={hub} onSelect={() => setSelectedHub(hub)} />
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Hub details modal */}
+    <div className="space-y-4">
+      {/* 
+          Restricting grid to 2 columns (md:grid-cols-2) for all larger viewports
+          to maintain layout stability while adding new capacity info.
+      */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
+        {pendingBuilds.map((t) => (
+          <PendingHubCard key={t.id} task={t} />
+        ))}
+        {hubsList.map((hub) => (
+          <HubCard key={hub.id ?? hub.name} hub={hub} onSelect={() => setSelectedHub(hub)} />
+        ))}
+      </div>
       <HubDetailsModal hub={selectedHub} onClose={() => setSelectedHub(null)} />
     </div>
   );

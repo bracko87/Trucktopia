@@ -1,307 +1,164 @@
+
 /**
  * Infrastructure.tsx
- *
- * Infrastructure page that shows Hubs and Facilities.
- *
- * Purpose:
- * - Render the Infrastructure page using the exact visual language used on
- *   the Staff Management page (pill tabs with blue active state).
- * - Stretch the page margins so the interactive "window" (tabs / card) spans
- *   the maximum width/height inside the page box while preserving internal
- *   paddings (p-6) so paragraph spacing stays identical.
- *
- * Notes:
- * - This page now mounts a non-visual helper (HubsDowngradeFix) which ensures
- *   the Downgrade button always performs a safe fallback downgrade when the
- *   page/button flow does not execute the expected logic. Mounting it here
- *   scopes the helper to the Infrastructure area and keeps its behaviour
- *   active when the page is open.
  */
 
 import React, { useMemo, useState } from 'react';
-import { MapPin, Home } from 'lucide-react';
+import { MapPin, Home, Truck, Globe, List } from 'lucide-react';
 import { useGame } from '../contexts/GameContext';
 import HubsPanel from '../components/infrastructure/HubsPanel';
 import FacilitiesPanel from '../components/infrastructure/FacilitiesPanel';
 import HubsDowngradeFix from '../components/infrastructure/HubsDowngradeFix';
 import BuildHubBox from '../components/infrastructure/BuildHubBox';
 import PendingTasksPanel from '../components/infrastructure/PendingTasksPanel';
-import { ALL_FACILITIES } from '../data/hubLevels';
 
-/**
- * formatNumber
- *
- * @description Format a nullable number safely for display.
- * @param value number | undefined | null
- * @returns string
- */
+// Simple mapping for regional grouping
+const COUNTRY_TO_REGION: Record<string, string> = {
+  // Europe
+  'de': 'Europe', 'fr': 'Europe', 'gb': 'Europe', 'it': 'Europe', 'es': 'Europe', 'pl': 'Europe', 'nl': 'Europe', 'be': 'Europe', 'ch': 'Europe', 'at': 'Europe', 'se': 'Europe', 'no': 'Europe', 'fi': 'Europe', 'dk': 'Europe', 'ie': 'Europe', 'pt': 'Europe', 'gr': 'Europe', 'cz': 'Europe', 'ro': 'Europe', 'hu': 'Europe', 'tr': 'Europe', 'ua': 'Europe', 'by': 'Europe', 'ru': 'Europe', 'sk': 'Europe', 'si': 'Europe', 'hr': 'Europe', 'bg': 'Europe', 'rs': 'Europe', 'lt': 'Europe', 'lv': 'Europe', 'ee': 'Europe', 'md': 'Europe', 'xk': 'Europe', 'me': 'Europe', 'al': 'Europe', 'mk': 'Europe', 'ba': 'Europe', 'lu': 'Europe', 'cy': 'Europe', 'ad': 'Europe', 'li': 'Europe', 'sm': 'Europe', 'mc': 'Europe', 'va': 'Europe', 'mt': 'Europe',
+  // Asia / Middle East
+  'cn': 'Asia', 'jp': 'Asia', 'kr': 'Asia', 'in': 'Asia', 'id': 'Asia', 'vn': 'Asia', 'th': 'Asia', 'my': 'Asia', 'ph': 'Asia', 'sg': 'Asia', 'tw': 'Asia', 'hk': 'Asia', 'mo': 'Asia', 'ae': 'Middle East', 'sa': 'Middle East', 'qa': 'Middle East', 'kw': 'Middle East', 'om': 'Middle East', 'bh': 'Middle East', 'il': 'Middle East', 'jo': 'Middle East', 'lb': 'Middle East', 'sy': 'Middle East', 'iq': 'Middle East', 'ir': 'Middle East', 'af': 'Asia', 'pk': 'Asia', 'bd': 'Asia', 'lk': 'Asia', 'np': 'Asia', 'mm': 'Asia', 'kh': 'Asia', 'la': 'Asia', 'uz': 'Asia', 'kz': 'Asia', 'tm': 'Asia', 'kg': 'Asia', 'tj': 'Asia', 'ge': 'Asia', 'am': 'Asia', 'az': 'Asia',
+  // Africa
+  'eg': 'Africa', 'ng': 'Africa', 'za': 'Africa', 'dz': 'Africa', 'ma': 'Africa', 'ke': 'Africa', 'et': 'Africa', 'gh': 'Africa', 'sn': 'Africa', 'ci': 'Africa', 'ug': 'Africa', 'cd': 'Africa', 'zw': 'Africa', 'rw': 'Africa', 'mw': 'Africa', 'sl': 'Africa', 'gm': 'Africa', 'ga': 'Africa', 'er': 'Africa', 'gq': 'Africa', 'dj': 'Africa', 'km': 'Africa', 'cf': 'Africa', 'cv': 'Africa', 'bi': 'Africa', 'bf': 'Africa', 'bw': 'Africa', 'bj': 'Africa'
+};
+
 function formatNumber(value: number | undefined | null): string {
   const v = typeof value === 'number' && !Number.isNaN(value) ? value : 0;
-  return String(v);
+  return v.toLocaleString();
 }
 
-/**
- * TabButtonProps
- *
- * @description Props for TabButton (small local pill button).
- */
-interface TabButtonProps {
-  id: 'hubs' | 'facilities';
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-  icon?: React.ReactNode;
-}
-
-/**
- * TabButton
- *
- * @description Reusable pill tab button that matches Staff Management visual
- *              treatment: rounded-full pill, blue active (bg-blue-600 text-white),
- *              slate inactive (text-slate-400) with hover state.
- *
- * @param props TabButtonProps
- */
-const TabButton: React.FC<TabButtonProps> = ({ id, active, onClick, children, icon }) => {
-  const base =
-    'px-4 py-2 rounded-xl font-medium flex items-center justify-center space-x-2 transition-all duration-150 w-full flex-1';
+const TabButton: React.FC<{ id: string; active: boolean; onClick: () => void; children: React.ReactNode; icon?: React.ReactNode }> = ({ active, onClick, children, icon }) => {
+  const base = 'px-4 py-2 rounded-xl font-medium flex items-center justify-center space-x-2 transition-all duration-150 w-full flex-1';
   const activeClass = 'bg-blue-600 text-white shadow-md ring-1 ring-white/5';
-  const inactiveClass = 'text-slate-400 hover:text-white hover:bg-slate-700/50';
+  const inactiveClass = 'text-slate-400 hover:text-white hover:bg-slate-700/5';
   return (
-    <button
-      role="tab"
-      aria-selected={active}
-      aria-controls={`infrastructure-tab-${id}`}
-      onClick={onClick}
-      className={`${base} ${active ? activeClass : inactiveClass}`}
-    >
+    <button onClick={onClick} className={`${base} ${active ? activeClass : inactiveClass}`}>
       {icon}
       <span>{children}</span>
     </button>
   );
 };
 
-/**
- * InfrastructureHeader
- *
- * @description Page header for Infrastructure that matches Staff/Garage headers.
- *              Title uses text-2xl font-bold, subtitle uses text-sm text-slate-400.
- *
- * @param props.hubsCount Number of hubs
- * @param props.facilitiesCount Number of facilities
- */
-const InfrastructureHeader: React.FC<{ hubsCount: number; facilitiesCount: number }> = ({
-  hubsCount,
-  facilitiesCount,
-}) => {
-  return (
-    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 w-full">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Infrastructure</h1>
-        <p className="text-sm text-slate-400">Manage hubs and facilities across your network</p>
-      </div>
-
-      <div className="flex items-center space-x-4">
-        <div className="text-right">
-          <div className="text-sm text-slate-400">Hubs</div>
-          <div className="text-2xl font-bold text-indigo-400">{formatNumber(hubsCount)}</div>
-        </div>
-
-        <div className="text-right">
-          <div className="text-sm text-slate-400">Facilities</div>
-          <div className="text-2xl font-bold text-amber-400">{formatNumber(facilitiesCount)}</div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-/**
- * Infrastructure
- *
- * @description Top-level Infrastructure page component.
- *
- * Layout decisions:
- * - Outer <main> removes the default page padding (p-6 -> p-0) so the internal
- *   primary card can span the maximum width of the available page box while
- *   keeping the internal card paddings (p-6) intact to preserve paragraph spacing.
- */
 const Infrastructure: React.FC = () => {
   const { gameState } = useGame() as any;
+  const [active, setActive] = useState<'hubs' | 'facilities' | 'overview'>('hubs');
 
-  // Derive counts safely from gameState (tolerant lookups)
-  /**
-   * Derive hubsCount and facilitiesCount from the same data sources used by the
-   * HubsPanel and FacilitiesPanel so header numbers match rendered panels.
-   *
-   * - hubsCount: tolerant lookup (prefer company.hubs array, fallback to company.hub,
-   *   infrastructure.hubs, then top-level gameState.hubs).
-   * - facilitiesCount: tolerant lookup of built facilities for the player's company.
-   *   We try common locations where "built" facilities may be stored:
-   *     - company.builtFacilities (array of ids or names)
-   *     - company.facilities (array of objects with a `built` flag or simple strings)
-   *     - infrastructure.builtFacilities
-   *     - hubs[].builtFacilities (aggregate across hubs)
-   *   If none are found, fall back to 0.
-   */
-  const { hubsCount, facilitiesCount } = useMemo(() => {
-    if (!gameState) return { hubsCount: 0, facilitiesCount: 0 };
+  const stats = useMemo(() => {
+    if (!gameState) return { hubsCount: 0, facilitiesCount: 0, totalCapacity: 0, regionalHubs: {} };
 
-    // Determine hubs list using the same tolerant rules used in HubsPanel
     let hubsArr: any[] = [];
-    if (Array.isArray(gameState?.company?.hubs) && gameState.company.hubs.length > 0) {
-      hubsArr = gameState.company.hubs;
-    } else if (gameState?.company?.hub && typeof gameState.company.hub === 'object') {
-      hubsArr = [gameState.company.hub];
-    } else if (Array.isArray(gameState?.infrastructure?.hubs) && gameState.infrastructure.hubs.length > 0) {
-      hubsArr = gameState.infrastructure.hubs;
-    } else if (Array.isArray(gameState?.hubs) && gameState.hubs.length > 0) {
-      hubsArr = gameState.hubs;
-    } else {
-      hubsArr = [];
-    }
+    if (Array.isArray(gameState?.company?.hubs)) hubsArr = gameState.company.hubs;
+    else if (gameState?.company?.hub) hubsArr = [gameState.company.hub];
 
-    // Tolerant lookup for built facilities
+    const totalCapacity = hubsArr.reduce((acc, hub) => acc + (hub.maxVehicles || 0), 0);
+
     const builtSet = new Set<string>();
-    const company = gameState?.company ?? null;
+    const company = gameState?.company;
+    if (company?.builtFacilities) company.builtFacilities.forEach((f: any) => builtSet.add(String(f)));
 
-    // 1) company.builtFacilities as an array of ids/names
-    if (company && Array.isArray(company.builtFacilities) && company.builtFacilities.length > 0) {
-      company.builtFacilities.forEach((f: any) => {
-        if (f == null) return;
-        builtSet.add(String(typeof f === 'object' ? (f.id ?? f.name ?? JSON.stringify(f)) : f));
-      });
-    }
-
-    // 2) company.facilities (array of objects or strings) where objects may have built flag
-    if (company && Array.isArray(company.facilities) && company.facilities.length > 0) {
-      company.facilities.forEach((f: any) => {
-        if (f == null) return;
-        if (typeof f === 'string') {
-          // string entries may represent built facility ids/names
-          builtSet.add(f);
-        } else if (f?.built) {
-          builtSet.add(String(f.id ?? f.name ?? JSON.stringify(f)));
-        } else if (f?.status === 'built' || f?.isBuilt) {
-          builtSet.add(String(f.id ?? f.name ?? JSON.stringify(f)));
-        }
-      });
-    }
-
-    // 3) infrastructure.builtFacilities (top-level)
-    if (Array.isArray(gameState?.infrastructure?.builtFacilities) && gameState.infrastructure.builtFacilities.length > 0) {
-      gameState.infrastructure.builtFacilities.forEach((f: any) => {
-        if (f == null) return;
-        builtSet.add(String(typeof f === 'object' ? (f.id ?? f.name ?? JSON.stringify(f)) : f));
-      });
-    }
-
-    // 4) per-hub builtFacilities aggregation
-    hubsArr.forEach((h: any) => {
-      if (!h) return;
-      if (Array.isArray(h.builtFacilities) && h.builtFacilities.length > 0) {
-        h.builtFacilities.forEach((f: any) => {
-          if (f == null) return;
-          builtSet.add(String(typeof f === 'object' ? (f.id ?? f.name ?? JSON.stringify(f)) : f));
-        });
-      }
-      // Some hubs may store built/unlocked entries under unlockedFacilities with a `built` flag
-      if (Array.isArray(h.unlockedFacilities) && h.unlockedFacilities.length > 0) {
-        h.unlockedFacilities.forEach((f: any) => {
-          if (f == null) return;
-          if (typeof f === 'string') return; // unlocked-only entry; skip unless explicit built
-          if (f?.built) builtSet.add(String(f.id ?? f.name ?? JSON.stringify(f)));
-        });
-      }
+    // Group by region
+    const regionalGroups: Record<string, any[]> = {};
+    hubsArr.forEach(hub => {
+      const country = (hub.country || hub.countryCode || '').toLowerCase();
+      const region = COUNTRY_TO_REGION[country] || 'Other';
+      if (!regionalGroups[region]) regionalGroups[region] = [];
+      regionalGroups[region].push(hub);
     });
-
-    const facilitiesCountResolved = builtSet.size;
-
-    return { hubsCount: hubsArr.length, facilitiesCount: facilitiesCountResolved };
+    
+    return { 
+      hubsCount: hubsArr.length, 
+      facilitiesCount: builtSet.size,
+      totalCapacity,
+      regionalHubs: regionalGroups
+    };
   }, [gameState]);
-
-  const [active, setActive] = useState<'hubs' | 'facilities'>('hubs');
 
   return (
     <main className="flex-1 p-0 overflow-auto">
       <div className="flex flex-col h-full min-h-0">
-        {/* Header - note: removed horizontal outer padding so header can align full-bleed */}
-        <div className="w-full pt-0 mb-6">
-          <div className="w-full px-6">{/* Keep px-6 only for header text alignment to the card content */}
-            <InfrastructureHeader hubsCount={hubsCount} facilitiesCount={facilitiesCount} />
+        <div className="w-full pt-0 mb-6 px-6">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 w-full">
+            <div>
+              <h1 className="text-2xl font-bold text-white">Infrastructure</h1>
+              <p className="text-sm text-slate-400">Manage hubs and facilities across your network</p>
+            </div>
+
+            <div className="flex items-center space-x-6">
+              <div className="text-right">
+                <div className="text-[10px] uppercase font-bold tracking-wider text-slate-500">Hubs</div>
+                <div className="text-xl font-bold text-indigo-400">{formatNumber(stats.hubsCount)}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] uppercase font-bold tracking-wider text-slate-500">Facilities</div>
+                <div className="text-xl font-bold text-amber-400">{formatNumber(stats.facilitiesCount)}</div>
+              </div>
+              <div className="text-right border-l border-slate-700 pl-6">
+                <div className="text-[10px] uppercase font-bold tracking-wider text-slate-500 flex items-center justify-end">
+                  <Truck className="w-3 h-3 mr-1" /> Network Capacity
+                </div>
+                <div className="text-xl font-bold text-emerald-400">{formatNumber(stats.totalCapacity)} <span className="text-xs text-slate-500 font-normal">Slots</span></div>
+              </div>
+            </div>
           </div>
         </div>
 
         <div className="flex-1 flex flex-col min-h-0">
-          {/* Primary content card — keep p-6 internally so paragraph spacing is preserved.
-              Card itself is full-bleed within the page because outer main uses p-0. */}
-          <section className="flex-1 bg-slate-800 rounded-none md:rounded-xl p-6 border border-slate-700 overflow-auto w-full">
+          <section className="flex-1 bg-slate-800 p-6 border-y border-slate-700 overflow-auto w-full">
             <div className="space-y-6">
-              {/* Non-visual helper: ensure Downgrade fallbacks work even when parent handlers are not wired.
-                  Mounting HubsDowngradeFix here ensures the fallback downgrade mutation runs when the
-                  Downgrade button title is clicked inside HubDetailsModal. */}
               <HubsDowngradeFix />
-
-              {/* Tabs — use the exact Staff Management tab visual language (blue active, slate inactive)
-                  and make them pill-shaped (rounded-full). */}
               <div className="border-b border-slate-700">
                 <div className="flex gap-2 p-1">
-                  <TabButton
-                    id="hubs"
-                    active={active === 'hubs'}
-                    onClick={() => setActive('hubs')}
-                    icon={<MapPin className="w-4 h-4" />}
-                  >
-                    Hubs
-                  </TabButton>
-
-                  <TabButton
-                    id="facilities"
-                    active={active === 'facilities'}
-                    onClick={() => setActive('facilities')}
-                    icon={<Home className="w-4 h-4" />}
-                  >
-                    Facilities
-                  </TabButton>
+                  <TabButton id="hubs" active={active === 'hubs'} onClick={() => setActive('hubs')} icon={<List className="w-4 h-4" />}>Management</TabButton>
+                  <TabButton id="overview" active={active === 'overview'} onClick={() => setActive('overview')} icon={<Globe className="w-4 h-4" />}>Network Overview</TabButton>
+                  <TabButton id="facilities" active={active === 'facilities'} onClick={() => setActive('facilities')} icon={<Home className="w-4 h-4" />}>Facilities</TabButton>
                 </div>
               </div>
 
-              {/* Panels */}
-              <div>
-                <div
-                  role="tabpanel"
-                  id="infrastructure-tab-hubs"
-                  aria-hidden={active !== 'hubs'}
-                  className={active === 'hubs' ? '' : 'hidden'}
-                >
+              {active === 'hubs' && (
+                <div className="space-y-6">
                   <HubsPanel />
-
-                  {/* Build Hub box — sits below the hubs list and lets players construct a hub
-                      in any city from the in-game database. */}
-                  <div className="mt-6">
-                    <BuildHubBox />
-                  </div>
+                  <BuildHubBox />
                 </div>
+              )}
 
-                <div
-                  role="tabpanel"
-                  id="infrastructure-tab-facilities"
-                  aria-hidden={active !== 'facilities'}
-                  className={active === 'facilities' ? '' : 'hidden'}
-                >
-                  <FacilitiesPanel />
+              {active === 'overview' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                  {Object.entries(stats.regionalHubs).length === 0 ? (
+                    <div className="col-span-full py-12 text-center text-slate-500 italic">
+                      No active hubs in your network yet.
+                    </div>
+                  ) : (
+                    Object.entries(stats.regionalHubs).map(([region, hubs]) => (
+                      <div key={region} className="bg-slate-900/40 rounded-xl border border-slate-700 p-4">
+                        <div className="flex items-center justify-between mb-4 border-b border-slate-700 pb-2">
+                          <h3 className="text-sm font-bold text-white uppercase tracking-widest">{region}</h3>
+                          <span className="text-xs text-blue-400 font-bold">{hubs.length} Hubs</span>
+                        </div>
+                        <div className="space-y-3">
+                          {hubs.map(hub => (
+                            <div key={hub.id} className="flex items-center justify-between text-xs">
+                              <div className="flex items-center text-slate-300">
+                                <MapPin className="w-3 h-3 mr-2 text-slate-500" />
+                                {hub.city || hub.name}
+                              </div>
+                              <div className="text-slate-500 font-mono">
+                                Lvl {hub.level} • {hub.maxVehicles} Slots
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
-              </div>
+              )}
+
+              {active === 'facilities' && <FacilitiesPanel />}
             </div>
           </section>
 
-          {/* Secondary boxed area — keeps p-6 internally so paragraph spacing is preserved.
-               Move the centralized PendingTasksPanel here so it is shown for all facility-related tasks. */}
-          <section className="w-full">
-            <div className="p-6">
-              {/* Centralized pending tasks panel for all facilities/hubs */}
-              <PendingTasksPanel />
-            </div>
+          <section className="w-full p-6">
+            <PendingTasksPanel />
           </section>
         </div>
       </div>

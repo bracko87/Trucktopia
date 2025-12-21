@@ -1,9 +1,8 @@
+
 /**
- * Dashboard page showing company overview and key metrics
- *
- * Notes:
- * - Safe guards for optional arrays and persisted date values
- * - If no company exists, shows a helpful placeholder (no redirects)
+ * Dashboard page showing company overview and key metrics.
+ * 
+ * Updated: Removed country flags from Hub Information for a cleaner layout.
  */
 
 import React from 'react';
@@ -13,16 +12,19 @@ import {
   Package,
   FileText,
   DollarSign,
-  TrendingUp,
   MapPin,
   Building,
-  Calendar,
-  BarChart3,
-  Users,
+  Compass,
+  Navigation,
   Briefcase,
-  User,
+  Users,
+  BarChart3
 } from 'lucide-react';
 
+/**
+ * Dashboard
+ * @description Main dashboard component showing company stats and HQ location.
+ */
 const Dashboard: React.FC = () => {
   const { gameState } = useGame();
 
@@ -39,32 +41,22 @@ const Dashboard: React.FC = () => {
   }
 
   const { company } = gameState;
-  /** Force displayed reputation to 0 for UI widgets to avoid flicker or non-zero display */
-  const displayedReputation = 0;
-
-  // Safe array access with fallbacks
+  const hub = (company as any).hub;
+  
   const trucks = Array.isArray((company as any).trucks) ? (company as any).trucks : [];
   const trailers = Array.isArray((company as any).trailers) ? (company as any).trailers : [];
   const activeJobs = Array.isArray((company as any).activeJobs) ? (company as any).activeJobs : [];
   const contracts = Array.isArray((company as any).contracts) ? (company as any).contracts : [];
   const staff = Array.isArray((company as any).staff) ? (company as any).staff : [];
 
-  // Calculate metrics safely
   const totalTrucks = trucks.length;
   const totalTrailers = trailers.length;
   const activeJobCount = activeJobs.length;
-  const availableContracts = contracts.filter((c) => c?.status === 'available').length;
+  const availableContracts = contracts.filter((c: any) => c?.status === 'available').length;
   const totalStaff = staff.length;
 
-  // Normalize founded date from persistence (string) to Date for display
   const foundedRaw = (company as any).founded;
-  const foundedDate =
-    foundedRaw instanceof Date ? foundedRaw : foundedRaw ? new Date(foundedRaw) : new Date();
-
-  // Mock financial data for demo
-  const monthlyRevenue = 45200;
-  const monthlyExpenses = 21500;
-  const netProfit = monthlyRevenue - monthlyExpenses;
+  const foundedDate = foundedRaw instanceof Date ? foundedRaw : foundedRaw ? new Date(foundedRaw) : new Date();
 
   return (
     <div className="space-y-6">
@@ -72,134 +64,117 @@ const Dashboard: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Company Dashboard</h1>
-          <p className="text-slate-400">Welcome back, Manager! Here's your business overview</p>
+          <p className="text-slate-400">Welcome back! Here's your business overview</p>
         </div>
         <div className="text-right">
-          <div className="text-sm text-slate-400">Company Balance</div>
+          <div className="text-sm text-slate-400">Current Balance</div>
           <div className="text-2xl font-bold text-green-400">
-            ${(company.balance ?? company.capital).toLocaleString()}
+            €{(company.balance ?? company.capital).toLocaleString()}
           </div>
         </div>
       </div>
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-        <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 rounded-xl bg-blue-500/10">
-              <Truck className="w-6 h-6 text-blue-400" />
-            </div>
-            <TrendingUp className="w-5 h-5 text-green-400" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="bg-slate-800 rounded-xl p-5 border border-slate-700">
+          <div className="flex items-center justify-between mb-3">
+            <div className="p-2 rounded-lg bg-blue-500/10"><Truck className="w-5 h-5 text-blue-400" /></div>
+            <span className="text-xs text-green-400">Status: OK</span>
           </div>
-          <h3 className="text-2xl font-bold text-white mb-1">{totalTrucks}</h3>
-          <p className="text-sm text-slate-300">Total Trucks</p>
+          <h3 className="text-xl font-bold text-white">{totalTrucks}</h3>
+          <p className="text-xs text-slate-400">Trucks</p>
         </div>
-
-        <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 rounded-xl bg-green-500/10">
-              <Package className="w-6 h-6 text-green-400" />
-            </div>
-            <TrendingUp className="w-5 h-5 text-green-400" />
+        <div className="bg-slate-800 rounded-xl p-5 border border-slate-700">
+          <div className="flex items-center justify-between mb-3">
+            <div className="p-2 rounded-lg bg-purple-500/10"><Package className="w-5 h-5 text-purple-400" /></div>
+            <span className="text-xs text-green-400">Active</span>
           </div>
-          <h3 className="text-2xl font-bold text-white mb-1">{totalTrailers}</h3>
-          <p className="text-sm text-slate-300">Total Trailers</p>
+          <h3 className="text-xl font-bold text-white">{totalTrailers}</h3>
+          <p className="text-xs text-slate-400">Trailers</p>
         </div>
-
-        <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 rounded-xl bg-blue-500/10">
-              <Briefcase className="w-6 h-6 text-blue-400" />
-            </div>
-            <TrendingUp className="w-5 h-5 text-green-400" />
+        <div className="bg-slate-800 rounded-xl p-5 border border-slate-700">
+          <div className="flex items-center justify-between mb-3">
+            <div className="p-2 rounded-lg bg-orange-500/10"><Briefcase className="w-5 h-5 text-orange-400" /></div>
           </div>
-          <h3 className="text-2xl font-bold text-white mb-1">{availableContracts}</h3>
-          <p className="text-sm text-slate-300">Available Jobs</p>
+          <h3 className="text-xl font-bold text-white">{availableContracts}</h3>
+          <p className="text-xs text-slate-400">Offers</p>
         </div>
-
-        <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 rounded-xl bg-orange-500/10">
-              <FileText className="w-6 h-6 text-orange-400" />
-            </div>
-            <TrendingUp className="w-5 h-5 text-green-400" />
+        <div className="bg-slate-800 rounded-xl p-5 border border-slate-700">
+          <div className="flex items-center justify-between mb-3">
+            <div className="p-2 rounded-lg bg-indigo-500/10"><FileText className="w-5 h-5 text-indigo-400" /></div>
           </div>
-          <h3 className="text-2xl font-bold text-white mb-1">{activeJobCount}</h3>
-          <p className="text-sm text-slate-300">Active Jobs</p>
+          <h3 className="text-xl font-bold text-white">{activeJobCount}</h3>
+          <p className="text-xs text-slate-400">Active Jobs</p>
         </div>
-
-        <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 rounded-xl bg-purple-500/10">
-              <Users className="w-6 h-6 text-purple-400" />
-            </div>
-            <TrendingUp className="w-5 h-5 text-green-400" />
+        <div className="bg-slate-800 rounded-xl p-5 border border-slate-700">
+          <div className="flex items-center justify-between mb-3">
+            <div className="p-2 rounded-lg bg-emerald-500/10"><Users className="w-5 h-5 text-emerald-400" /></div>
           </div>
-          <h3 className="text-2xl font-bold text-white mb-1">{totalStaff}</h3>
-          <p className="text-sm text-slate-300">Total Staff</p>
+          <h3 className="text-xl font-bold text-white">{totalStaff}</h3>
+          <p className="text-xs text-slate-400">Staff</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Company Information */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Company Identity */}
         <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
           <h2 className="text-lg font-bold text-white mb-4 flex items-center space-x-2">
-            <Building className="w-5 h-5 text-yellow-400" />
-            <span>Company Information</span>
+            <Building className="w-5 h-5 text-blue-400" />
+            <span>Company Identity</span>
           </h2>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-slate-400">Company Name</span>
+          <div className="space-y-3">
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-400">Legal Name</span>
               <span className="text-white font-medium">{company.name}</span>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-slate-400">Company Level</span>
-              {/* Use centralized hook so Dashboard displays the same canonical level as other components */}
-              <span className="text-white font-medium capitalize">
-                {/** Prefer human-friendly levelName from hook, fallback to raw company.level or computed key */}
-                {(() => {
-                  try {
-                    const mod = require('../hooks/useCompanyLevel') as any;
-                    // when using require we get the module object; default export is the hook
-                    // but require('../hooks/useCompanyLevel') returns the module, so call default()
-                    // However we cannot call hook here; instead import the hook at top-level would be ideal.
-                    // For safety and to keep this replacement minimal, use existing persisted values first:
-                    return company?.levelName ?? company?.level ?? '—';
-                  } catch {
-                    return company?.levelName ?? company?.level ?? '—';
-                  }
-                })()}
-              </span>
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-400">Level</span>
+              <span className="text-indigo-400 font-bold uppercase tracking-wider">{company.level || 'Seed'}</span>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-slate-400">Headquarters</span>
-              <div className="flex items-center space-x-1">
-                <MapPin className="w-4 h-4 text-blue-400" />
-                <span className="text-white font-medium">
-                  {(company as any).hub?.name}, {(company as any).hub?.country}
-                </span>
-              </div>
-            </div>
-            {/* Reputation - display forced to 0 to match global enforcement */}
-            <div className="flex items-center justify-between">
+            <div className="flex justify-between text-sm">
               <span className="text-slate-400">Reputation</span>
-              <div className="flex items-center space-x-2">
-                <div className="w-16 bg-slate-700 rounded-full h-2">
-                  <div
-                    className="bg-yellow-500 h-2 rounded-full"
-                    style={{ width: `${displayedReputation}%` }}
+              <div className="flex items-center space-x-1">
+                <span className="text-amber-400 font-medium">{company.reputation || 0}%</span>
+                <div className="w-12 h-1 bg-slate-700 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-amber-500" 
+                    style={{ width: `${company.reputation || 0}%` }}
                   />
                 </div>
-                <span className="text-white font-medium">{displayedReputation}</span>
               </div>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-slate-400">Founded</span>
-              <div className="flex items-center space-x-1">
-                <Calendar className="w-4 h-4 text-slate-400" />
-                <span className="text-white font-medium">{foundedDate.toLocaleDateString()}</span>
-              </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-400">Established</span>
+              <span className="text-white font-medium">{foundedDate.toLocaleDateString()}</span>
             </div>
+          </div>
+        </div>
+
+        {/* Hub Information */}
+        <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
+          <h2 className="text-lg font-bold text-white mb-4 flex items-center space-x-2">
+            <MapPin className="w-5 h-5 text-rose-400" />
+            <span>Main Headquarters</span>
+          </h2>
+          <div className="space-y-3">
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-400">Location</span>
+              <span className="text-white font-medium">{hub?.city || hub?.name || 'Loading...'}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-400">Region</span>
+              <span className="text-white">{hub?.country || 'International'}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-400">Parking Capacity</span>
+              <span className="text-emerald-400 font-bold">{hub?.data?.capacity || 5} Slots</span>
+            </div>
+            {hub?.lat && (
+              <div className="flex justify-between text-xs text-slate-500 pt-2 border-t border-slate-700">
+                <span className="flex items-center gap-1"><Compass className="w-3 h-3" /> {hub.lat.toFixed(4)}° N</span>
+                <span className="flex items-center gap-1"><Navigation className="w-3 h-3" /> {hub.lon.toFixed(4)}° E</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -207,26 +182,16 @@ const Dashboard: React.FC = () => {
         <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
           <h2 className="text-lg font-bold text-white mb-4 flex items-center space-x-2">
             <DollarSign className="w-5 h-5 text-green-400" />
-            <span>Financial Overview</span>
+            <span>Financials</span>
           </h2>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-slate-400">Monthly Revenue</span>
-              <span className="text-green-400 font-medium">${monthlyRevenue.toLocaleString()}</span>
+          <div className="space-y-3">
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-400">Available Funds</span>
+              <span className="text-green-400 font-bold">€{(company.balance ?? company.capital).toLocaleString()}</span>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-slate-400">Monthly Expenses</span>
-              <span className="text-red-400 font-medium">${monthlyExpenses.toLocaleString()}</span>
-            </div>
-            <div className="flex items-center justify-between border-t border-slate-700 pt-3">
-              <span className="text-slate-300 font-medium">Net Profit</span>
-              <span className={`font-bold ${netProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                ${netProfit.toLocaleString()}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-slate-400">Available Contracts</span>
-              <span className="text-blue-400 font-medium">{availableContracts}</span>
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-400">Initial Capital</span>
+              <span className="text-slate-300">€{(company.capital || 0).toLocaleString()}</span>
             </div>
           </div>
         </div>
@@ -234,76 +199,24 @@ const Dashboard: React.FC = () => {
 
       {/* Quick Actions */}
       <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-        <h2 className="text-lg font-bold text-white mb-4">Quick Actions</h2>
+        <h2 className="text-lg font-bold text-white mb-4">Management Portal</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <button className="bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2">
-            <Truck className="w-5 h-5" />
-            <span>Buy Truck</span>
+          <button className="bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-lg text-sm font-medium transition-colors flex items-center justify-center space-x-2">
+            <Truck className="w-4 h-4" />
+            <span>Purchase Fleet</span>
           </button>
-          <button className="bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2">
-            <Users className="w-5 h-5" />
-            <span>Hire Staff</span>
+          <button className="bg-slate-700 hover:bg-slate-600 text-white py-3 px-4 rounded-lg text-sm font-medium transition-colors flex items-center justify-center space-x-2">
+            <Users className="w-4 h-4" />
+            <span>Recruit Staff</span>
           </button>
-          <button className="bg-purple-600 hover:bg-purple-700 text-white py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2">
-            <Briefcase className="w-5 h-5" />
-            <span>Find Jobs</span>
+          <button className="bg-slate-700 hover:bg-slate-600 text-white py-3 px-4 rounded-lg text-sm font-medium transition-colors flex items-center justify-center space-x-2">
+            <Briefcase className="w-4 h-4" />
+            <span>Find Freight</span>
           </button>
-          <button className="bg-orange-600 hover:bg-orange-700 text-white py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2">
-            <BarChart3 className="w-5 h-5" />
-            <span>View Reports</span>
+          <button className="bg-slate-700 hover:bg-slate-600 text-white py-3 px-4 rounded-lg text-sm font-medium transition-colors flex items-center justify-center space-x-2">
+            <BarChart3 className="w-4 h-4" />
+            <span>Reports</span>
           </button>
-        </div>
-      </div>
-
-      {/* Recent Activity */}
-      <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-        <h2 className="text-lg font-bold text-white mb-4">Recent Activity</h2>
-        <div className="space-y-3">
-          <div className="flex items-center justify-between py-3 border-b border-slate-700">
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-green-500/20 rounded-full flex items-center justify-center">
-                <FileText className="w-4 h-4 text-green-400" />
-              </div>
-              <div>
-                <p className="font-medium text-white text-sm">New contract accepted</p>
-                <p className="text-xs text-slate-400">Electronics Transport to Milan</p>
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-sm text-green-400 font-medium">+$18,500</div>
-              <div className="text-xs text-slate-400">2 hours ago</div>
-            </div>
-          </div>
-          <div className="flex items-center justify-between py-3 border-b border-slate-700">
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-blue-500/20 rounded-full flex items-center justify-center">
-                <Truck className="w-4 h-4 text-blue-400" />
-              </div>
-              <div>
-                <p className="font-medium text-white text-sm">Truck maintenance completed</p>
-                <p className="text-xs text-slate-400">Volvo FH16 #001</p>
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-sm text-red-400 font-medium">-$1,200</div>
-              <div className="text-xs text-slate-400">5 hours ago</div>
-            </div>
-          </div>
-          <div className="flex items-center justify-between py-3">
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-yellow-500/20 rounded-full flex items-center justify-center">
-                <Users className="w-4 h-4 text-yellow-400" />
-              </div>
-              <div>
-                <p className="font-medium text-white text-sm">New driver hired</p>
-                <p className="text-xs text-slate-400">Mark Johnson joined your team</p>
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-sm text-slate-400 font-medium">Staff +1</div>
-              <div className="text-xs text-slate-400">1 day ago</div>
-            </div>
-          </div>
         </div>
       </div>
     </div>

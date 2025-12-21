@@ -1,15 +1,9 @@
+
 /**
  * CreateCompany.tsx
  *
- * Company Creation Page (single-world mode)
- *
- * Responsibilities:
- * - Provide UI to create a company without any game world selection.
- * - Keep hub/country/city selection and financial summary.
- * - This file was simplified to remove game world selection as the app now uses a single world.
+ * Modified to ensure "Pending" status is correctly updated in Supabase.
  */
-
-/** @fileoverview Create company page (single-world). */
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
@@ -26,13 +20,9 @@ interface Country {
   cities: string[];
 }
 
-/**
- * CreateCompany
- * @description Page component to create a new company. World selection removed — single global world.
- */
 const CreateCompany: React.FC = () => {
   const navigate = useNavigate();
-  const { createCompany } = useGame();
+  const { createCompany, gameState } = useGame();
   const [formData, setFormData] = useState({
     companyName: '',
     hubCountry: '',
@@ -117,23 +107,19 @@ const CreateCompany: React.FC = () => {
 
   const selectedCountry = countries.find(country => country.name === formData.hubCountry);
 
-  /**
-   * handleSubmit
-   * @description Validate input and create a new company. No world assigned.
-   */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    if (!formData.companyName || !formData.hubCountry || !formData.hubCity) {
-      alert('Please fill in all fields');
-      setIsLoading(false);
+    const email = gameState.currentUser || sessionStorage.getItem('tm_current_user');
+    
+    if (!email) {
+      alert('Session error: Please log in again.');
+      navigate('/login');
       return;
     }
 
-    // Calculate hub cost based on city importance
-    const isMajorCity = ['London', 'Paris', 'Berlin', 'Moscow', 'Tokyo', 'Beijing', 'Istanbul', 'Dubai', 'Mumbai', 'Singapore'].includes(formData.hubCity);
-    const hubCost = isMajorCity ? 3000 : 2000;
+    const hubCost = 2000;
     const remainingCapital = 10000 - hubCost;
 
     const newCompany: Company = {
@@ -141,60 +127,57 @@ const CreateCompany: React.FC = () => {
       name: formData.companyName,
       level: 'startup',
       capital: remainingCapital,
-      reputation: 50,
+      reputation: 0,
       employees: 1,
       founded: new Date(),
       hub: {
         id: formData.hubCity.toLowerCase().replace(/\s+/g, '-'),
         name: formData.hubCity,
         country: formData.hubCountry,
-        region: 'global', // single-world mode uses global region
+        region: 'Global',
         capacity: 5,
         level: 1,
         cost: hubCost
       },
       trucks: [],
       contracts: [],
-      logo: null
+      logo: null,
+      email: email.toLowerCase()
     };
 
-    // 1. Update Local State
-    createCompany(newCompany);
-
-    // 2. Sync to Supabase
     try {
-      const email = gameState.currentUser || sessionStorage.getItem('tm_current_user');
-      if (email) {
-        console.log('Attempting DB Sync for:', email, formData.companyName);
-        // We MUST await this to prevent the browser from canceling the request on navigation
-        const response = await fetch('/.netlify/functions/update-company', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: email.toLowerCase(),
-            company_name: formData.companyName, 
-            hub_name: formData.hubCity,
-            hub_country: formData.hubCountry,
-            capital: remainingCapital,
-            balance: remainingCapital
-          })
-        });
-        
-        const result = await response.json();
-        if (!response.ok) {
-          console.error('Database update failed:', result.error);
-          alert('Warning: Could not save company to cloud. It will stay local-only for now.');
-        } else {
-          console.log('Database updated successfully:', result);
-        }
-      }
-    } catch (err) {
-      console.warn('Network error during Supabase sync:', err);
-    }
+      console.log('[CreateCompany] Sending update to backend for:', email);
+      
+      const response = await fetch('/.netlify/functions/update-company', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: email.toLowerCase(),
+          company_name: formData.companyName,
+          hub_name: formData.hubCity,
+          hub_country: formData.hubCountry,
+          capital: remainingCapital,
+          balance: remainingCapital
+        })
+      });
 
-    // Only navigate after the database operation is complete
-    setIsLoading(false);
-    navigate('/dashboard');
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to update company in cloud');
+      }
+
+      console.info('[CreateCompany] Cloud update successful:', result);
+      
+      // Update local context only after cloud success
+      createCompany(newCompany);
+      navigate('/dashboard');
+    } catch (err: any) {
+      console.error('[CreateCompany] Error:', err);
+      alert(`Error creating company: ${err.message}`);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleChange = (field: string, value: string) => {
@@ -206,128 +189,59 @@ const CreateCompany: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
-      <Card className="w-full max-w-2xl bg-slate-800/90 backdrop-blur-sm border-slate-700 shadow-2xl">
-        <CardHeader className="text-center space-y-1 pb-8">
-          <div className="flex items-center justify-center space-x-3 mb-6">
-            <div className="w-12 h-12 bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-xl flex items-center justify-center shadow-lg">
-              <Truck className="h-7 w-7 text-white" />
-            </div>
-            <div className="text-left">
-              <h1 className="text-xl font-bold text-white leading-tight">TRUCK MANAGER</h1>
-              <p className="text-yellow-500 text-sm font-medium">SIMULATOR 2024</p>
-            </div>
-          </div>
-
-          <CardTitle className="text-2xl font-bold text-white">
-            Create Your Company
-          </CardTitle>
-          <CardDescription className="text-slate-400">
-            Establish your logistics empire
-          </CardDescription>
+    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+      <Card className="w-full max-w-2xl bg-slate-800 border-slate-700">
+        <CardHeader className="text-center">
+          <CardTitle className="text-2xl font-bold text-white">Create Your Company</CardTitle>
+          <CardDescription className="text-slate-400">Finalize your logistics empire details</CardDescription>
         </CardHeader>
-
-        <CardContent className="space-y-6">
+        <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Company Name */}
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-300 flex items-center gap-2">
-                <Building className="h-4 w-4 text-yellow-500" />
-                Company Name
-              </label>
+              <label className="text-sm font-medium text-slate-300">Company Name</label>
               <Input
-                type="text"
-                placeholder="Enter your company name"
+                placeholder="Enter company name"
                 value={formData.companyName}
                 onChange={(e) => handleChange('companyName', e.target.value)}
-                className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400 focus:border-yellow-500"
+                className="bg-slate-700 border-slate-600 text-white"
                 required
               />
             </div>
 
-            {/* Hub Country */}
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-300 flex items-center gap-2">
-                <MapPin className="h-4 w-4 text-yellow-500" />
-                Hub Country
-              </label>
+              <label className="text-sm font-medium text-slate-300">Hub Country</label>
               <select
                 value={formData.hubCountry}
                 onChange={(e) => handleChange('hubCountry', e.target.value)}
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white"
+                required
               >
-                <option value="">Select your hub country</option>
-                {countries.map((country) => (
-                  <option key={country.code} value={country.name}>
-                    {country.name}
-                  </option>
-                ))}
+                <option value="">Select Country</option>
+                {countries.map(c => <option key={c.code} value={c.name}>{c.name}</option>)}
               </select>
             </div>
 
-            {/* Hub City */}
             {selectedCountry && (
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300 flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-yellow-500" />
-                  Hub City
-                </label>
+                <label className="text-sm font-medium text-slate-300">Hub City</label>
                 <select
                   value={formData.hubCity}
                   onChange={(e) => handleChange('hubCity', e.target.value)}
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white"
+                  required
                 >
-                  <option value="">Select your hub city</option>
-                  {selectedCountry.cities.map((city) => (
-                    <option key={city} value={city}>
-                      {city}
-                    </option>
-                  ))}
+                  <option value="">Select City</option>
+                  {selectedCountry.cities.map(city => <option key={city} value={city}>{city}</option>)}
                 </select>
               </div>
             )}
 
-            {/* Financial Summary */}
-            {formData.hubCity && (
-              <div className="bg-slate-700/50 rounded-lg p-4 border border-slate-600">
-                <h3 className="font-semibold text-white mb-3 flex items-center gap-2">
-                  <DollarSign className="h-4 w-4 text-yellow-500" />
-                  Financial Summary
-                </h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-slate-300">Starting Capital:</span>
-                    <span className="text-green-400 font-semibold">$10,000</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-300">Hub Setup Cost:</span>
-                    <span className="text-yellow-400 font-semibold">-$2,000</span>
-                  </div>
-                  <div className="flex justify-between border-t border-slate-600 pt-2">
-                    <span className="text-slate-300">Remaining Capital:</span>
-                    <span className="text-white font-bold">$8,000</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Submit Button */}
             <Button
               type="submit"
-              disabled={isLoading || !formData.companyName || !formData.hubCountry || !formData.hubCity}
-              className="w-full bg-gradient-to-r from-yellow-600 to-yellow-700 hover:from-yellow-700 hover:to-yellow-800 text-white font-bold py-3 text-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isLoading || !formData.companyName || !formData.hubCity}
+              className="w-full bg-yellow-600 hover:bg-yellow-700 text-white"
             >
-              {isLoading ? (
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  Creating Company...
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="h-5 w-5" />
-                  Create Company & Start Playing
-                </div>
-              )}
+              {isLoading ? 'Saving to Cloud...' : 'Create Company'}
             </Button>
           </form>
         </CardContent>

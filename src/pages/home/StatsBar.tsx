@@ -42,12 +42,12 @@ const StatsBar: React.FC = () => {
     trucks: number | null;
     jobs: number | null;
     cities: number | null;
-  }>({
+  }>(({
     users: null,
     trucks: null,
     jobs: null,
     cities: null
-  });
+  }));
 
   const [loading, setLoading] = useState(true);
 

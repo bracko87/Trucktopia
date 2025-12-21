@@ -2,11 +2,9 @@
  * netlify/functions/cities-count.js
  *
  * File-level:
- * Fetches the total number of rows from the public.cities table using 
+ * Fetches the total number of rows from the public.cities table using
  * high-performance PostgREST count headers.
  */
-
-const fetch = require('node-fetch');
 
 /**
  * handler
@@ -24,38 +22,40 @@ module.exports.handler = async function () {
       };
     }
 
+    // Build REST base (ensure no trailing slash)
     const restBase = SUPABASE_URL.replace(/\/$/, '') + '/rest/v1';
 
-    // Query 'cities' table with count=exact preference
-    // We use Range: 0-0 to only get the headers and avoid downloading row data
+    // Query 'cities' table with count=exact preference.
+    // We use Range: 0-0 to only get the headers and avoid downloading row data.
     const response = await fetch(`${restBase}/cities?select=id`, {
       method: 'GET',
       headers: {
-        'apikey': SERVICE_KEY,
-        'Authorization': `Bearer ${SERVICE_KEY}`,
-        'Prefer': 'count=exact',
-        'Range': '0-0'
+        apikey: SERVICE_KEY,
+        Authorization: `Bearer ${SERVICE_KEY}`,
+        Prefer: 'count=exact',
+        Range: '0-0',
+        Accept: 'application/json'
       }
     });
 
     const contentRange = response.headers.get('content-range');
     let total = 0;
-    
+
     if (contentRange) {
-      // PostgREST content-range looks like: "0-0/452" -> 452 is the total
+      // PostgREST content-range looks like: "0-0/846" -> 846 is the total
       const parts = contentRange.split('/');
       if (parts.length > 1) {
         total = parseInt(parts[1], 10) || 0;
       }
     } else {
-      // Fallback: if header is missing, attempt a simple count select
+      // Fallback: if header is missing, attempt a simple count based on body length
       const data = await response.json().catch(() => []);
       total = Array.isArray(data) ? data.length : 0;
     }
 
     return {
       statusCode: 200,
-      headers: { 
+      headers: {
         'Content-Type': 'application/json',
         'Cache-Control': 'public, max-age=60'
       },
