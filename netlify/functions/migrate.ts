@@ -19,7 +19,7 @@
  * - Return informative errors and the normalized rows to help client debugging
  */
 
-import fetch from "node-fetch";
+// fetch is global in Node 18+ (Netlify)
 
 /**
  * normalizeCollections
@@ -432,3 +432,4 @@ export const handler = async (event: any, context: any) => {
     };
   }
 };
+

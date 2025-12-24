@@ -21,7 +21,7 @@
  * Handler
  * @param event Netlify event
  */
-const fetch = globalThis.fetch || require('node-fetch');
+const fetch = globalThis.fetch;
 
 exports.handler = async function (event, context) {
   try {

@@ -27,7 +27,7 @@
  * - Returns normalized function response to caller.
  */
 
-const fetch = globalThis.fetch || require('node-fetch');
+const fetch = globalThis.fetch;
 
 /**
  * sendResponse

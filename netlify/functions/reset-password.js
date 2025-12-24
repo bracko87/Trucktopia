@@ -14,7 +14,7 @@
  * - Do NOT enable debug output in production for long (it will echo Supabase response).
  */
 
-const fetch = require('node-fetch');
+const fetch = globalThis.fetch;
 
 exports.handler = async function (event, context) {
   /**
