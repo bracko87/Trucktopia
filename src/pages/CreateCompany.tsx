@@ -1,18 +1,18 @@
-
 /**
  * CreateCompany.tsx
  *
- * Modified to ensure "Pending" status is correctly updated in Supabase.
+ * Full version with finance seeding fixed.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useGame } from '../contexts/GameContext';
 import { Company } from '../types/game';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { Truck, Building, MapPin, DollarSign, CheckCircle } from 'lucide-react';
+import { Truck, ChevronDown, Check } from 'lucide-react';
+import { financeApply } from '../utils/financeClient';
 
 interface Country {
   code: string;
@@ -23,14 +23,27 @@ interface Country {
 const CreateCompany: React.FC = () => {
   const navigate = useNavigate();
   const { createCompany, gameState } = useGame();
+
   const [formData, setFormData] = useState({
     companyName: '',
     hubCountry: '',
     hubCity: ''
   });
-  const [isLoading, setIsLoading] = useState(false);
 
-  // Complete expanded list of countries from attachment
+  const [isLoading, setIsLoading] = useState(false);
+  const [isCountryOpen, setIsCountryOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsCountryOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const countries: Country[] = [
     { code: 'xk', name: 'Kosovo', cities: ['Pristina', 'Prizren', 'Peja', 'Gjakova', 'Mitrovica', 'Ferizaj', 'Gjilan', 'Vushtrri', 'Suharekë', 'Podujevë'] },
     { code: 'lu', name: 'Luxembourg', cities: ['Luxembourg City', 'Differdange', 'Dudelange', 'Ettelbruck', 'Diekirch', 'Wiltz', 'Echternach'] },
@@ -105,14 +118,16 @@ const CreateCompany: React.FC = () => {
     { code: 'in', name: 'India', cities: ['Mumbai', 'Delhi', 'Bangalore', 'Hyderabad', 'Ahmedabad', 'Chennai', 'Kolkata', 'Surat', 'Pune', 'Jaipur', 'Lucknow', 'Kanpur', 'Nagpur', 'Indore', 'Thane', 'Bhopal', 'Visakhapatnam', 'Patna', 'Vadodara', 'Ludhiana'] }
   ].sort((a, b) => a.name.localeCompare(b.name)); // Alphabetical sorting
 
-  const selectedCountry = countries.find(country => country.name === formData.hubCountry);
+  const selectedCountry = countries.find(c => c.name === formData.hubCountry);
+
+  const getFlagUrl = (code: string) =>
+    `https://flagcdn.com/w40/${code.toLowerCase()}.png`;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     const email = gameState.currentUser || sessionStorage.getItem('tm_current_user');
-    
     if (!email) {
       alert('Session error: Please log in again.');
       navigate('/login');
@@ -143,18 +158,10 @@ const CreateCompany: React.FC = () => {
       contracts: [],
       logo: null,
       email: email.toLowerCase(),
-      /**
-       * creditScore
-       * @description New companies start with a baseline credit score of 50 (Tier C).
-       * This field is used by the loans UI to surface the company's credit rating immediately
-       * after creation.
-       */
       creditScore: 50
     };
 
     try {
-      console.log('[CreateCompany] Sending update to backend for:', email);
-      
       const response = await fetch('/.netlify/functions/update-company', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -169,86 +176,115 @@ const CreateCompany: React.FC = () => {
       });
 
       const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Cloud update failed');
 
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to update company in cloud');
+      // Create locally first
+      createCompany(newCompany);
+
+      // Best-effort finance seeding
+      try {
+        const idempotencyKey = `seed-${newCompany.id}-${Date.now()}`;
+        const seedCents = Math.round((newCompany.capital || 0) * 100);
+
+        const res = await financeApply({
+          companyId: newCompany.id,
+          deltaCents: seedCents,
+          type: 'income',
+          description: 'Seed capital',
+          idempotencyKey
+        });
+
+        if (res.success && typeof res.newBalanceCents === 'number') {
+          const canonicalEuros = res.newBalanceCents / 100;
+
+          createCompany({
+            ...newCompany,
+            capital: canonicalEuros
+          });
+        }
+      } catch (financeErr) {
+        console.warn('Finance seed failed:', financeErr);
       }
 
-      console.info('[CreateCompany] Cloud update successful:', result);
-      
-      // Update local context only after cloud success
-      createCompany(newCompany);
       navigate('/dashboard');
     } catch (err: any) {
-      console.error('[CreateCompany] Error:', err);
-      alert(`Error creating company: ${err.message}`);
+      alert(err.message);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleChange = (field: string, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value,
-      ...(field === 'hubCountry' && { hubCity: '' })
-    }));
-  };
-
   return (
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-      <Card className="w-full max-w-2xl bg-slate-800 border-slate-700">
+    <div className="min-h-screen flex items-center justify-center bg-slate-900 p-4">
+      <Card className="w-full max-w-lg bg-slate-800 border-slate-700">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold text-white">Create Your Company</CardTitle>
-          <CardDescription className="text-slate-400">Finalize your logistics empire details</CardDescription>
+          <div className="flex items-center justify-center space-x-3 mb-4">
+            <div className="w-12 h-12 bg-yellow-600 rounded-xl flex items-center justify-center">
+              <Truck className="h-6 w-6 text-white" />
+            </div>
+            <h1 className="text-xl font-bold text-white">TRUCKTOPIA</h1>
+          </div>
+          <CardTitle className="text-white">Create Your Company</CardTitle>
+          <CardDescription className="text-slate-400">
+            Choose your global hub
+          </CardDescription>
         </CardHeader>
+
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-300">Company Name</label>
-              <Input
-                placeholder="Enter company name"
-                value={formData.companyName}
-                onChange={(e) => handleChange('companyName', e.target.value)}
-                className="bg-slate-700 border-slate-600 text-white"
-                required
-              />
-            </div>
+            <Input
+              placeholder="Company Name"
+              value={formData.companyName}
+              onChange={e => setFormData(p => ({ ...p, companyName: e.target.value }))}
+              required
+            />
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-300">Hub Country</label>
-              <select
-                value={formData.hubCountry}
-                onChange={(e) => handleChange('hubCountry', e.target.value)}
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white"
-                required
+            <div ref={dropdownRef}>
+              <button
+                type="button"
+                onClick={() => setIsCountryOpen(!isCountryOpen)}
+                className="w-full bg-slate-700 text-white px-3 py-2 rounded"
               >
-                <option value="">Select Country</option>
-                {countries.map(c => <option key={c.code} value={c.name}>{c.name}</option>)}
-              </select>
+                {selectedCountry ? selectedCountry.name : 'Select Country'}
+              </button>
+
+              {isCountryOpen && (
+                <div className="bg-slate-700 mt-2 rounded">
+                  {countries.map(c => (
+                    <button
+                      key={c.code}
+                      type="button"
+                      className="block w-full text-left px-3 py-2 hover:bg-slate-600 text-white"
+                      onClick={() => {
+                        setFormData(p => ({ ...p, hubCountry: c.name, hubCity: '' }));
+                        setIsCountryOpen(false);
+                      }}
+                    >
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {selectedCountry && (
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">Hub City</label>
-                <select
-                  value={formData.hubCity}
-                  onChange={(e) => handleChange('hubCity', e.target.value)}
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white"
-                  required
-                >
-                  <option value="">Select City</option>
-                  {selectedCountry.cities.map(city => <option key={city} value={city}>{city}</option>)}
-                </select>
-              </div>
+              <select
+                className="w-full bg-slate-700 text-white px-3 py-2 rounded"
+                value={formData.hubCity}
+                onChange={e => setFormData(p => ({ ...p, hubCity: e.target.value }))}
+                required
+              >
+                <option value="">Select City</option>
+                {selectedCountry.cities.map(city => (
+                  <option key={city} value={city}>
+                    {city}
+                  </option>
+                ))}
+              </select>
             )}
 
-            <Button
-              type="submit"
-              disabled={isLoading || !formData.companyName || !formData.hubCity}
-              className="w-full bg-yellow-600 hover:bg-yellow-700 text-white"
-            >
-              {isLoading ? 'Saving to Cloud...' : 'Create Company'}
+            <Button type="submit" disabled={isLoading || !formData.hubCity}>
+              {isLoading ? 'Creating…' : 'Create Company'}
             </Button>
           </form>
         </CardContent>
