@@ -153,7 +153,7 @@ export const MEDIUM_TRUCKS: Truck[] = [
       cargoTypes: ['Frozen / Refrigerated'],
       axles: 2
     },
-    image: undefined,
+    image: 'https://i.ibb.co/1fXQ97Fy/Mercedes-Benz-Atego-1221-3.png',
     truckCategory: 'Medium',
     fuelTankCapacity: 200
   },
@@ -325,7 +325,7 @@ export const MEDIUM_TRUCKS: Truck[] = [
       cargoTypes: ['Frozen / Refrigerated'],
       axles: 2
     },
-    image: undefined,
+  image: 'https://i.ibb.co/ccH7j1LB/ivaco-eurocargo-ml-120e24-3.png',
     truckCategory: 'Medium',
     fuelTankCapacity: 190
   },
@@ -549,7 +549,7 @@ export const MEDIUM_TRUCKS: Truck[] = [
       cargoTypes: ['Frozen / Refrigerated'],
       axles: 2
     },
-    image: undefined,
+    image: 'https://i.ibb.co/YF87pVDK/Valvo-FL-240-12-3b.png',
     truckCategory: 'Medium',
     fuelTankCapacity: 200
   },
@@ -605,7 +605,7 @@ export const MEDIUM_TRUCKS: Truck[] = [
       cargoTypes: ['Vehicles'],
       axles: 2
     },
-    image: undefined,
+    image: 'https://i.ibb.co/kg9nNvYh/valvo-fl-280-12-3.png',
     truckCategory: 'Medium',
     fuelTankCapacity: 200
   },
@@ -689,7 +689,7 @@ export const MEDIUM_TRUCKS: Truck[] = [
       cargoTypes: ['Liquid - Industrial / Chemical', 'Hazardous Materials', 'Corrosive Chemicals'],
       axles: 2
     },
-    image: undefined,
+    image: 'https://i.ibb.co/tpy3XZ6F/Renualt-Midlum-220-dxi-tanker-3.png',
     truckCategory: 'Medium',
     fuelTankCapacity: 220
   }

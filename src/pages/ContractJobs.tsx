@@ -670,10 +670,7 @@ const ContractJobs: React.FC = () => {
           <h1 className="text-2xl font-bold text-white">Contract Jobs</h1>
           <p className="text-slate-400">Professional logistics contracts with detailed cost analysis</p>
         </div>
-        <div className="text-right">
-          <div className="text-sm text-slate-400">Company Balance</div>
-          <div className="text-2xl font-bold text-green-400">${gameState.company.capital?.toLocaleString() || 0}</div>
-        </div>
+{/* Balance element removed as requested */}
       </div>
 
       {/* Filters */}

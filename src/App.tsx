@@ -59,6 +59,7 @@ import ForceGrantFundsToUser from './components/admin/ForceGrantFundsToUser';
 
 import { manifest as rulesManifest } from './data/game-rules-engines';
 import CompanyLevelEngine from './engines/CompanyLevelEngine';
+import './i18n'; // Initialize i18next
 
 import './data/trailer-cleanup';
 import './data/trailer-additions';
@@ -126,6 +127,7 @@ import StaffFiredListener from './components/StaffFiredListener';
  * from the engines folder and mount it alongside other background helpers.
  */
 import ComponentWearEngine from './engines/ComponentWearEngine';
+import RemoveDuplicateBalance from './components/RemoveDuplicateBalance';
 
 // ExposeGameState helper is already imported above
 
@@ -206,6 +208,8 @@ function App() {
                 This engine listens to 'truckLiveUpdate' and 'componentWear:trigger' events
                 and persists component state to localStorage / emits incidents. */}
             <ComponentWearEngine />
+            {/* Remove duplicate body-level balance when header already shows it */}
+            <RemoveDuplicateBalance />
 
             {/* Company persistence sync: ensure in-memory company changes are persisted to localStorage */}
             <CompanyPersistenceSync />

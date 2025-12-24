@@ -1,8 +1,8 @@
-
 /**
- * Dashboard page showing company overview and key metrics.
- * 
- * Updated: Removed country flags from Hub Information for a cleaner layout.
+ * Dashboard.tsx
+ *
+ * Main dashboard page showing company overview and key metrics.
+ * Header-level balance elements have been removed to avoid duplicate displays.
  */
 
 import React from 'react';
@@ -66,12 +66,7 @@ const Dashboard: React.FC = () => {
           <h1 className="text-2xl font-bold text-white">Company Dashboard</h1>
           <p className="text-slate-400">Welcome back! Here's your business overview</p>
         </div>
-        <div className="text-right">
-          <div className="text-sm text-slate-400">Current Balance</div>
-          <div className="text-2xl font-bold text-green-400">
-            €{(company.balance ?? company.capital).toLocaleString()}
-          </div>
-        </div>
+        {/* Header balance elements intentionally removed to avoid duplicates */}
       </div>
 
       {/* Key Metrics */}
@@ -146,6 +141,33 @@ const Dashboard: React.FC = () => {
             <div className="flex justify-between text-sm">
               <span className="text-slate-400">Established</span>
               <span className="text-white font-medium">{foundedDate.toLocaleDateString()}</span>
+            </div>
+
+            {/* Credit Rating (wired to company.creditScore when present; otherwise computed) */}
+            <div className="flex justify-between text-sm mt-3">
+              <span className="text-slate-400">Credit Rating</span>
+              {company ? (
+                (() => {
+                  // Compute canonical score fallback if company.creditScore absent
+                  const capital = typeof company.capital === 'number' ? company.capital : 0;
+                  const foundedRaw = (company as any).founded;
+                  const founded = foundedRaw ? new Date(foundedRaw).getTime() : Date.now();
+                  const years = Math.max(0, (Date.now() - founded) / (1000 * 60 * 60 * 24 * 365));
+                  const capScore = Math.min(70, Math.round(Math.log10(Math.max(1, capital)) * 12));
+                  const ageScore = Math.min(30, Math.round(Math.min(10, years) * 3));
+                  const computedScore = Math.min(100, capScore + ageScore);
+
+                  const cs = typeof (company as any).creditScore === 'number'
+                    ? Math.max(0, Math.min(100, Math.round((company as any).creditScore)))
+                    : computedScore;
+
+                  const grade = cs >= 80 ? 'A' : cs >= 60 ? 'B' : cs >= 40 ? 'C' : 'D';
+                  const range = grade === 'A' ? '≥ 150k' : grade === 'B' ? '50k–150k' : grade === 'C' ? '15k–50k' : '5k–15k';
+                  return <span className="text-white font-medium">{cs} ({grade}) • {range}</span>;
+                })()
+              ) : (
+                <span className="text-slate-300">—</span>
+              )}
             </div>
           </div>
         </div>

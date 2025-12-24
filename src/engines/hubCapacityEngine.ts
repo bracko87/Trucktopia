@@ -101,9 +101,14 @@ export function countAssignedStaff(company: any, hubId: string | null): number {
  * getHubCapacityInfo
  * @description Return a HubCapacityInfo summary for a hub reference.
  */
+/**
+ * getHubCapacityInfo
+ * @description Return a HubCapacityInfo summary. Updated to prefer 'hub_level' from public.hubs schema.
+ */
 export function getHubCapacityInfo(company: any, hub: any): HubCapacityInfo {
   const hubId = normalizeHubId(hub);
-  const levelNum = typeof hub?.level === 'number' ? hub.level : 1;
+  // Support both DB schema (hub_level) and local state (level)
+  const levelNum = typeof hub?.hub_level === 'number' ? hub.hub_level : (typeof hub?.level === 'number' ? hub.level : 1);
   const levelInfo = getHubLevel(levelNum);
 
   const assignedVehicles = countAssignedVehicles(company, hubId);

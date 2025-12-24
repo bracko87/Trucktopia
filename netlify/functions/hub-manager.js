@@ -1,4 +1,3 @@
-
 const { createClient } = require('@supabase/supabase-js');
 
 const supabase = createClient(
@@ -7,86 +6,81 @@ const supabase = createClient(
 );
 
 /**
- * calculateBasePrice
- * Generates a unique price between 500k and 900k based on city name string.
+ * hub-manager.js
+ * 
+ * Server-authoritative logic for hubs and construction using In-Game Time.
  */
-function calculateBasePrice(city, countryCode) {
-  // Deterministic "randomness" based on string characters
-  const seed = (city + countryCode).split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  // Variance between 0 and 400,000
-  const variance = (seed * 1337 % 401) * 1000; 
-  return 500000 + variance;
-}
-
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'Method Not Allowed' };
 
   try {
-    const { action, email, city, countryCode, duration, taskId } = JSON.parse(event.body);
+    const { action, email, city, countryCode, duration } = JSON.parse(event.body);
 
-    if (action === 'GET_PENDING') {
-      const { data: tasks } = await supabase
-        .from('infrastructure_tasks')
-        .select('*')
-        .eq('user_email', email)
-        .eq('status', 'pending');
-      
-      const { data: timeData } = await supabase.from('game_time').select('current_ms').single();
+    const { data: user, error: userErr } = await supabase.from('users').select('id').eq('email', email).single();
+    if (userErr || !user) return { statusCode: 404, body: JSON.stringify({ error: 'User not found' }) };
+    const ownerId = user.id;
 
-      return {
-        statusCode: 200,
-        body: JSON.stringify({ tasks: tasks || [], currentGameMs: timeData?.current_ms || Date.now() })
-      };
-    }
+    const { data: timeData } = await supabase.from('game_clock').select('now_utc_ms').single();
+    const currentGameMs = timeData ? timeData.now_utc_ms : Date.now();
 
+    // --- ACTION: START_BUILD ---
     if (action === 'START_BUILD') {
-      const basePrice = calculateBasePrice(city, countryCode);
-      const daysSaved = 60 - duration;
-      const speedPremium = basePrice * 0.01 * daysSaved; // 1% per day
-      const totalPrice = basePrice + speedPremium;
+      const chosenDuration = Math.max(40, Math.min(60, duration || 60));
+      
+      // Rule: Faster = More Expensive. Base (60 days) = 200k.
+      const speedPremium = (60 - chosenDuration) * 10000;
+      const totalCost = 200000 + speedPremium;
 
-      // Check Funds
-      const { data: company } = await supabase.from('companies').select('capital').eq('owner_email', email).single();
-      if (!company || company.capital < totalPrice) {
-        return { statusCode: 400, body: JSON.stringify({ error: 'Insufficient funds' }) };
-      }
+      // Duplicate Check (Existing Hub or Active Task)
+      const { data: existingHub } = await supabase.from('hubs').select('id').eq('owner_id', ownerId).eq('city', city).single();
+      if (existingHub) return { statusCode: 400, body: JSON.stringify({ error: 'Hub already exists in this city.' }) };
+      
+      const { data: existingTask } = await supabase.from('pending_tasks').select('id').eq('owner_id', ownerId).eq('payload->>city', city).eq('status', 'pending').single();
+      if (existingTask) return { statusCode: 400, body: JSON.stringify({ error: 'Construction is already in progress for this city.' }) };
 
-      // Deduct Capital
-      await supabase.from('companies').update({ capital: company.capital - totalPrice }).eq('owner_email', email);
+      const msPerDay = 24 * 60 * 60 * 1000;
+      const completionGameMs = currentGameMs + (chosenDuration * msPerDay);
 
-      // Create Task (duration is in in-game days)
-      const { data: timeData } = await supabase.from('game_time').select('current_ms').single();
-      const startMs = timeData?.current_ms || Date.now();
-      const completionMs = startMs + (duration * 24 * 60 * 60 * 1000);
-
-      const { data: task, error: taskErr } = await supabase.from('infrastructure_tasks').insert({
-        user_email: email,
-        task_type: 'build-hub',
-        cost: totalPrice,
-        completion_time: new Date(completionMs).toISOString(),
-        payload: {
-          city,
-          countryCode,
-          duration,
-          startedAtGameMs: startMs,
-          totalDays: duration
-        },
+      const { error: taskErr } = await supabase.from('pending_tasks').insert({
+        owner_id: ownerId,
+        task_type: 'build_hub',
+        completion_time: new Date(completionGameMs).toISOString(),
+        cost: totalCost,
+        payload: { city, countryCode, duration: chosenDuration },
         status: 'pending'
       });
 
-      return { statusCode: 200, body: JSON.stringify({ message: 'Build started', task }) };
+      if (taskErr) throw taskErr;
+      return { statusCode: 200, body: JSON.stringify({ message: 'Success', cost: totalCost, days: chosenDuration }) };
     }
 
-    if (action === 'CANCEL_BUILD') {
-        const { data: task } = await supabase.from('infrastructure_tasks').select('*').eq('id', taskId).single();
-        if (!task) return { statusCode: 404, body: 'Task not found' };
+    // --- ACTION: FINALIZE_TASKS ---
+    if (action === 'FINALIZE_TASKS') {
+      const { data: readyTasks } = await supabase
+        .from('pending_tasks')
+        .select('*')
+        .eq('owner_id', ownerId)
+        .eq('status', 'pending')
+        .lte('completion_time', new Date(currentGameMs).toISOString());
 
-        const refund = task.cost * 0.5;
-        const { data: company } = await supabase.from('companies').select('capital').eq('owner_email', email).single();
-        await supabase.from('companies').update({ capital: company.capital + refund }).eq('owner_email', email);
-        await supabase.from('infrastructure_tasks').delete().eq('id', taskId);
+      if (readyTasks && readyTasks.length > 0) {
+        for (const task of readyTasks) {
+          await supabase.from('hubs').insert({
+            owner_id: ownerId,
+            city: task.payload.city,
+            country_code: task.payload.countryCode,
+            hub_level: 1, // Rule: Always start at Level 1
+            data: { capacity: 10, is_main: false }
+          });
+          await supabase.from('pending_tasks').update({ status: 'completed' }).eq('id', task.id);
+        }
+      }
+      return { statusCode: 200, body: JSON.stringify({ message: 'Check complete' }) };
+    }
 
-        return { statusCode: 200, body: JSON.stringify({ message: 'Cancelled and refunded' }) };
+    if (action === 'GET_HUBS') {
+      const { data: hubs } = await supabase.from('hubs').select('*').eq('owner_id', ownerId);
+      return { statusCode: 200, body: JSON.stringify({ hubs }) };
     }
 
     return { statusCode: 400, body: 'Invalid Action' };

@@ -35,6 +35,7 @@ import { getSkillsByCategory } from '../utils/skillsDatabase';
 import { writeSkillProgress, readSkillProgress } from '../utils/skillPersistence';
 import { MANAGER_SKILLS } from '../utils/roleSkills';
 import { normalizeJobsOnLoad } from '../utils/jobNormalization';
+import { computeCompanyLevel } from '../utils/companyLevel';
 
 /**
  * GameContextType
@@ -985,7 +986,13 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         contracts: Array.isArray(company.contracts) ? company.contracts : [],
         activeJobs: Array.isArray(company.activeJobs) ? company.activeJobs : [],
         // reputation default: 0 for newly created/updated companies (keeps admin state untouched if present)
-        reputation: typeof company.reputation === 'number' ? company.reputation : 0
+        reputation: typeof company.reputation === 'number' ? company.reputation : 0,
+        /**
+         * creditScore
+         * @description Ensure new companies start with a baseline credit score of 50 (Tier C)
+         * unless an explicit creditScore is provided in the payload.
+         */
+        creditScore: typeof company.creditScore === 'number' ? company.creditScore : 50
       };
       const ensured = ensureStaffDefaults(normalizedCompany);
       const updated = updateStaffStatuses(ensured);

@@ -65,39 +65,49 @@ const HubCard: React.FC<{ hub: HubData; onSelect?: () => void }> = ({ hub, onSel
   const navigate = useNavigate();
   const { gameState } = useGame() as any;
 
-  const title = hub.name || hub.title || (hub.city ? `${hub.city} Hub` : `Hub ${hub.id ?? ''}`) || 'Hub';
+  // Robust title handling from your DB schema
+  const title = hub.name || (hub.city ? `${hub.city} Hub` : 'Strategic Hub');
   
-  // Calculate specific hub capacity using the engine
+  // Capacity calculation (uses hub_level from DB)
   const capacity = useMemo(() => getHubCapacityInfo(gameState?.company, hub), [gameState?.company, hub]);
 
+  // Handle isMain from both local state and your data jsonb column
+  const isMain = hub.isMain || hub.is_main || hub.data?.is_main;
+
   return (
-    <div className="w-full h-full text-left bg-slate-700 rounded-lg p-5 border border-slate-600 hover:border-slate-500 transition-all flex flex-col justify-between group">
+    <div className="w-full h-full text-left bg-slate-700 rounded-2xl p-6 border border-slate-600 hover:border-indigo-500/50 hover:bg-slate-700/80 transition-all flex flex-col justify-between group shadow-xl">
       <div>
-        <div className="flex items-start justify-between mb-2">
+        <div className="flex items-start justify-between mb-4">
           <div>
-            <div className="font-bold text-white text-base group-hover:text-indigo-300 transition-colors">{title}</div>
-            <div className="text-[11px] font-mono text-slate-400">LEVEL {capacity.level} INFRASTRUCTURE</div>
+            <div className="font-black text-white text-lg group-hover:text-indigo-400 transition-colors uppercase tracking-tight">{title}</div>
+            <div className="flex items-center space-x-2 mt-1">
+               <div className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-400 text-[9px] font-black uppercase tracking-widest border border-indigo-500/30">
+                 LVL {capacity.level}
+               </div>
+               {isMain && (
+                 <div className="px-2 py-0.5 rounded bg-amber-500 text-slate-900 text-[9px] font-black uppercase tracking-widest">
+                   Main HQ
+                 </div>
+               )}
+            </div>
           </div>
-          {hub.isMain && (
-            <div className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-600 text-white uppercase">Main</div>
-          )}
         </div>
 
-        {/* Capacity Stats Section */}
-        <div className="mt-4 grid grid-cols-1 gap-4">
+        {/* Capacity Status Section */}
+        <div className="space-y-4 bg-slate-900/40 p-4 rounded-xl border border-slate-800/50">
           <CapacityBar 
-            label="Vehicle Fleet" 
+            label="Vehicle Slots" 
             current={capacity.assignedVehicles} 
             max={capacity.maxVehicles} 
             icon={<Truck className="w-3 h-3" />}
-            colorClass={capacity.assignedVehicles >= capacity.maxVehicles * 0.9 ? 'bg-rose-500' : 'bg-emerald-500'}
+            colorClass={capacity.assignedVehicles >= capacity.maxVehicles ? 'bg-rose-500' : 'bg-indigo-500'}
           />
           <CapacityBar 
-            label="Office Spots" 
+            label="Staff Capacity" 
             current={capacity.assignedStaff} 
             max={capacity.maxStaff} 
             icon={<Users className="w-3 h-3" />}
-            colorClass={capacity.assignedStaff >= capacity.maxStaff * 0.9 ? 'bg-amber-500' : 'bg-indigo-500'}
+            colorClass={capacity.assignedStaff >= capacity.maxStaff ? 'bg-amber-500' : 'bg-emerald-500'}
           />
         </div>
       </div>

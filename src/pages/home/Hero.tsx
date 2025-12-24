@@ -11,6 +11,7 @@
 import React from 'react';
 import { Link } from 'react-router';
 import { Building, Truck, Shield } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface CompanyBrief {
   name?: string;
@@ -35,6 +36,7 @@ interface HeroProps {
  * messaging plus primary CTAs.
  */
 const Hero: React.FC<HeroProps> = ({ authenticated = false, company }) => {
+  const { t } = useTranslation();
   return (
     <header className="relative">
       {/* Cinematic background image (smart placeholder) */}
@@ -57,12 +59,11 @@ const Hero: React.FC<HeroProps> = ({ authenticated = false, company }) => {
             </div>
 
             <h1 className="text-5xl sm:text-6xl font-extrabold text-white leading-tight">
-              Trucktopia — Build your logistics empire
+              {t('landing.hero_title')}
             </h1>
 
             <p className="mt-4 text-lg text-slate-300 max-w-2xl">
-              Manage fleets, hire professionals, and deliver cargo worldwide.
-              Real markets, strategic upgrades and real-time operations — start growing today.
+              {t('landing.hero_subtitle')}
             </p>
 
             <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
@@ -72,16 +73,16 @@ const Hero: React.FC<HeroProps> = ({ authenticated = false, company }) => {
                 aria-label="Login to your company"
               >
                 <Shield className="w-4 h-4" />
-                <span>Login to Your Company</span>
+                <span>{t('landing.cta_login')}</span>
               </Link>
 
               <Link
                 to="/register"
                 className="inline-flex items-center justify-center space-x-3 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-6 py-3 rounded-lg font-semibold transition-transform transform hover:-translate-y-0.5 shadow-lg"
-                aria-label="Start a new company"
+                aria-label={t('landing.cta_register')}
               >
                 <Building className="w-4 h-4" />
-                <span>Start New Company</span>
+                <span>{t('landing.cta_register')}</span>
               </Link>
             </div>
           </div>

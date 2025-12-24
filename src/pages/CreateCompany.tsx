@@ -142,7 +142,14 @@ const CreateCompany: React.FC = () => {
       trucks: [],
       contracts: [],
       logo: null,
-      email: email.toLowerCase()
+      email: email.toLowerCase(),
+      /**
+       * creditScore
+       * @description New companies start with a baseline credit score of 50 (Tier C).
+       * This field is used by the loans UI to surface the company's credit rating immediately
+       * after creation.
+       */
+      creditScore: 50
     };
 
     try {

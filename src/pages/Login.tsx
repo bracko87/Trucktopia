@@ -168,11 +168,11 @@ export default function Login(): JSX.Element {
             </div>
             <div className="text-left">
               <h1 className="text-xl font-bold text-white leading-tight">TRUCKTOPIA</h1>
-              <p className="text-yellow-500 text-sm font-medium">SIMULATOR 2024</p>
+              <p className="text-yellow-500 text-sm font-medium">Every Route Counts </p>
             </div>
           </div>
 
-          <CardTitle className="text-2xl font-bold text-white">Welcome Back, Manager</CardTitle>
+          <CardTitle className="text-2xl font-bold text-white">Welcome Back</CardTitle>
           <CardDescription className="text-slate-400">
             Sign in to continue building your empire
           </CardDescription>
@@ -264,7 +264,7 @@ export default function Login(): JSX.Element {
               onClick={handleClearStorage}
               className="text-slate-400 hover:text-white transition-colors"
             >
-              Developer: Clear local data
+             
             </button>
           </div>
         </CardContent>

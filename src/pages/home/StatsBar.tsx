@@ -12,6 +12,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Users, Truck, Briefcase, MapPin } from 'lucide-react';
 import { useGame } from '../../contexts/GameContext';
+import { useTranslation } from 'react-i18next';
 
 /**
  * StatCard
@@ -34,6 +35,7 @@ const StatCard: React.FC<{ icon: React.ReactNode; label: string; value: string; 
  * @description Orchestrates parallel fetching from Netlify endpoints.
  */
 const StatsBar: React.FC = () => {
+  const { t } = useTranslation();
   const { gameState } = useGame();
   const company = gameState.company;
 
@@ -95,27 +97,27 @@ const StatsBar: React.FC = () => {
     <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
       <StatCard 
         icon={<Users className="w-6 h-6 text-blue-400" />} 
-        label="Total User Accounts" 
+        label={t('landing.stats.total_users')} 
         value={displayValue(stats.users)} 
-        ariaLabel="Total user accounts" 
+        ariaLabel={t('landing.stats.total_users')} 
       />
       <StatCard 
         icon={<Truck className="w-6 h-6 text-amber-400" />} 
-        label="Total Trucks (active in game)" 
+        label={t('landing.stats.total_trucks')} 
         value={displayValue(stats.trucks)} 
-        ariaLabel="Total trucks" 
+        ariaLabel={t('landing.stats.total_trucks')} 
       />
       <StatCard 
         icon={<Briefcase className="w-6 h-6 text-green-400" />} 
-        label="Total Jobs (open / global)" 
+        label={t('landing.stats.total_jobs')} 
         value={displayValue(stats.jobs)} 
-        ariaLabel="Total jobs" 
+        ariaLabel={t('landing.stats.total_jobs')} 
       />
       <StatCard 
         icon={<MapPin className="w-6 h-6 text-indigo-400" />} 
-        label="In-game Cities" 
+        label={t('landing.stats.cities')} 
         value={displayValue(stats.cities)} 
-        ariaLabel="In-game Cities" 
+        ariaLabel={t('landing.stats.cities')} 
       />
     </div>
   );

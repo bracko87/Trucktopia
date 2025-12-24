@@ -1,28 +1,14 @@
-/**
- * FeaturesGrid.tsx
- *
- * Small features/benefits grid used on the landing page to describe the game.
- */
-
 import React from 'react';
 import { Truck, Map, DollarSign } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
-/**
- * FeatureCardProps
- * @description Props for a single feature card.
- */
 interface FeatureCardProps {
   title: string;
   description: string;
   icon: React.ReactNode;
-  accent?: string;
 }
 
-/**
- * FeatureCard
- * @description Presentational card describing one feature/benefit.
- */
-const FeatureCard: React.FC<FeatureCardProps> = ({ title, description, icon, accent = 'bg-slate-700' }) => {
+const FeatureCard: React.FC<FeatureCardProps> = ({ title, description, icon }) => {
   return (
     <div className="p-6 rounded-2xl border border-slate-700 shadow-sm bg-slate-800/60">
       <div className="flex items-start space-x-4">
@@ -38,26 +24,23 @@ const FeatureCard: React.FC<FeatureCardProps> = ({ title, description, icon, acc
   );
 };
 
-/**
- * FeaturesGrid
- * @description Renders a 3-column responsive grid of features for the landing page.
- */
 const FeaturesGrid: React.FC = () => {
+  const { t } = useTranslation();
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
       <FeatureCard
-        title="Advanced Fleet Management"
-        description="Buy, maintain and optimize your trucks. Hire drivers and improve profits through upgrades and maintenance."
+        title={t('landing.features.fleet_title')}
+        description={t('landing.features.fleet_desc')}
         icon={<Truck className="w-6 h-6 text-amber-400" />}
       />
       <FeatureCard
-        title="Worldwide Transport Network"
-        description="Take freight contracts across different countries with dynamic markets and realistic delivery constraints."
+        title={t('landing.features.network_title')}
+        description={t('landing.features.network_desc')}
         icon={<Map className="w-6 h-6 text-green-400" />}
       />
       <FeatureCard
-        title="Strategic Growth & Markets"
-        description="Earn profits, invest in equipment and expand your company strategically to dominate the market."
+        title={t('landing.features.growth_title')}
+        description={t('landing.features.growth_desc')}
         icon={<DollarSign className="w-6 h-6 text-blue-400" />}
       />
     </div>

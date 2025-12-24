@@ -15,17 +15,15 @@
  * Notes:
  * - This file is a safe, self-contained replacement to ensure used/new detection and proper persistence
  *   of used truck metadata (production year, kilometres, condition, price) from market -> modal -> garage.
+ * - Added: runtime fetch+merge of authoritative technical specifications via fetchVehicleSpecs.
+ *   The modal will try to enrich the selected vehicle with Supabase (public.vehicles) rows
+ *   when available at runtime and fall back to local data otherwise.
  */
+
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useGame } from '../contexts/GameContext';
-import {
-  Package,
-  DollarSign,
-  Calendar,
-  Truck as TruckIcon,
-  X,
-} from 'lucide-react';
+import { Package, DollarSign, Calendar, Truck as TruckIcon, X } from 'lucide-react';
 import { TRAILERS } from '../data/trailers';
 import TruckCard from '../components/market/TruckCard';
 import { TRUCKS, TruckCategoryKey } from '../data/trucks';
@@ -35,6 +33,7 @@ import { isTrailer } from '../utils/vehicleTypeUtils';
 import { getHubCapacityInfo } from '../engines/hubCapacityEngine';
 import ConfirmPurchaseHubInfo from '../components/market/ConfirmPurchaseHubInfo';
 import { readOffersFromStorage } from '../engines/UsedTruckGenerator';
+import { fetchVehicleSpecs } from '../utils/specsFetcher';
 
 /**
  * randInt
@@ -115,6 +114,16 @@ function normalizeTechnicalFields(truck: any): any {
     'fuelConsumptionL/100km',
   ];
 
+  // reliability aliases we want to normalize into specifications.reliability
+  const reliabilityCandidates = ['reliability', 'reliabilityRating', 'reliability_rating', 'reliabilityCategory', 'reliability_category'];
+
+  // durability, maintenanceGroup aliases
+  const durabilityCandidates = ['durability', 'durabilityScore', 'durability_score'];
+  const maintenanceCandidates = ['maintenanceGroup', 'maintenance_group', 'maintenance', 'mg', 'maintenanceGroupId'];
+
+  // speed aliases
+  const speedCandidates = ['maxSpeed', 'topSpeed', 'speed', 'speedKmH', 'speed_kmh', 'speedKm', 'speed_km_h'];
+
   let foundFuel: any = null;
   for (const key of fuelCandidates) {
     if (cloned[key] !== undefined && cloned[key] !== null && String(cloned[key]).trim() !== '') {
@@ -136,6 +145,65 @@ function normalizeTechnicalFields(truck: any): any {
 
   if (foundFuel !== null) {
     cloned.specifications = { ...(cloned.specifications ?? {}), fuelConsumption: foundFuel };
+  }
+
+  // Normalize reliability: prefer top-level then nested specs then common variants
+  for (const key of reliabilityCandidates) {
+    const top = cloned[key];
+    if (top !== undefined && top !== null && String(top).trim() !== '') {
+      cloned.specifications = { ...(cloned.specifications ?? {}), reliability: top };
+      break;
+    }
+    if (cloned.specifications && cloned.specifications[key] !== undefined && cloned.specifications[key] !== null && String(cloned.specifications[key]).trim() !== '') {
+      cloned.specifications = { ...(cloned.specifications ?? {}), reliability: cloned.specifications[key] };
+      break;
+    }
+  }
+
+  // Normalize durability
+  for (const key of durabilityCandidates) {
+    const top = cloned[key];
+    if (top !== undefined && top !== null && String(top).trim() !== '') {
+      cloned.specifications = { ...(cloned.specifications ?? {}), durability: top };
+      break;
+    }
+    if (cloned.specifications && cloned.specifications[key] !== undefined && cloned.specifications[key] !== null && String(cloned.specifications[key]).trim() !== '') {
+      cloned.specifications = { ...(cloned.specifications ?? {}), durability: cloned.specifications[key] };
+      break;
+    }
+  }
+
+  // Normalize maintenance group
+  for (const key of maintenanceCandidates) {
+    const top = cloned[key];
+    if (top !== undefined && top !== null && String(top).trim() !== '') {
+      cloned.specifications = { ...(cloned.specifications ?? {}), maintenanceGroup: top };
+      break;
+    }
+    if (cloned.specifications && cloned.specifications[key] !== undefined && cloned.specifications[key] !== null && String(cloned.specifications[key]).trim() !== '') {
+      cloned.specifications = { ...(cloned.specifications ?? {}), maintenanceGroup: cloned.specifications[key] };
+      break;
+    }
+  }
+
+  // Normalize speed / maxSpeed
+  for (const key of speedCandidates) {
+    const top = cloned[key];
+    if (top !== undefined && top !== null && String(top).trim() !== '') {
+      cloned.specifications = { ...(cloned.specifications ?? {}), maxSpeed: top, speed: top };
+      break;
+    }
+    if (cloned.specifications && cloned.specifications[key] !== undefined && cloned.specifications[key] !== null && String(cloned.specifications[key]).trim() !== '') {
+      cloned.specifications = { ...(cloned.specifications ?? {}), maxSpeed: cloned.specifications[key], speed: cloned.specifications[key] };
+      break;
+    }
+    if (cloned.specifications) {
+      const dk = key.replace(/\./g, '');
+      if (cloned.specifications[dk] !== undefined && cloned.specifications[dk] !== null && String(cloned.specifications[dk]).trim() !== '') {
+        cloned.specifications = { ...(cloned.specifications ?? {}), maxSpeed: cloned.specifications[dk], speed: cloned.specifications[dk] };
+        break;
+      }
+    }
   }
 
   return cloned;
@@ -256,6 +324,9 @@ const VehicleMarket: React.FC = () => {
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
   const [selectedDeliveryHubId, setSelectedDeliveryHubId] = useState<string | null>(null);
 
+  // NEW: loading flag when fetching authoritative specs for the modal
+  const [specsLoading, setSpecsLoading] = useState<boolean>(false);
+
   const [truckSearchTerm, setTruckSearchTerm] = useState('');
   const [truckPriceRange, setTruckPriceRange] = useState<[number, number]>([0, 200000]);
   const [truckSortBy, setTruckSortBy] = useState<'price-low' | 'price-high' | 'availability'>('price-low');
@@ -280,26 +351,82 @@ const VehicleMarket: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    // load generated used offers from storage initially
-    try {
-      const stored = readOffersFromStorage();
-      setUsedOffers(Array.isArray(stored) ? stored : []);
-    } catch {
-      setUsedOffers([]);
-    }
+    // load generated used offers from storage initially and attempt to enrich each offer
+    let mounted = true;
 
-    // Listen for generator event to refresh offers automatically
-    const handler = () => {
+    const loadAndEnrich = async () => {
       try {
-        const updated = readOffersFromStorage();
-        setUsedOffers(Array.isArray(updated) ? updated : []);
+        const stored = readOffersFromStorage();
+        const base = Array.isArray(stored) ? stored.map((s: any) => normalizeTechnicalFields(s)) : [];
+        if (!mounted) return;
+        setUsedOffers(base);
+
+        // Best-effort: enrich each offer with authoritative specs (same strategy used for new trucks)
+        const enriched = await Promise.all(
+          base.map(async (offer: any) => {
+            try {
+              const candidates: string[] = [];
+              if (offer.specifications?.modelId) candidates.push(String(offer.specifications.modelId));
+              if (offer.modelId) candidates.push(String(offer.modelId));
+              if (offer.id) candidates.push(String(offer.id));
+              if (offer.brand && offer.model) {
+                candidates.push(`${String(offer.brand)} ${String(offer.model)}`);
+                candidates.push(`${String(offer.brand)}-${String(offer.model)}`);
+                candidates.push(`${String(offer.brand).toLowerCase()}-${String(offer.model).toLowerCase()}`);
+              }
+              if (offer.marketEntry?.model) candidates.push(String(offer.marketEntry.model));
+              const uniq = Array.from(new Set(candidates.map((c) => (c || '').trim()))).filter(Boolean);
+              let found: any = null;
+              for (const id of uniq) {
+                try {
+                  // try to fetch authoritative specs
+                  // eslint-disable-next-line no-await-in-loop
+                  const res = await fetchVehicleSpecs(id);
+                  if (res && Object.keys(res).length > 0) {
+                    found = res;
+                    break;
+                  }
+                } catch {
+                  // continue trying other candidates
+                }
+              }
+              if (!found) return offer;
+
+              // Merge authoritative specs but preserve listing metadata (price/condition/km/year)
+              const mergedSpecs = { ...(offer.specifications ?? {}), ...(found.specifications ?? {}), ...found };
+              if (offer.price !== undefined) mergedSpecs.price = offer.price;
+              if (offer.condition !== undefined) mergedSpecs.condition = offer.condition;
+              if (offer.kilometers !== undefined) mergedSpecs.kilometers = offer.kilometers;
+              if (offer.year !== undefined) mergedSpecs.year = mergedSpecs.year ?? offer.year;
+
+              const merged = { ...offer, specifications: mergedSpecs, marketEntry: JSON.parse(JSON.stringify(offer.marketEntry ?? offer)) };
+
+              // Ensure normalized technical fields are present
+              return normalizeTechnicalFields(merged);
+            } catch {
+              return offer;
+            }
+          })
+        );
+
+        if (!mounted) return;
+        setUsedOffers(enriched);
       } catch {
-        // ignore
+        if (!mounted) return;
+        setUsedOffers([]);
       }
+    };
+
+    void loadAndEnrich();
+
+    // Listen for generator events and re-run enrichment
+    const handler = () => {
+      void loadAndEnrich();
     };
     window.addEventListener('tm:used-offers-generated', handler as EventListener);
 
     return () => {
+      mounted = false;
       window.removeEventListener('tm:used-offers-generated', handler as EventListener);
     };
   }, []);
@@ -371,6 +498,13 @@ const VehicleMarket: React.FC = () => {
       // eslint-disable-next-line no-console
       console.warn('VehicleMarket.getFilteredTrucks failed to build base list', e);
       list = [];
+    }
+
+    // Normalize technical fields for all list items so used offers receive same spec keys
+    try {
+      list = list.map((t) => normalizeTechnicalFields(t));
+    } catch {
+      // ignore normalization failures, keep original list
     }
 
     if (activeTruckCategoryTab) {
@@ -474,6 +608,8 @@ const VehicleMarket: React.FC = () => {
   /**
    * openItemDetails
    * @description Open details modal for selected vehicle and attempt authoritative lookups for trucks.
+   *              This now attempts to enrich the selected vehicle with authoritative technical specs
+   *              from Supabase.public.vehicles via fetchVehicleSpecs (if available).
    */
   const openItemDetails = (vehicle: any | null) => {
     setPurchaseError(null);
@@ -499,17 +635,18 @@ const VehicleMarket: React.FC = () => {
         authoritative = unified.find((t: any) => String(t.id) === String(vehicle.id)) ?? null;
 
         // Determine whether this market item should be treated as a market/used offer.
-        // If it is a market/used offer, we should NOT override its metadata with
-        // canonical dataset values (brand+model lookup), because offers carry
-        // the correct condition/km/year that the user expects.
+        // Market listings carry important metadata (price/condition/km). We MUST NOT overwrite
+        // those fields, but we still want to enrich used offers with canonical technical specs
+        // (engine, fuelConsumption, reliability, maxSpeed, etc.) when we can find a matching model.
         const marketOfferHint =
           (vehicle.marketSource && String(vehicle.marketSource).toLowerCase().includes('used')) ||
           Boolean(vehicle.marketEntry && Object.keys(vehicle.marketEntry).length > 0) ||
           isUsedVehicle(vehicle);
 
-        // Only fallback to brand+model heuristics when the clicked item does NOT look like
-        // a specific market/used offer (to avoid overwriting used-offer fields such as condition/km).
-        if (!authoritative && !marketOfferHint && vehicle.brand && vehicle.model) {
+        // Attempt brand+model heuristics to find an authoritative dataset entry.
+        // Unlike before, we perform this lookup even for market/used offers — we will only
+        // merge the authoritative technical specifications below and preserve listing metadata.
+        if (!authoritative && vehicle.brand && vehicle.model) {
           authoritative =
             unified.find(
               (t: any) =>
@@ -530,7 +667,7 @@ const VehicleMarket: React.FC = () => {
     // enriching the item with canonical technical specs from the authoritative dataset.
     const source = authoritative ?? vehicle;
 
-    /** 
+    /**
      * Build merged object:
      * - Start with authoritative dataset when available (it provides canonical technical defaults)
      * - Overlay listing (vehicle) top-level fields so market-specific metadata wins
@@ -726,6 +863,110 @@ const VehicleMarket: React.FC = () => {
     setSelectedVehicle(cloned);
     const hubs = getUserHubs();
     setSelectedDeliveryHubId(hubs.length > 0 ? hubs[0].id : null);
+
+    /**
+     * fetchAndMergeSpecs
+     * @description Attempt to fetch authoritative technical specs for the selected vehicle using fetchVehicleSpecs.
+     *              Tries multiple candidate identifiers (modelId, id, brand+model variants). Merges returned specs
+     *              into selectedVehicle.specifications while preserving listing-specific metadata (price, condition, km).
+     */
+    const fetchAndMergeSpecs = async () => {
+      setSpecsLoading(true);
+      try {
+        const candidates: string[] = [];
+        if (cloned.specifications?.modelId) candidates.push(String(cloned.specifications.modelId));
+        if (cloned.modelId) candidates.push(String(cloned.modelId));
+        if (cloned.id) candidates.push(String(cloned.id));
+        if (cloned.brand && cloned.model) {
+          candidates.push(`${String(cloned.brand)} ${String(cloned.model)}`);
+          candidates.push(`${String(cloned.brand)}-${String(cloned.model)}`);
+          candidates.push(`${String(cloned.brand).toLowerCase()}-${String(cloned.model).toLowerCase()}`);
+        }
+        if (cloned.marketEntry?.model) candidates.push(String(cloned.marketEntry.model));
+        // make unique and filter empty
+        const uniq = Array.from(new Set(candidates.map((c) => (c || '').trim()))).filter(Boolean);
+        let found: any = null;
+        for (const id of uniq) {
+          try {
+            const res = await fetchVehicleSpecs(id);
+            if (res && Object.keys(res).length > 0) {
+              found = res;
+              break;
+            }
+          } catch (err) {
+            // continue trying other candidates
+            // eslint-disable-next-line no-console
+            console.warn('fetchVehicleSpecs attempt failed for', id, err);
+          }
+        }
+        if (found) {
+          // Merge authoritative result into specifications, but preserve critical market metadata
+          const enrichedSpecs = { ...(cloned.specifications ?? {}), ...(found.specifications ?? {}), ...found };
+
+          // Ensure listing metadata stays in specs so UI that reads only specs sees them
+          if (cloned.price !== undefined) enrichedSpecs.price = cloned.price;
+          if (cloned.condition !== undefined) enrichedSpecs.condition = cloned.condition;
+          if (cloned.kilometers !== undefined) enrichedSpecs.kilometers = cloned.kilometers;
+
+          // Also ensure common reliability/durability/maintenance fields from found are present
+          if (found.reliability !== undefined && found.reliability !== null) {
+            enrichedSpecs.reliability = enrichedSpecs.reliability ?? found.reliability;
+          }
+          if ((found.specifications && found.specifications.reliability) !== undefined && (found.specifications && found.specifications.reliability) !== null) {
+            enrichedSpecs.reliability = enrichedSpecs.reliability ?? found.specifications.reliability;
+          }
+          if (found.durability !== undefined && found.durability !== null) {
+            enrichedSpecs.durability = enrichedSpecs.durability ?? found.durability;
+          }
+          if (found.maintenanceGroup !== undefined && found.maintenanceGroup !== null) {
+            enrichedSpecs.maintenanceGroup = enrichedSpecs.maintenanceGroup ?? found.maintenanceGroup;
+          }
+
+          // Resolve speed / maxSpeed from found payload (many possible keys)
+          const resolvedSpeed =
+            found.maxSpeed ??
+            found.topSpeed ??
+            found.speed ??
+            (found.specifications && (found.specifications.maxSpeed ?? found.specifications.speed)) ??
+            null;
+          if (resolvedSpeed !== null && resolvedSpeed !== undefined) {
+            enrichedSpecs.maxSpeed = enrichedSpecs.maxSpeed ?? resolvedSpeed;
+            enrichedSpecs.speed = enrichedSpecs.speed ?? resolvedSpeed;
+          }
+
+          // Update selected vehicle in state with enriched specifications and mirror top-level compatibility fields
+          setSelectedVehicle((prev) => {
+            if (!prev) return prev;
+            const next = { ...prev, specifications: enrichedSpecs };
+
+            // Mirror reliability/durability/maintenance to top-level for components that read top-level
+            if (enrichedSpecs.reliability !== undefined && enrichedSpecs.reliability !== null) {
+              next.reliability = next.reliability ?? enrichedSpecs.reliability;
+            }
+            if (enrichedSpecs.durability !== undefined && enrichedSpecs.durability !== null) {
+              next.durability = next.durability ?? enrichedSpecs.durability;
+            }
+            if (enrichedSpecs.maintenanceGroup !== undefined && enrichedSpecs.maintenanceGroup !== null) {
+              next.maintenanceGroup = next.maintenanceGroup ?? enrichedSpecs.maintenanceGroup;
+            }
+
+            // Mirror speed/maxSpeed to top-level for compatibility with components that read top-level
+            if (enrichedSpecs.maxSpeed !== undefined && enrichedSpecs.maxSpeed !== null) {
+              next.maxSpeed = next.maxSpeed ?? enrichedSpecs.maxSpeed;
+              next.speed = next.speed ?? enrichedSpecs.maxSpeed;
+            }
+
+            return next;
+          });
+        }
+      } finally {
+        setSpecsLoading(false);
+      }
+    };
+
+    // Fire-and-forget fetch to enrich modal. This is best-effort and non-blocking.
+    // The modal will update when enriched specs arrive.
+    void fetchAndMergeSpecs();
   };
 
   const closeModal = () => {
@@ -947,10 +1188,7 @@ const VehicleMarket: React.FC = () => {
           <h1 className="text-2xl font-bold text-white">Vehicle Market</h1>
           <p className="text-slate-400">Purchase or lease new trailers and trucks</p>
         </div>
-        <div className="text-right">
-          <div className="text-sm text-slate-400">Company Balance</div>
-          <div className="text-2xl font-bold text-green-400">€{(company.capital || 0).toLocaleString()}</div>
-        </div>
+{/* Balance element removed as requested */}
       </div>
 
       {/* Main Tabs */}
@@ -1495,7 +1733,10 @@ const VehicleMarket: React.FC = () => {
               </div>
 
               <div className="mb-4">
-                {selectedVehicle?.type === 'trailer' || isTrailer(selectedVehicle) ? (
+                {/** Show a small loading indicator while authoritative specs are fetched and merged */}
+                {specsLoading ? (
+                  <div className="py-6 flex items-center justify-center text-sm text-slate-400">Loading specifications…</div>
+                ) : selectedVehicle?.type === 'trailer' || isTrailer(selectedVehicle) ? (
                   <TrailerTechnicalSpecs specs={selectedVehicle.specifications ?? selectedVehicle} />
                 ) : (
                   <VehicleSpecsSelector vehicle={selectedVehicle} />

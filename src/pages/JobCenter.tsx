@@ -1194,10 +1194,7 @@ const JobCenter: React.FC = () => {
           <h1 className="text-3xl font-bold text-white flex items-center gap-3">Job Centre</h1>
           <p className="text-slate-400">Find and hire qualified staff for your transportation company</p>
         </div>
-        <div className="text-right">
-          <div className="text-sm text-slate-400">Company Balance</div>
-          <div className="text-2xl font-bold text-green-400">€{company.capital.toLocaleString()}</div>
-        </div>
+{/* Balance element removed as requested */}
       </div>
 
       {/* Search and Filters */}

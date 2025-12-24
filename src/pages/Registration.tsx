@@ -74,7 +74,7 @@ export default function Registration() {
             </div>
             <div className="text-left">
               <h1 className="text-xl font-bold text-white leading-tight">TRUCKTOPIA</h1>
-              <p className="text-yellow-500 text-sm font-medium">SIMULATOR 2024</p>
+              <p className="text-yellow-500 text-sm font-medium">Every Route Counts</p>
             </div>
           </div>
           

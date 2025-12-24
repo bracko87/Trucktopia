@@ -1,8 +1,9 @@
+/**
+ * BuildHubModal.tsx
+ */
 
-import React, { useState, useMemo } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../ui/dialog';
-import { Button } from '../ui/button';
-import { Clock, Euro, AlertTriangle, TrendingUp } from 'lucide-react';
+import React from 'react';
+import { nowUtcMs } from '../../utils/gameClock';
 
 interface Props {
   open: boolean;
@@ -10,108 +11,101 @@ interface Props {
   countryName: string;
   city: string;
   onClose: () => void;
-  onConfirm: (payload: { duration: number; estimatedPrice: number }) => void;
+  onConfirm: (payload: { estimatedPrice: number; chosenDays: number; completionGameMs: number }) => void;
 }
 
 /**
- * BuildHubModal
- * @description Variations in price (500k-900k) based on city name + 1% Speed Premium.
+ * Deterministic Price Engine
+ * Generates unique prices per city (e.g., $545k, $613k)
  */
+function getBasePrice(city: string, countryCode: string) {
+  let hash = 0;
+  const str = city + countryCode;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const variance = Math.abs(hash % 250000); // Up to $250k variance
+  return 500000 + variance;
+}
+
 const BuildHubModal: React.FC<Props> = ({ open, countryCode, countryName, city, onClose, onConfirm }) => {
-  const [duration, setDuration] = useState(60);
+  const MIN_DAYS = 40;
+  const MAX_DAYS = 60;
+  const [selectedDays, setSelectedDays] = React.useState<number>(MAX_DAYS);
 
-  // Deterministic price based on city name to ensure variety (e.g. 545k, 613k)
-  const basePrice = useMemo(() => {
-    if (!city) return 500000;
-    const seed = (city + countryCode).split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    const variance = (seed * 1337 % 401) * 1000; // 0 to 400,000 variance
-    return 500000 + variance;
-  }, [city, countryCode]);
+  if (!open) return null;
 
-  // Speed Premium: 1% of base price for every day under 60
-  const daysSaved = 60 - duration;
-  const speedPremium = basePrice * 0.01 * daysSaved;
-  const totalPrice = basePrice + speedPremium;
+  const basePrice = getBasePrice(city, countryCode);
+  const daysSaved = MAX_DAYS - selectedDays;
+  const premium = basePrice * (daysSaved * 0.01); // 1% per day saved
+  const finalPrice = Math.round(basePrice + premium);
+  
+  const completionGameMs = Math.floor(nowUtcMs() + selectedDays * 24 * 60 * 60 * 1000);
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="bg-slate-800 border-slate-700 text-white sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="text-xl font-bold flex items-center space-x-2">
-            <TrendingUp className="w-5 h-5 text-blue-400" />
-            <span>Investment Analysis</span>
-          </DialogTitle>
-          <DialogDescription className="text-slate-400 text-xs">
-            Review the construction costs and timeline for the new {city} Hub.
-          </DialogDescription>
-        </DialogHeader>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+      <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl">
+        <div className="p-6 border-b border-slate-700 flex justify-between items-center">
+          <h3 className="text-xl font-bold text-white">Construction Proposal</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-white">✕</button>
+        </div>
 
-        <div className="space-y-6 py-4">
-          <div className="bg-slate-900/50 border border-slate-700 rounded-xl p-4">
-            <div className="flex justify-between items-center mb-1">
-              <span className="text-[10px] uppercase font-bold text-slate-500 tracking-widest">Location</span>
-              <span className="text-xs font-bold text-blue-400">{countryName}</span>
+        <div className="p-6 space-y-6">
+          <div className="flex items-center space-x-4 bg-slate-900/50 p-4 rounded-xl border border-slate-700/50">
+            <div className="w-12 h-8 rounded bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-400 border border-slate-700">
+              {countryCode.toUpperCase()}
             </div>
-            <div className="text-lg font-bold text-white">{city}</div>
+            <div>
+              <div className="text-white font-bold">{city}</div>
+              <div className="text-xs text-slate-500 uppercase tracking-widest">{countryName}</div>
+            </div>
           </div>
 
-          <div className="space-y-3">
-            <div className="flex justify-between text-sm">
-              <label className="text-slate-400 font-medium">Construction Speed</label>
-              <div className="flex items-center text-blue-400 font-bold">
-                <Clock className="w-3.5 h-3.5 mr-1" />
-                {duration} In-Game Days
-              </div>
-            </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-3">Construction Speed</label>
             <input
               type="range"
-              min="40"
-              max="60"
-              step="1"
-              value={duration}
-              onChange={(e) => setDuration(parseInt(e.target.value))}
-              className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+              min={MIN_DAYS}
+              max={MAX_DAYS}
+              value={selectedDays}
+              onChange={(e) => setSelectedDays(Number(e.target.value))}
+              className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
             />
-            <div className="flex justify-between text-[10px] text-slate-500 uppercase font-bold">
-              <span>Fast (40d)</span>
-              <span>Standard (60d)</span>
+            <div className="flex justify-between text-[10px] font-bold text-slate-500 mt-2 uppercase">
+              <span>Fast (40 Days)</span>
+              <span className="text-indigo-400">Target: {selectedDays} Days</span>
+              <span>Standard (60 Days)</span>
             </div>
           </div>
 
-          <div className="bg-blue-500/5 rounded-xl p-4 border border-blue-500/10 space-y-3">
-            <div className="flex justify-between text-xs text-slate-400">
-              <span>Local Market Base Price:</span>
-              <span className="text-white font-mono">€{basePrice.toLocaleString()}</span>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50">
+              <div className="text-[10px] font-bold text-slate-500 uppercase mb-1">Base Price</div>
+              <div className="text-white font-mono">${Math.round(basePrice).toLocaleString()}</div>
             </div>
-            <div className="flex justify-between text-xs text-slate-400">
-              <span>Speed Premium ({daysSaved}d @ 1%/d):</span>
-              <span className="text-amber-400 font-mono">+ €{speedPremium.toLocaleString()}</span>
-            </div>
-            <div className="pt-2 border-t border-slate-700 flex justify-between items-center">
-              <span className="text-sm font-bold text-white">Total Investment:</span>
-              <div className="text-xl font-bold text-green-400 font-mono">€{totalPrice.toLocaleString()}</div>
+            <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50">
+              <div className="text-[10px] font-bold text-slate-500 uppercase mb-1">Speed Premium (1%/day)</div>
+              <div className="text-amber-400 font-mono">+${Math.round(premium).toLocaleString()}</div>
             </div>
           </div>
 
-          <div className="flex items-start space-x-2 text-[10px] text-slate-500 italic leading-relaxed">
-            <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0 text-amber-500" />
-            <p>Investment is final. Cancellation only yields a 50% refund. Construction follows the global server clock.</p>
+          <div className="bg-indigo-500/10 border border-indigo-500/20 p-4 rounded-xl">
+            <div className="text-[10px] font-bold text-indigo-400 uppercase mb-1">Total Investment</div>
+            <div className="text-2xl font-black text-white">${finalPrice.toLocaleString()}</div>
           </div>
         </div>
 
-        <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={onClose} className="bg-transparent border-slate-700 text-slate-300 hover:bg-slate-700">
-            Cancel
-          </Button>
-          <Button 
-            onClick={() => onConfirm({ duration, estimatedPrice: totalPrice })}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-8"
+        <div className="p-6 bg-slate-900/50 flex space-x-3">
+          <button onClick={onClose} className="flex-1 px-4 py-3 rounded-xl font-bold text-slate-400 hover:text-white transition-colors">Cancel</button>
+          <button
+            onClick={() => onConfirm({ estimatedPrice: finalPrice, chosenDays: selectedDays, completionGameMs })}
+            className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-3 rounded-xl font-bold shadow-lg shadow-indigo-600/20 transition-all"
           >
-            Authorize Build
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            Confirm Build
+          </button>
+        </div>
+      </div>
+    </div>
   );
 };
 

@@ -44,7 +44,8 @@ exports.handler = async (event) => {
         hub_country: hub_country,
         capital: capital || 10000,
         balance: balance || capital || 10000,
-        level: 'startup',
+        // Quick fix: persist human-friendly Seed tier instead of forcing 'startup'
+        level: 'Seed',
         updated_at: new Date().toISOString()
       })
       .eq('email', cleanEmail)
