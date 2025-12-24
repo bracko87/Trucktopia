@@ -20,7 +20,7 @@
  * - Keep the service role key server-only. Do not expose it to the browser.
  */
 
-import fetch from 'node-fetch';
+
 
 /**
  * SupabaseDistanceRow
