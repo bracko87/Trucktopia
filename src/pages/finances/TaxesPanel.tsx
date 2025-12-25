@@ -114,9 +114,12 @@ const TaxesPanel: React.FC = () => {
   const makeExpenseTx = (amount: number, description: string) => ({
     id: `tax-${description.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     date: new Date().toISOString(),
-    type: 'expense' as const,
-    amount: -Math.round(amount),
-    description
+    // Taxes paid from the Taxes panel are recorded as 'tax' type so they appear in audit lists
+    type: 'tax' as const,
+    // Keep amounts positive: the provider will deduct capital when persisting transactions.
+    amount: Math.round(amount),
+    description,
+    category: description
   });
 
   const paySingle = (key: keyof typeof breakdown, label: string) => {

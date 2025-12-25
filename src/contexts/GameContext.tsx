@@ -1212,6 +1212,26 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       staff: [...(gameState.company.staff || []), newStaff]
     };
 
+    // If a capital deduction happened (hiring cost), record a transaction so Transactions page shows it.
+    try {
+      const finances = updatedCompany.finances && typeof updatedCompany.finances === 'object' ? { ...(updatedCompany.finances) } : { transactions: [], loans: [], leases: [] };
+      finances.transactions = Array.isArray(finances.transactions) ? finances.transactions.slice() : [];
+      if (deduction > 0) {
+        finances.transactions.push({
+          id: `tx-hire-${newStaff.id}-${Date.now()}`,
+          date: new Date().toISOString(),
+          type: 'expense' as const,
+          amount: Math.round(deduction),
+          description: `Hire: ${newStaff.name}`,
+          category: 'Staff Hiring',
+          meta: { staffId: newStaff.id }
+        });
+      }
+      updatedCompany.finances = finances;
+    } catch {
+      // ignore finance write failures
+    }
+
     // Use createCompany (GameContext) to persist, preserving existing behavior
     if (typeof createCompany === 'function') {
       createCompany(updatedCompany);

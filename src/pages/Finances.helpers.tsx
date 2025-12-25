@@ -3,7 +3,12 @@
  *
  * Helper UI pieces used by the Finances page for tax audit display.
  * - Exposes NextAuditBadge: next scheduled audit date (10th each month)
- * - Exposes AuditListGross: shows recent paid audits or synthesizes & persists three prior paid audits.
+ * - Exposes AuditListGross: shows recent paid audits by reading actual tax transactions
+ *
+ * Notes:
+ * - Monthly tax payments are created by FinancialProvider on the 10th of each month.
+ * - AuditListGross shows only one entry per month (the most recent tax transaction for that month)
+ *   and limits the view to the last 5 months.
  */
 
 import React from 'react';
@@ -16,7 +21,7 @@ import { useFinancials } from '../contexts/FinancialContext';
  */
 function formatISO(iso?: string | Date) {
   try {
-    const d = typeof iso === 'string' ? new Date(iso) : (iso instanceof Date ? iso : new Date());
+    const d = typeof iso === 'string' ? new Date(iso) : iso instanceof Date ? iso : new Date();
     return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
   } catch {
     return String(iso);
@@ -43,121 +48,79 @@ export const NextAuditBadge: React.FC = () => {
 
 /**
  * AuditListGross
- * @description Renders a short list of recent tax audits.
- * - Uses real audit transactions in company.finances.transactions when possible.
- * - Otherwise synthesizes 3 prior paid audits falling on the 10th of previous months,
- *   persists them into company.finances.transactions and renders them.
+ * @description Renders a short list of recent tax audit / tax payment transactions.
+ * - Reads actual transactions from company.finances.transactions and filters those of type 'tax'
+ *   or transactions that explicitly mention tax in category/description.
+ * - Ensures only a single entry per year-month is shown (latest in that month).
+ * - Shows up to the last 5 months.
  */
 export const AuditListGross: React.FC = () => {
-  const { gameState, createCompany } = useGame();
-  const {
-    monthlyRoadTolls,
-    monthlyVehicleTax,
-    monthlyPayrollTaxes,
-    monthlyCIT
-  } = useFinancials();
+  const { gameState } = useGame();
+  const { monthlyRoadTolls, monthlyVehicleTax, monthlyPayrollTaxes, monthlyCIT } = useFinancials();
 
-  /**
-   * findExistingAudits
-   * @description Return transactions that look like tax/audit payments.
-   */
-  const findExistingAudits = React.useCallback(() => {
+  const transactions: any[] = React.useMemo(() => {
     try {
       const txs = (gameState.company as any)?.finances?.transactions || [];
-      return (txs || []).filter((t: any) => {
+      if (!Array.isArray(txs)) return [];
+
+      // Filter tax-ish transactions
+      const taxTxs = txs.filter((t: any) => {
+        if (!t) return false;
+        if (t.type === 'tax') return true;
+        const cat = String(t.category || '').toLowerCase();
         const desc = String(t.description || '').toLowerCase();
-        if (typeof t.type === 'string' && t.type === 'tax') return true;
-        if (/tax|audit|tax payment|taxes|tax-audit/i.test(desc)) return true;
-        // expense txes with "tax" in description
-        if (t.type === 'expense' && desc.includes('tax')) return true;
+        if (cat.includes('tax') || desc.includes('tax') || desc.includes('audit') || cat.includes('payroll') || cat.includes('vehicle') || cat.includes('tolls')) return true;
         return false;
       });
+
+      // Map to year-month -> keep the latest transaction within that month
+      const byMonth = new Map<string, any>();
+      taxTxs.forEach((t: any) => {
+        try {
+          const date = t.date ? new Date(t.date) : null;
+          if (!date || Number.isNaN(date.getTime())) return;
+          const ym = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+          const existing = byMonth.get(ym);
+          if (!existing) {
+            byMonth.set(ym, t);
+            return;
+          }
+          const existingDate = existing.date ? new Date(existing.date) : null;
+          if (!existingDate || (date.getTime() > existingDate.getTime())) {
+            byMonth.set(ym, t);
+          }
+        } catch {
+          // ignore malformed tx
+        }
+      });
+
+      // Convert map to array sorted by date desc and limit to 5 months
+      const arr = Array.from(byMonth.values()).sort((a: any, b: any) => {
+        const da = a.date ? new Date(a.date).getTime() : 0;
+        const db = b.date ? new Date(b.date).getTime() : 0;
+        return db - da;
+      });
+
+      return arr.slice(0, 5);
     } catch {
       return [];
     }
   }, [gameState.company]);
 
-  const existingAudits = React.useMemo(() => findExistingAudits(), [findExistingAudits]);
-
-  /**
-   * synthesizeAudits
-   * @description Build 3 synthetic past audit transactions using available hooks.
-   */
-  const synthesizeAudits = React.useCallback(() => {
-    const now = new Date();
-    const monthlyRoad = typeof monthlyRoadTolls === 'function' ? monthlyRoadTolls() : 0;
-    const monthlyVehicle = typeof monthlyVehicleTax === 'function' ? monthlyVehicleTax() : 0;
-    const monthlyPayroll = typeof monthlyPayrollTaxes === 'function' ? monthlyPayrollTaxes() : 0;
-    const monthlyCit = typeof monthlyCIT === 'function' ? monthlyCIT() : 0;
-
-    const base = Math.round(monthlyRoad + monthlyVehicle + monthlyPayroll + monthlyCit);
-    const items: Array<any> = [];
-    for (let i = 3; i >= 1; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 10, 0, 0, 0, 0);
-      const variance = Math.round(base * (0.08 * (i - 1))); // small variation
-      const amount = Math.max(100, base - variance);
-      items.push({
-        id: `synth-audit-${d.getFullYear()}-${d.getMonth() + 1}`,
-        date: d.toISOString(),
-        amount,
-        description: 'Monthly tax audit payment',
-        type: 'expense'
-      });
-    }
-    return items;
-  }, [monthlyRoadTolls, monthlyVehicleTax, monthlyPayrollTaxes, monthlyCIT]);
-
-  /**
-   * seedSynthesizedIfNeeded
-   * @description If no existing audits found, persist synthesized audits into company.finances.transactions
-   * so they appear in the Transactions list and persist across reloads.
-   */
-  React.useEffect(() => {
-    try {
-      if (!gameState.company) return;
-      const existing = findExistingAudits();
-      if (existing && existing.length > 0) return; // already present
-
-      const synth = synthesizeAudits();
-      if (!synth || synth.length === 0) return;
-
-      // Persist by updating company.finances.transactions
-      const prevFinances = (gameState.company as any).finances || {};
-      const prevTxs = Array.isArray(prevFinances.transactions) ? prevFinances.transactions.slice() : [];
-      const merged = [...prevTxs, ...synth];
-
-      const updatedCompany = {
-        ...gameState.company,
-        finances: {
-          ...prevFinances,
-          transactions: merged
-        }
-      };
-      // createCompany will persist using GameContext APIs
-      createCompany(updatedCompany);
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    } catch (err) {
-      // ignore persistence failure
-      // eslint-disable-next-line no-console
-      console.warn('[AuditListGross] seeding audits failed', err);
-    }
-  }, [gameState.company, createCompany, findExistingAudits, synthesizeAudits]);
-
-  const auditsToRender = existingAudits.length > 0 ? existingAudits : (gameState.company as any)?.finances?.transactions?.filter((t: any) => {
-    const desc = String(t.description || '').toLowerCase();
-    return /tax|audit|tax payment|taxes|tax-audit/i.test(desc) || (t.type === 'tax') || (t.type === 'expense' && desc.includes('tax'));
-  })?.slice(-3) || [];
-
-  if (!auditsToRender || auditsToRender.length === 0) {
-    return <div className="text-slate-400">No tax audit records available.</div>;
+  if (!transactions || transactions.length === 0) {
+    return (
+      <div className="text-slate-400">
+        No tax audit records available. Monthly tax payments are processed on the 10th of each month and will appear here when paid.
+      </div>
+    );
   }
 
   return (
     <div className="space-y-2">
-      {auditsToRender.slice().reverse().map((a: any) => (
+      {transactions.map((a: any) => (
         <div key={a.id || (a.date + Math.random())} className="flex items-center justify-between bg-slate-700 p-2 rounded border border-slate-600">
           <div>
-            <div className="text-sm text-slate-200 font-medium">{a.description || 'Tax Audit'}</div>
+            <div className="text-sm text-slate-200 font-medium">{a.description || 'Monthly tax audit payment'}</div>
             <div className="text-xs text-slate-400">{formatISO(a.date)}</div>
           </div>
           <div className="text-right">

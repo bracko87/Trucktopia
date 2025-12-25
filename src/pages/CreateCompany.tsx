@@ -1,7 +1,12 @@
 /**
  * CreateCompany.tsx
  *
- * Full version with finance seeding fixed.
+ * Full version:
+ * - Original background, glow, branding
+ * - Custom dropdown with flags
+ * - FULL country + city list
+ * - Updated Supabase / Netlify cloud logic
+ * - creditScore preserved
  */
 
 import React, { useState, useRef, useEffect } from 'react';
@@ -12,7 +17,6 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Truck, ChevronDown, Check } from 'lucide-react';
-import { financeApply } from '../utils/financeClient';
 
 interface Country {
   code: string;
@@ -178,34 +182,7 @@ const CreateCompany: React.FC = () => {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Cloud update failed');
 
-      // Create locally first
       createCompany(newCompany);
-
-      // Best-effort finance seeding
-      try {
-        const idempotencyKey = `seed-${newCompany.id}-${Date.now()}`;
-        const seedCents = Math.round((newCompany.capital || 0) * 100);
-
-        const res = await financeApply({
-          companyId: newCompany.id,
-          deltaCents: seedCents,
-          type: 'income',
-          description: 'Seed capital',
-          idempotencyKey
-        });
-
-        if (res.success && typeof res.newBalanceCents === 'number') {
-          const canonicalEuros = res.newBalanceCents / 100;
-
-          createCompany({
-            ...newCompany,
-            capital: canonicalEuros
-          });
-        }
-      } catch (financeErr) {
-        console.warn('Finance seed failed:', financeErr);
-      }
-
       navigate('/dashboard');
     } catch (err: any) {
       alert(err.message);
@@ -215,52 +192,73 @@ const CreateCompany: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-900 p-4">
-      <Card className="w-full max-w-lg bg-slate-800 border-slate-700">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4 relative overflow-hidden">
+      <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_25%,rgba(68,68,68,0.2)_50%,transparent_75%,transparent_100%)] bg-[length:20px_20px]" />
+      <div className="absolute top-1/4 left-1/4 w-32 h-32 bg-yellow-500/10 rounded-full blur-xl animate-pulse" />
+      <div className="absolute bottom-1/3 right-1/4 w-24 h-24 bg-yellow-500/10 rounded-full blur-xl animate-pulse delay-1000" />
+
+      <Card className="w-full max-w-lg bg-slate-800/90 border-slate-700 relative z-10">
         <CardHeader className="text-center">
           <div className="flex items-center justify-center space-x-3 mb-4">
-            <div className="w-12 h-12 bg-yellow-600 rounded-xl flex items-center justify-center">
+            <div className="w-12 h-12 bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-xl flex items-center justify-center">
               <Truck className="h-6 w-6 text-white" />
             </div>
-            <h1 className="text-xl font-bold text-white">TRUCKTOPIA</h1>
+            <div className="text-left">
+              <h1 className="text-xl font-bold text-white">TRUCKTOPIA</h1>
+              <p className="text-yellow-500 text-sm">Every Route Counts</p>
+            </div>
           </div>
-          <CardTitle className="text-white">Create Your Company</CardTitle>
-          <CardDescription className="text-slate-400">
-            Choose your global hub
-          </CardDescription>
+          <CardTitle className="text-2xl font-bold text-white">Create Your Company</CardTitle>
+          <CardDescription className="text-slate-400">Choose your global hub</CardDescription>
         </CardHeader>
 
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
-            <Input
-              placeholder="Company Name"
-              value={formData.companyName}
-              onChange={e => setFormData(p => ({ ...p, companyName: e.target.value }))}
-              required
-            />
+            <div>
+              <label className="text-sm text-slate-300">Company Name</label>
+              <Input
+                value={formData.companyName}
+                onChange={e => setFormData(p => ({ ...p, companyName: e.target.value }))}
+                className="bg-slate-700 border-slate-600 text-white"
+                required
+              />
+            </div>
 
             <div ref={dropdownRef}>
+              <label className="text-sm text-slate-300">Hub Country</label>
               <button
                 type="button"
                 onClick={() => setIsCountryOpen(!isCountryOpen)}
-                className="w-full bg-slate-700 text-white px-3 py-2 rounded"
+                className="w-full mt-1 flex items-center justify-between bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white"
               >
-                {selectedCountry ? selectedCountry.name : 'Select Country'}
+                {selectedCountry ? (
+                  <div className="flex items-center space-x-2">
+                    <img src={getFlagUrl(selectedCountry.code)} className="w-6 h-4 rounded" />
+                    <span>{selectedCountry.name}</span>
+                  </div>
+                ) : (
+                  <span className="text-slate-400">Select Country</span>
+                )}
+                <ChevronDown className="w-4 h-4" />
               </button>
 
               {isCountryOpen && (
-                <div className="bg-slate-700 mt-2 rounded">
+                <div className="mt-2 max-h-60 overflow-y-auto bg-slate-800 border border-slate-700 rounded-lg">
                   {countries.map(c => (
                     <button
                       key={c.code}
                       type="button"
-                      className="block w-full text-left px-3 py-2 hover:bg-slate-600 text-white"
                       onClick={() => {
                         setFormData(p => ({ ...p, hubCountry: c.name, hubCity: '' }));
                         setIsCountryOpen(false);
                       }}
+                      className="w-full flex items-center justify-between px-3 py-2 hover:bg-slate-700 text-white"
                     >
-                      {c.name}
+                      <div className="flex items-center space-x-2">
+                        <img src={getFlagUrl(c.code)} className="w-6 h-4 rounded" />
+                        <span>{c.name}</span>
+                      </div>
+                      {formData.hubCountry === c.name && <Check className="w-4 h-4 text-yellow-500" />}
                     </button>
                   ))}
                 </div>
@@ -268,23 +266,28 @@ const CreateCompany: React.FC = () => {
             </div>
 
             {selectedCountry && (
-              <select
-                className="w-full bg-slate-700 text-white px-3 py-2 rounded"
-                value={formData.hubCity}
-                onChange={e => setFormData(p => ({ ...p, hubCity: e.target.value }))}
-                required
-              >
-                <option value="">Select City</option>
-                {selectedCountry.cities.map(city => (
-                  <option key={city} value={city}>
-                    {city}
-                  </option>
-                ))}
-              </select>
+              <div>
+                <label className="text-sm text-slate-300">Hub City</label>
+                <select
+                  value={formData.hubCity}
+                  onChange={e => setFormData(p => ({ ...p, hubCity: e.target.value }))}
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white"
+                  required
+                >
+                  <option value="">Select City</option>
+                  {selectedCountry.cities.map(city => (
+                    <option key={city} value={city}>{city}</option>
+                  ))}
+                </select>
+              </div>
             )}
 
-            <Button type="submit" disabled={isLoading || !formData.hubCity}>
-              {isLoading ? 'Creating…' : 'Create Company'}
+            <Button
+              type="submit"
+              disabled={isLoading || !formData.hubCity}
+              className="w-full bg-yellow-600 hover:bg-yellow-700 text-white"
+            >
+              {isLoading ? 'Saving to Cloud...' : 'Create Company'}
             </Button>
           </form>
         </CardContent>

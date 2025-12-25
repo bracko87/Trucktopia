@@ -7,14 +7,19 @@
  * - Expose finance calculations (monthly revenue/expenses, taxes, tolls, vehicle tax)
  * - Provide actions to add transactions, take/repay loans and manage leases
  * - Persist changes by delegating updated Company object to the GameContext.createCompany
+ * - Auto-record important expenses into Transactions so company balance history is visible
+ * - Run monthly tax collection on the 10th of each month (single payment per month)
  *
  * Notes:
  * - Money is displayed and calculated in USD only.
  * - Per your request we keep numbers as plain numbers (no cents integer migration).
- * - This module is isolated and does not modify hubs, company creation logic or unrelated systems.
+ * - This provider tries to be conservative and avoid double-deducting capital:
+ *   - If an external engine (GameContext) already deducted capital (e.g. startTraining),
+ *     the provider will create a matching transaction but will NOT deduct capital again.
+ *   - When the provider itself pays a scheduled obligation (monthly taxes), it will deduct capital.
  */
 
-import React, { createContext, useContext, ReactNode } from 'react';
+import React, { createContext, useContext, ReactNode, useEffect, useRef } from 'react';
 import { useGame } from './GameContext';
 import { Company } from '../types/game';
 
@@ -28,6 +33,7 @@ export interface FinancialTransaction {
   type: 'income' | 'expense' | 'tax' | 'loan' | 'repayment' | 'leasing';
   amount: number; // USD positive
   description?: string;
+  category?: string; // optional category (Staff, Maintenance, Loans, Taxes, Leasing, Equipment, Other)
   meta?: Record<string, any>;
 }
 
@@ -75,7 +81,7 @@ export interface FinancialsModel {
  */
 export interface FinancialContextType {
   finances: FinancialsModel;
-  addTransaction: (tx: FinancialTransaction) => void;
+  addTransaction: (tx: FinancialTransaction, opts?: { syncOnly?: boolean }) => void;
   takeLoan: (loan: Omit<LoanRecord, 'outstanding' | 'status' | 'startDate' | 'id'> & { id?: string }) => void;
   repayLoan: (loanId: string, amount: number) => void;
   addLease: (lease: Omit<LeaseRecord, 'startDate' | 'id' | 'status'> & { id?: string }) => void;
@@ -119,6 +125,9 @@ function todayISO() {
 export const FinancialProvider: React.FC<Props> = ({ children }) => {
   const { gameState, createCompany } = useGame();
 
+  // Keep last seen snapshot so we can auto-sync important events to transactions
+  const lastCompanyRef = useRef<Company | null>(null);
+
   /**
    * getFinancesModel
    * @description Ensure company.finances exists and returns a safe model
@@ -142,38 +151,52 @@ export const FinancialProvider: React.FC<Props> = ({ children }) => {
   };
 
   /**
-   * persistFinances
-   * @description Persist updated finances by calling createCompany with updated company object.
+   * persistTransactions
+   * @description Append transactions to company.finances.transactions and optionally adjust capital.
+   * If syncOnly === true we will NOT alter company.capital (used when GameContext already deducted amount).
    */
-  const persistFinances = (finances: FinancialsModel) => {
-    if (!gameState.currentUser || !gameState.company) return;
-    const updated: Company = {
-      ...gameState.company,
-      // @ts-ignore - attach finances on company
-      finances
-    };
-    // Reuse createCompany to persist changes (non-invasive to other systems)
-    createCompany(updated);
+  const persistTransactions = (txs: FinancialTransaction[], opts?: { syncOnly?: boolean }) => {
+    if (!gameState.company || !gameState.currentUser) return;
+    try {
+      const prevFinances = (gameState.company as any).finances || {};
+      const prevTxs = Array.isArray(prevFinances.transactions) ? prevFinances.transactions.slice() : [];
+      const merged = [...prevTxs, ...txs];
+
+      const updatedCompany: Company = {
+        ...gameState.company,
+        // @ts-ignore
+        finances: {
+          ...prevFinances,
+          transactions: merged
+        }
+      };
+
+      // If we should deduct capital (provider paying), reduce capital by total tx amounts (expenses/tax/repayment negative sign logic)
+      if (!opts?.syncOnly) {
+        const delta = txs.reduce((acc, it) => {
+          // income increases, others decrease
+          if (it.type === 'income' || it.type === 'loan') return acc + it.amount;
+          return acc - it.amount;
+        }, 0);
+        updatedCompany.capital = Math.max(0, Number((updatedCompany.capital || 0) + delta));
+      }
+
+      // Persist via createCompany (keeps other behavior intact)
+      createCompany(updatedCompany);
+    } catch (err) {
+      // best-effort persist
+      console.warn('[FinancialProvider] persistTransactions failed', err);
+    }
   };
 
   /**
    * addTransaction
-   * @description Append a transaction and update company capital accordingly.
+   * @description Append a single transaction. By default this will also adjust company capital.
+   * If opts.syncOnly === true the transaction will be recorded but capital will NOT be changed
+   * (useful when another system already applied the money change).
    */
-  const addTransaction = (tx: FinancialTransaction) => {
-    const finances = getFinancesModel();
-    const next = { ...finances, transactions: [...finances.transactions, tx] };
-    // update company capital: income increases, expense/tax decreases
-    if (gameState.company) {
-      const delta = tx.type === 'income' ? tx.amount : -tx.amount;
-      const updatedCompany: Company = { ...gameState.company, capital: Number((gameState.company.capital || 0) + delta) };
-      // attach finances then persist with createCompany to keep behavior consistent
-      // @ts-ignore
-      updatedCompany.finances = next;
-      createCompany(updatedCompany);
-    } else {
-      persistFinances(next);
-    }
+  const addTransaction = (tx: FinancialTransaction, opts?: { syncOnly?: boolean }) => {
+    persistTransactions([{ ...tx, date: tx.date || todayISO() }], { syncOnly: !!opts?.syncOnly });
   };
 
   /**
@@ -181,7 +204,6 @@ export const FinancialProvider: React.FC<Props> = ({ children }) => {
    * @description Create loan record and add proceeds as an income transaction.
    */
   const takeLoan = (loanPartial: Omit<LoanRecord, 'outstanding' | 'status' | 'startDate' | 'id'> & { id?: string }) => {
-    const finances = getFinancesModel();
     const id = loanPartial.id ?? `loan-${Date.now()}`;
     const startDate = todayISO();
     const loan: LoanRecord = {
@@ -198,17 +220,14 @@ export const FinancialProvider: React.FC<Props> = ({ children }) => {
       date: startDate,
       type: 'loan',
       amount: loan.principal,
-      description: `Loan received (${loan.id})`
+      description: `Loan received (${loan.id})`,
+      category: 'Loans'
     };
+    // Persist loan + tx and update capital (not syncOnly)
+    const finances = getFinancesModel();
     const next: FinancialsModel = { ...finances, loans: [...finances.loans, loan], transactions: [...finances.transactions, tx] };
-    persistFinances(next);
-    // Also update company capital immediately via createCompany (persistFinances uses createCompany)
-    if (gameState.company) {
-      const updatedCompany: Company = { ...gameState.company, capital: Number((gameState.company.capital || 0) + loan.principal) };
-      // @ts-ignore
-      updatedCompany.finances = next;
-      createCompany(updatedCompany);
-    }
+    // Persist by using persistTransactions to apply capital change
+    persistTransactions([tx], { syncOnly: false });
   };
 
   /**
@@ -227,18 +246,12 @@ export const FinancialProvider: React.FC<Props> = ({ children }) => {
       date: todayISO(),
       type: 'repayment',
       amount,
-      description: `Loan repayment (${loanId})`
+      description: `Loan repayment (${loanId})`,
+      category: 'Loans'
     };
-    const next: FinancialsModel = { ...finances, loans, transactions: [...finances.transactions, tx] };
-    // Deduct from capital
-    if (gameState.company) {
-      const updatedCompany: Company = { ...gameState.company, capital: Number((gameState.company.capital || 0) - amount) };
-      // @ts-ignore
-      updatedCompany.finances = next;
-      createCompany(updatedCompany);
-    } else {
-      persistFinances(next);
-    }
+    // Deduct capital when repaying
+    persistTransactions([tx], { syncOnly: false });
+    // persist loan state by creating company (we rely on persistTransactions->createCompany for final persist)
   };
 
   /**
@@ -246,12 +259,18 @@ export const FinancialProvider: React.FC<Props> = ({ children }) => {
    * @description Add a leasing obligation and register first transaction (optional).
    */
   const addLease = (leasePartial: Omit<LeaseRecord, 'startDate' | 'id' | 'status'> & { id?: string }) => {
-    const finances = getFinancesModel();
     const id = leasePartial.id ?? `lease-${Date.now()}`;
     const startDate = todayISO();
     const lease: LeaseRecord = { id, assetLabel: leasePartial.assetLabel, monthlyPayment: leasePartial.monthlyPayment, remainingMonths: leasePartial.remainingMonths, startDate, status: 'active' };
-    const next: FinancialsModel = { ...finances, leases: [...finances.leases, lease] };
-    persistFinances(next);
+    const tx: FinancialTransaction = {
+      id: `tx-${Date.now()}`,
+      date: startDate,
+      type: 'leasing',
+      amount: lease.monthlyPayment,
+      description: `Lease started: ${lease.assetLabel}`,
+      category: 'Leasing'
+    };
+    persistTransactions([tx], { syncOnly: false });
   };
 
   /**
@@ -342,7 +361,7 @@ export const FinancialProvider: React.FC<Props> = ({ children }) => {
       if (d >= startOfMonth && d < endOfMonth && (t.type === 'expense' || t.type === 'tax' || t.type === 'repayment' || t.type === 'leasing')) return acc + t.amount;
       return acc;
     }, 0);
-    const payroll = monthlyPayrollTaxes(); // payroll taxes, but payroll itself already part of expenses if recorded; include payroll taxes as deductible expense here
+    const payroll = monthlyPayrollTaxes();
     const tolls = monthlyRoadTolls();
     const leases = (finances.leases || []).reduce((acc, l) => acc + (l.status === 'active' ? l.monthlyPayment : 0), 0);
     const taxableProfit = Math.max(0, income - (expenses + payroll + tolls + leases));
@@ -376,6 +395,231 @@ export const FinancialProvider: React.FC<Props> = ({ children }) => {
     const leases = (finances.leases || []).reduce((acc, l) => acc + (l.status === 'active' ? l.monthlyPayment : 0), 0);
     return Number(income - expenses - payrollTaxes - tolls - vehicleTax - cit - leases);
   };
+
+  /**
+   * Auto-sync important events to Transactions
+   *
+   * - Training started: GameContext.startTraining deducts cost immediately. We detect new training entries
+   *   and create a matching 'expense' transaction for transparency (syncOnly so we don't double-deduct).
+   *
+   * - Other capital changes that are not accompanied by a known category are recorded as a single
+   *   "System expense/income" transaction (this ensures every capital change has a visible transaction).
+   *
+   * This effect compares the lastCompanyRef to the current snapshot.
+   */
+  useEffect(() => {
+    try {
+      const prev = lastCompanyRef.current;
+      const cur = gameState.company;
+      if (!cur) {
+        lastCompanyRef.current = null;
+        return;
+      }
+
+      // First mount: set snapshot and exit
+      if (!prev) {
+        lastCompanyRef.current = cur;
+        return;
+      }
+
+      const createdTxs: FinancialTransaction[] = [];
+
+      // 1) Training started detection: any staff that has training in cur and did not in prev
+      const prevStaffById = new Map((prev.staff || []).map((s: any) => [String(s.id), s]));
+      (cur.staff || []).forEach((s: any) => {
+        try {
+          const pid = prevStaffById.get(String(s.id));
+          const prevTraining = pid ? pid.training : null;
+          const curTraining = s.training ?? null;
+          if (!prevTraining && curTraining && typeof curTraining.cost === 'number') {
+            // Training cost already deducted by GameContext.startTraining; create sync-only tx for visibility
+            createdTxs.push({
+              id: `tx-training-${s.id}-${Date.now()}`,
+              date: curTraining.startDate || todayISO(),
+              type: 'expense',
+              amount: Number(curTraining.cost || 0),
+              description: `Training: ${s.name} - ${curTraining.skill}`,
+              category: 'Staff',
+              meta: { staffId: s.id, training: true }
+            });
+          }
+        } catch {
+          // ignore per-staff errors
+        }
+      });
+
+      // 2) Detect capital delta not explained by the above transactions.
+      // Compute numeric capital difference between prev and cur.
+      const prevCap = Number(prev.capital || 0);
+      const curCap = Number(cur.capital || 0);
+      const capDelta = Math.round((curCap - prevCap) * 100) / 100; // can be negative
+
+      // Sum of createdTxs amounts (expenses are positive amounts here)
+      const createdSum = createdTxs.reduce((s, t) => s + (t.type === 'income' ? t.amount : t.amount), 0);
+      // If capital decreased and we did not create txs matching the absolute drop -> create a generic expense tx (syncOnly)
+      if (capDelta < 0) {
+        const unexplained = Math.abs(capDelta) - createdSum;
+        if (unexplained > 0.5) {
+          createdTxs.push({
+            id: `tx-auto-expense-${Date.now()}`,
+            date: todayISO(),
+            type: 'expense',
+            amount: Number(Math.round(unexplained)),
+            description: 'Automatic expense (system sync)',
+            category: 'Other',
+            meta: { inferred: true }
+          });
+        }
+      } else if (capDelta > 0) {
+        // Capital increased (income or loan). If no explicit loan/income tx exists we create one visible tx.
+        const existingIncome = (getFinancesModel().transactions || []).slice().reverse().find(t => t.type === 'income' || t.type === 'loan');
+        // only create if no recent income in same second
+        if (!existingIncome) {
+          createdTxs.push({
+            id: `tx-auto-income-${Date.now()}`,
+            date: todayISO(),
+            type: 'income',
+            amount: Number(Math.round(capDelta)),
+            description: 'Automatic income (system sync)',
+            category: 'Other',
+            meta: { inferred: true }
+          });
+        }
+      }
+
+      // Persist createdTxs as syncOnly (do not double-deduct). If any txs, record them.
+      if (createdTxs.length > 0) {
+        persistTransactions(createdTxs, { syncOnly: true });
+      }
+
+      // update snapshot
+      lastCompanyRef.current = cur;
+    } catch (err) {
+      console.warn('[FinancialProvider] auto-sync error', err);
+      lastCompanyRef.current = gameState.company ?? null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameState.company]);
+
+  /**
+   * Monthly tax collection (single payment on 10th of each month)
+   *
+   * Behavior:
+   * - Runs on mount and whenever company changes
+   * - If today is the 10th and taxes for the current (year-month) have NOT been paid yet,
+   *   compute the tax breakdown:
+   *    - Payroll Taxes
+   *    - Vehicle Tax (monthly prorated)
+   *    - Road Tolls
+   *    - CIT (corporate income tax)
+   * - Create separate tax transactions for each box (type 'tax', category = specific)
+   * - Deduct the total from company.capital once (persist via createCompany)
+   * - Record a local marker (localStorage tm_tax_paid_<companyId>_<YYYY-MM>) so it's only paid once per month
+   */
+  useEffect(() => {
+    try {
+      const company = gameState.company;
+      if (!company || !gameState.currentUser) return;
+      const now = new Date();
+      const day = now.getDate();
+      // Only run tax & payroll payment on the 10th of each month (single-run)
+      if (day !== 10) return;
+
+      const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      const key = `tm_tax_paid_${company.id}_${ym}`;
+      if (localStorage.getItem(key)) {
+        // already paid this month
+        return;
+      }
+
+      // Compute each obligation
+      const payrollTax = monthlyPayrollTaxes(); // payroll taxes (e.g. 30% payroll)
+      const vehicle = monthlyVehicleTax();
+      const tolls = monthlyRoadTolls();
+      const cit = monthlyCIT();
+
+      // Compute gross monthly salaries (actual payouts) - ensure realistic salary recording
+      const grossSalaries = Array.isArray((company as any).staff)
+        ? (company as any).staff.reduce((s: number, st: any) => s + (Number(st.salary || 0) || 0), 0)
+        : 0;
+
+      // Build separate transactions for each obligation (amounts positive)
+      const txs: FinancialTransaction[] = [];
+
+      // 1) Salaries (actual payroll payout) - recorded as an expense
+      if (grossSalaries > 0) {
+        txs.push({
+          id: `tx-salary-${Date.now()}`,
+          date: todayISO(),
+          type: 'expense',
+          amount: Math.round(grossSalaries),
+          description: 'Staff salaries (monthly payroll)',
+          category: 'Staff Salaries'
+        });
+      }
+
+      // 2) Payroll taxes (separate tax entry)
+      if (payrollTax > 0) {
+        txs.push({
+          id: `tx-tax-payroll-${Date.now()}`,
+          date: todayISO(),
+          type: 'tax',
+          amount: Math.round(payrollTax),
+          description: 'Payroll taxes (monthly)',
+          category: 'Payroll Taxes'
+        });
+      }
+
+      if (vehicle > 0) {
+        txs.push({
+          id: `tx-tax-vehicle-${Date.now()}`,
+          date: todayISO(),
+          type: 'tax',
+          amount: Math.round(vehicle),
+          description: 'Vehicle tax (monthly)',
+          category: 'Vehicle Tax'
+        });
+      }
+
+      if (tolls > 0) {
+        txs.push({
+          id: `tx-tax-tolls-${Date.now()}`,
+          date: todayISO(),
+          type: 'tax',
+          amount: Math.round(tolls),
+          description: 'Road tolls (monthly)',
+          category: 'Road Tolls'
+        });
+      }
+
+      if (cit > 0) {
+        txs.push({
+          id: `tx-tax-cit-${Date.now()}`,
+          date: todayISO(),
+          type: 'tax',
+          amount: Math.round(cit),
+          description: 'Corporate income tax (monthly estimate)',
+          category: 'CIT'
+        });
+      }
+
+      // If no obligations, mark as paid and exit
+      const total = txs.reduce((s, t) => s + (t.type === 'income' || t.type === 'loan' ? t.amount : t.amount), 0);
+      if (total <= 0) {
+        localStorage.setItem(key, '1');
+        return;
+      }
+
+      // Persist and deduct capital once (provider pays). This will deduct the sum of all expense/tax txs.
+      persistTransactions(txs, { syncOnly: false });
+
+      // Mark as paid for this month so it doesn't run again
+      localStorage.setItem(key, '1');
+    } catch (err) {
+      console.warn('[FinancialProvider] monthly tax collection failed', err);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameState.company, gameState.currentUser]);
 
   const ctxValue: FinancialContextType = {
     finances: getFinancesModel(),
