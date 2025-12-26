@@ -10,23 +10,28 @@
  * - Update company.capital (PATCH) and insert finances_transactions (POST)
  *
  * Notes:
- * - This function requires SUPABASE_URL and SUPABASE_SERVICE_ROLE environment variables.
+ * - This function requires SUPABASE_URL and a service role key (SUPABASE_SERVICE_ROLE or SUPABASE_SERVICE_ROLE_KEY).
  * - For local testing use `netlify dev` and set those env vars locally to avoid incurring cloud costs.
  */
 
 /**
  * svcFetch
  * @description Perform fetch calls with Service Role headers and return parsed body.
+ *              Uses resolved SERVICE_ROLE (reads SUPABASE_SERVICE_ROLE || SUPABASE_SERVICE_ROLE_KEY).
  * @param {string} url
  * @param {object} opts
  */
 async function svcFetch(url, opts) {
   opts = opts || {};
+
+  // Resolve service role key at runtime from either env var name to avoid 401 when only KEY name is set.
+  const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
   const headers = Object.assign(
     {
       'Content-Type': 'application/json',
-      apikey: process.env.SUPABASE_SERVICE_ROLE,
-      Authorization: 'Bearer ' + process.env.SUPABASE_SERVICE_ROLE
+      apikey: SERVICE_ROLE,
+      Authorization: 'Bearer ' + SERVICE_ROLE
     },
     opts.headers || {}
   );
@@ -48,10 +53,10 @@ exports.handler = async function (event) {
     }
 
     const SUPABASE_URL = process.env.SUPABASE_URL || '';
-    const SUPABASE_SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+    const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE) {
-      console.error('[finance-apply] missing SUPABASE_URL or SERVICE_ROLE');
+    if (!SUPABASE_URL || !SERVICE_ROLE) {
+      console.error('[finance-apply] missing SUPABASE_URL or SERVICE_ROLE env var');
       return { statusCode: 500, body: JSON.stringify({ success: false, message: 'Server not configured' }) };
     }
 
@@ -77,7 +82,7 @@ exports.handler = async function (event) {
     let meta = body.meta ?? {}; // default to empty object
 
     // Defensive: if caller provided "null" string or non-object, coerce to {}
-    if (meta === null || typeof meta === 'string' && meta.toLowerCase() === 'null') meta = {};
+    if (meta === null || (typeof meta === 'string' && meta.toLowerCase() === 'null')) meta = {};
     if (typeof meta !== 'object' || Array.isArray(meta)) meta = {};
 
     const actorUserId = body.actorUserId ?? null;
@@ -108,7 +113,7 @@ exports.handler = async function (event) {
     const companyRes = await svcFetch(companyUrl, { method: 'GET' });
     if (!companyRes.ok) {
       console.error('[finance-apply] failed to read company', companyRes.status, companyRes.text);
-      return { statusCode: 500, body: JSON.stringify({ success: false, message: 'Failed to read company data', info: companyRes.text }) };
+      return { statusCode: companyRes.status || 500, body: JSON.stringify({ success: false, message: 'Failed to read company data', info: companyRes.text }) };
     }
     const companyData = Array.isArray(companyRes.json) && companyRes.json.length > 0 ? companyRes.json[0] : null;
     if (!companyData) {
@@ -142,6 +147,13 @@ exports.handler = async function (event) {
       idempotency_key: idempotencyKey,
       actor_user_id: actorUserId
     };
+
+    // Debug: log txBody server-side to inspect what is being inserted (helps catch meta=null issues)
+    try {
+      console.log('finance-apply txBody:', JSON.stringify(txBody));
+    } catch (e) {
+      // ignore logging errors
+    }
 
     const insertRes = await svcFetch(insertUrl, {
       method: 'POST',
