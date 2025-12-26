@@ -1,34 +1,45 @@
 /**
  * finance-apply.js
  *
- * Netlify function wrapper implementing a safe REST-based finance apply flow.
+ * Netlify function: safe finance apply wrapper using Supabase REST.
  *
  * Responsibilities:
  * - Validate incoming payload
- * - Provide idempotent behaviour by checking finances_transactions for an existing idempotency_key
- * - Update company balance and insert finances_transactions using the Supabase REST API
- *   while running with the SERVICE_ROLE key (server-side)
+ * - Ensure finances_transactions.meta is never NULL (DB has NOT NULL constraint)
+ * - Provide idempotent behavior by checking existing idempotency_key
+ * - Update company.capital (PATCH) and insert finances_transactions (POST)
  *
- * Rationale:
- * The previously used database RPC produced a "column reference ... ambiguous" error
- * in some environments. This implementation uses REST table operations with the
- * service role key to achieve the same result without depending on the RPC.
- *
- * Note:
- * - This implementation is best-effort and tries to keep behaviour compatible with
- *   the RPC (returns the inserted transaction and newBalanceCents). It does not
- *   provide full transactional atomicity across the two REST calls (check+update+insert),
- *   but it enforces idempotency by checking for an existing idempotency_key and will
- *   return the existing transaction if found.
+ * Notes:
+ * - This function requires SUPABASE_URL and SUPABASE_SERVICE_ROLE environment variables.
+ * - For local testing use `netlify dev` and set those env vars locally to avoid incurring cloud costs.
  */
 
 /**
+ * svcFetch
+ * @description Perform fetch calls with Service Role headers and return parsed body.
+ * @param {string} url
+ * @param {object} opts
+ */
+async function svcFetch(url, opts) {
+  opts = opts || {};
+  const headers = Object.assign(
+    {
+      'Content-Type': 'application/json',
+      apikey: process.env.SUPABASE_SERVICE_ROLE,
+      Authorization: 'Bearer ' + process.env.SUPABASE_SERVICE_ROLE
+    },
+    opts.headers || {}
+  );
+  const res = await fetch(url, Object.assign({}, opts, { headers }));
+  const text = await res.text().catch(() => '');
+  let json;
+  try { json = text ? JSON.parse(text) : null; } catch { json = text; }
+  return { ok: res.ok, status: res.status, json, text };
+}
+
+/**
  * handler
- * @description Netlify function entry. Accepts POST requests with JSON body:
- *  { companyId, deltaCents, type, description?, meta?, idempotencyKey?, actorUserId? }
- *
- * Returns:
- *  { success: true, transaction: {...}, newBalanceCents: number, raw: any }
+ * @description Netlify function entrypoint
  */
 exports.handler = async function (event) {
   try {
@@ -44,7 +55,7 @@ exports.handler = async function (event) {
       return { statusCode: 500, body: JSON.stringify({ success: false, message: 'Server not configured' }) };
     }
 
-    // Parse body safely
+    // Parse body safely (handle base64-encoded Netlify body)
     let bodyRaw = event.isBase64Encoded ? Buffer.from(event.body, 'base64').toString('utf8') : event.body;
     let body;
     try {
@@ -54,7 +65,7 @@ exports.handler = async function (event) {
       return { statusCode: 400, body: JSON.stringify({ success: false, message: 'Invalid JSON body' }) };
     }
 
-    // Basic validation
+    // Basic validation & mapping
     const companyId = body && body.companyId ? String(body.companyId) : null;
     const delta = typeof body.deltaCents === 'number' ? Math.round(Number(body.deltaCents)) : (body.deltaCents ? Math.round(Number(body.deltaCents)) : NaN);
     if (!companyId) return { statusCode: 400, body: JSON.stringify({ success: false, message: 'companyId required' }) };
@@ -63,33 +74,17 @@ exports.handler = async function (event) {
     const idempotencyKey = body.idempotencyKey ? String(body.idempotencyKey) : null;
     const txType = body.type ? String(body.type) : null;
     const description = body.description ?? null;
-    const meta = body.meta ?? null;
-    const actorUserId = body.actorUserId ?? null;
+    let meta = body.meta ?? {}; // default to empty object
 
-    /**
-     * svcFetch
-     * @description perform fetch calls with Service Role headers and return parsed body
-     */
-    async function svcFetch(url, opts) {
-      opts = opts || {};
-      const headers = Object.assign(
-        {
-          'Content-Type': 'application/json',
-          apikey: SUPABASE_SERVICE_ROLE,
-          Authorization: 'Bearer ' + SUPABASE_SERVICE_ROLE
-        },
-        opts.headers || {}
-      );
-      const res = await fetch(url, Object.assign({}, opts, { headers }));
-      const text = await res.text().catch(() => '');
-      let json;
-      try { json = text ? JSON.parse(text) : null; } catch { json = text; }
-      return { ok: res.ok, status: res.status, json, text };
-    }
+    // Defensive: if caller provided "null" string or non-object, coerce to {}
+    if (meta === null || typeof meta === 'string' && meta.toLowerCase() === 'null') meta = {};
+    if (typeof meta !== 'object' || Array.isArray(meta)) meta = {};
+
+    const actorUserId = body.actorUserId ?? null;
 
     const base = SUPABASE_URL.replace(/\/+$/, '');
 
-    // 1) If idempotencyKey provided, check for existing transaction
+    // Idempotency check: return existing transaction if idempotencyKey matches
     if (idempotencyKey) {
       try {
         const existsUrl = `${base}/rest/v1/finances_transactions?company_id=eq.${companyId}&idempotency_key=eq.${encodeURIComponent(idempotencyKey)}&select=*`;
@@ -108,7 +103,7 @@ exports.handler = async function (event) {
       }
     }
 
-    // 2) Read current company balance using an unambiguous select (capital_cents)
+    // 1) Read company current balance
     const companyUrl = `${base}/rest/v1/companies?id=eq.${companyId}&select=capital_cents`;
     const companyRes = await svcFetch(companyUrl, { method: 'GET' });
     if (!companyRes.ok) {
@@ -123,7 +118,7 @@ exports.handler = async function (event) {
     const currentBalance = typeof companyData.capital_cents === 'number' ? companyData.capital_cents : (companyData.capital_cents ? Number(companyData.capital_cents) : 0);
     const newBalance = currentBalance + Number(delta);
 
-    // 3) Update company balance (PATCH) - use id-based filter 'id=eq.<companyId>'
+    // 2) Patch company balance
     const updateUrl = `${base}/rest/v1/companies?id=eq.${companyId}`;
     const updateRes = await svcFetch(updateUrl, {
       method: 'PATCH',
@@ -135,7 +130,7 @@ exports.handler = async function (event) {
       return { statusCode: 500, body: JSON.stringify({ success: false, message: 'Failed to update company balance', info: updateRes.text }) };
     }
 
-    // 4) Insert transaction row into finances_transactions
+    // 3) Insert transaction row. Ensure meta is a non-null object.
     const insertUrl = `${base}/rest/v1/finances_transactions`;
     const txBody = {
       company_id: companyId,
@@ -143,10 +138,11 @@ exports.handler = async function (event) {
       amount: delta,
       balance_after: newBalance,
       description: description,
-      meta: meta,
+      meta: meta ?? {}, // ensure non-null for NOT NULL column
       idempotency_key: idempotencyKey,
       actor_user_id: actorUserId
     };
+
     const insertRes = await svcFetch(insertUrl, {
       method: 'POST',
       headers: { Prefer: 'return=representation' },
@@ -154,8 +150,8 @@ exports.handler = async function (event) {
     });
 
     if (!insertRes.ok) {
-      // Attempt to detect concurrent insert with same idempotency_key and return it
       console.error('[finance-apply] insert failed', insertRes.status, insertRes.text);
+      // Try to detect concurrent insert by idempotency key
       if (idempotencyKey) {
         try {
           const fetchAgainUrl = `${base}/rest/v1/finances_transactions?company_id=eq.${companyId}&idempotency_key=eq.${encodeURIComponent(idempotencyKey)}&select=*`;
@@ -169,10 +165,10 @@ exports.handler = async function (event) {
           console.warn('[finance-apply] post-insert idempotency fetch failed', e && e.message ? e.message : String(e));
         }
       }
+
       return { statusCode: 500, body: JSON.stringify({ success: false, message: 'Failed to insert transaction', info: insertRes.text }) };
     }
 
-    // Normalize inserted transaction (Supabase returns an array when Prefer=return=representation)
     let inserted = insertRes.json;
     if (Array.isArray(inserted) && inserted.length > 0) inserted = inserted[0];
 
