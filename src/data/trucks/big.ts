@@ -1447,6 +1447,7 @@ export const BIG_TRUCKS: Truck[] = [
       fuelTankCapacity: 400,
       gcw: 'A'
     },
+    image: 'https://i.ibb.co/Kx27FHRJ/faw-j6p-3.png',
     truckCategory: 'Big',
     gcw: 'A'
   },
@@ -1471,6 +1472,7 @@ export const BIG_TRUCKS: Truck[] = [
       fuelTankCapacity: 400,
       gcw: 'A'
     },
+    image: 'https://i.ibb.co/chcD2HHf/fow-j6e-3.png',
     truckCategory: 'Big',
     gcw: 'A'
   },
@@ -1615,6 +1617,7 @@ export const BIG_TRUCKS: Truck[] = [
       fuelTankCapacity: 380,
       gcw: 'A'
     },
+    image: 'https://i.ibb.co/8QyHmB6/Dingfeng-EQ4180-VFN-3.png',
     truckCategory: 'Big',
     gcw: 'A'
   },
@@ -1687,6 +1690,7 @@ export const BIG_TRUCKS: Truck[] = [
       fuelTankCapacity: 400,
       gcw: 'A'
     },
+    image: 'https://i.ibb.co/whB91Jk0/Shacmen-SX4180-XC13-3.png',
     truckCategory: 'Big',
     gcw: 'A'
   },
@@ -1711,6 +1715,7 @@ export const BIG_TRUCKS: Truck[] = [
       fuelTankCapacity: 440,
       gcw: 'A'
     },
+    image: 'https://i.ibb.co/DHz4KWnd/Shacmen-f3000-3.png',
     truckCategory: 'Big',
     gcw: 'A'
   },
@@ -2409,15 +2414,16 @@ export const BIG_TRUCKS: Truck[] = [
       fuelTankCapacity: 300,
       gcw: 'A'
     },
+    image: 'https://i.ibb.co/wNhdNz39/Ashok-Leyland-4020-3.png',
     truckCategory: 'Big',
     gcw: 'A'
   },
   {
-    id: 'bhorat-benz-028',
+    id: 'bhorat-benz-5028',
     type: 'truck',
     category: 'new',
     brand: 'Bhorat Benz',
-    model: '%028',
+    model: '5028',
     tonnage: 18,
     price: 89900,
     condition: 100,
@@ -2433,6 +2439,7 @@ export const BIG_TRUCKS: Truck[] = [
       fuelTankCapacity: 455,
       gcw: 'A'
     },
+    image: 'https://i.ibb.co/67Bn1sk5/Bhorat-Benz-5028-3.png',
     truckCategory: 'Big',
     gcw: 'A'
   }

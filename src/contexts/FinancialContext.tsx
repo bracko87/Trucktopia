@@ -22,6 +22,8 @@
 import React, { createContext, useContext, ReactNode, useEffect, useRef } from 'react';
 import { useGame } from './GameContext';
 import { Company } from '../types/game';
+import { financeApply } from '../utils/financeClient';
+import getUserAccessToken from '../utils/getUserAccessToken';
 
 /**
  * FinancialTransaction
@@ -203,6 +205,11 @@ export const FinancialProvider: React.FC<Props> = ({ children }) => {
    * takeLoan
    * @description Create loan record and add proceeds as an income transaction.
    */
+  /**
+   * takeLoan
+   * @description Create loan record and call server RPC to apply proceeds atomically.
+   *              Falls back to local persist when server call fails.
+   */
   const takeLoan = (loanPartial: Omit<LoanRecord, 'outstanding' | 'status' | 'startDate' | 'id'> & { id?: string }) => {
     const id = loanPartial.id ?? `loan-${Date.now()}`;
     const startDate = todayISO();
@@ -223,16 +230,94 @@ export const FinancialProvider: React.FC<Props> = ({ children }) => {
       description: `Loan received (${loan.id})`,
       category: 'Loans'
     };
-    // Persist loan + tx and update capital (not syncOnly)
-    const finances = getFinancesModel();
-    const next: FinancialsModel = { ...finances, loans: [...finances.loans, loan], transactions: [...finances.transactions, tx] };
-    // Persist by using persistTransactions to apply capital change
-    persistTransactions([tx], { syncOnly: false });
+
+    (async () => {
+      try {
+        // Retrieve a user access token (best-effort)
+        const token = getUserAccessToken();
+
+        // Try to apply on server (delta in cents)
+        const res = await financeApply({
+          companyId: (gameState.company as Company)?.id ?? '',
+          deltaCents: Math.round(loan.principal * 100),
+          type: 'loan',
+          description: `Loan received (${loan.id})`,
+          token
+        });
+
+        if (res && res.success) {
+          // Server applied change. Merge server transaction (if any) and reconcile capital
+          const finances = getFinancesModel();
+          const mergedLoans = [...finances.loans, loan];
+
+          // Prefer server-provided transaction row to avoid duplicate synthetic rows
+          const serverTx = res.transaction ?? tx;
+          const existingTxs = Array.isArray(finances.transactions) ? finances.transactions.slice() : [];
+          let mergedTxs = existingTxs;
+
+          // Detect duplicates by id when possible
+          if (serverTx && serverTx.id) {
+            const found = existingTxs.some((t: any) => String(t.id) === String(serverTx.id));
+            if (!found) mergedTxs = [...existingTxs, serverTx];
+          } else {
+            // fallback: use heuristics (timestamp + amount + description) to avoid trivial duplicates
+            const similar = existingTxs.some((t: any) => {
+              try {
+                return t.amount === serverTx.amount && t.description === serverTx.description && new Date(t.date).toISOString() === new Date(serverTx.date).toISOString();
+              } catch {
+                return false;
+              }
+            });
+            if (!similar) mergedTxs = [...existingTxs, serverTx];
+          }
+
+          const updatedCompany: Company = {
+            ...(gameState.company as Company),
+            // @ts-ignore
+            finances: {
+              ...((gameState.company as any)?.finances ?? {}),
+              loans: mergedLoans,
+              transactions: mergedTxs
+            }
+          };
+
+          // If server returned canonical new balance in cents, use it (best source)
+          if (typeof res.newBalanceCents === 'number') {
+            updatedCompany.capital = Number(res.newBalanceCents) / 100;
+          } else {
+            // Fallback: add principal to local capital
+            updatedCompany.capital = Math.max(0, Number(((updatedCompany.capital || 0) + loan.principal)));
+          }
+
+          // Persist via GameContext.createCompany if available
+          try {
+            createCompany(updatedCompany);
+          } catch {
+            // fallback: best-effort local persist
+            persistTransactions([tx], { syncOnly: false });
+          }
+          return;
+        }
+
+        // If server reports failure, fallback to local persist
+        persistTransactions([tx], { syncOnly: false });
+      } catch (err) {
+        // On network or RPC error, fallback to local persist to keep UX working
+        // eslint-disable-next-line no-console
+        console.warn('[FinancialProvider.takeLoan] financeApply failed, falling back to local persist', err);
+        persistTransactions([tx], { syncOnly: false });
+      }
+    })();
   };
 
   /**
    * repayLoan
    * @description Pay down loan outstanding and create repayment transaction; does not compute amortization schedule.
+   */
+  /**
+   * repayLoan
+   * @description Pay down loan outstanding and create repayment transaction;
+   *              attempt to call server RPC to perform atomic repayment. Falls back to local persist.
    */
   const repayLoan = (loanId: string, amount: number) => {
     const finances = getFinancesModel();
@@ -249,9 +334,71 @@ export const FinancialProvider: React.FC<Props> = ({ children }) => {
       description: `Loan repayment (${loanId})`,
       category: 'Loans'
     };
-    // Deduct capital when repaying
-    persistTransactions([tx], { syncOnly: false });
-    // persist loan state by creating company (we rely on persistTransactions->createCompany for final persist)
+
+    (async () => {
+      try {
+        const token = getUserAccessToken();
+
+        const res = await financeApply({
+          companyId: (gameState.company as Company)?.id ?? '',
+          deltaCents: -Math.round(amount * 100),
+          type: 'repayment',
+          description: `Loan repayment (${loanId})`,
+          token
+        });
+
+        if (res && res.success) {
+          // Prefer server-provided transaction row to avoid duplicate synthetic rows
+          const serverTx = res.transaction ?? tx;
+          const existingTxs = Array.isArray(finances.transactions) ? finances.transactions.slice() : [];
+          let mergedTxs = existingTxs;
+
+          if (serverTx && serverTx.id) {
+            const found = existingTxs.some((t: any) => String(t.id) === String(serverTx.id));
+            if (!found) mergedTxs = [...existingTxs, serverTx];
+          } else {
+            const similar = existingTxs.some((t: any) => {
+              try {
+                return t.amount === serverTx.amount && t.description === serverTx.description && new Date(t.date).toISOString() === new Date(serverTx.date).toISOString();
+              } catch {
+                return false;
+              }
+            });
+            if (!similar) mergedTxs = [...existingTxs, serverTx];
+          }
+
+          // Persist repayment tx locally (syncOnly so we don't double-deduct)
+          persistTransactions([], { syncOnly: true }); // no-op persist; we'll persist via createCompany below
+
+          // Update loan outstanding locally and persist company if server returned canonical balance
+          const updatedCompany: Company = {
+            ...(gameState.company as Company),
+            // @ts-ignore
+            finances: {
+              ...((gameState.company as any)?.finances ?? {}),
+              loans,
+              transactions: mergedTxs
+            }
+          };
+          if (typeof res.newBalanceCents === 'number') {
+            updatedCompany.capital = Number(res.newBalanceCents) / 100;
+          }
+          try {
+            createCompany(updatedCompany);
+          } catch {
+            // ignore
+          }
+          return;
+        }
+
+        // Fallback: persist and deduct capital locally
+        persistTransactions([tx], { syncOnly: false });
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[FinancialProvider.repayLoan] financeApply failed, falling back to local persist', err);
+        persistTransactions([tx], { syncOnly: false });
+      }
+    })();
   };
 
   /**

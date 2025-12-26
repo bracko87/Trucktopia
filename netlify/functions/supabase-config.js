@@ -1,65 +1,71 @@
 /**
- * supabase-config.js
+ * netlify/functions/supabase-config.js
  *
- * Netlify serverless function that returns runtime Supabase configuration to the client.
+ * Serverless function to expose public Supabase runtime config to the client.
  *
  * Responsibilities:
- * - Expose SUPABASE_URL and SUPABASE_ANON_KEY (read from process.env) to client code that needs them.
- * - Return a helpful 404-like message (500) when vars are not present so client can fallback gracefully.
+ * - Return SUPABASE_URL and SUPABASE_ANON_KEY (or SUPABASE_ANON) for client use.
+ * - Never expose SUPABASE_SERVICE_ROLE (service role must remain secret).
+ * - Handle CORS and OPTIONS preflight.
  *
- * Security note:
- * - The Supabase anon key is intended for public client use for typical auth operations.
- * - If you prefer not to expose keys, use the reset-password function which calls Supabase server-side.
+ * Security:
+ * - Ensure service role is NOT returned.
+ *
+ * Expected env vars on Netlify:
+ * - SUPABASE_URL
+ * - SUPABASE_ANON_KEY (or SUPABASE_ANON)
+ *
+ * Request:
+ * - Method: GET
+ *
+ * Response (200):
+ * { SUPABASE_URL: "...", SUPABASE_ANON_KEY: "..." }
  */
 
-/* eslint-disable no-undef */
-exports.handler = async (event) => {
-  const headers = {
-    'Content-Type': 'application/json',
-    // Allow any origin to call; adjust for stricter security if needed
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type'
+exports.handler = async function (event) {
+  /**
+   * buildResponse
+   * @description Helper to build HTTP response with CORS headers.
+   * @param {number} status
+   * @param {object|string} body
+   */
+  const buildResponse = (status, body) => {
+    return {
+      statusCode: status,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS'
+      },
+      body: typeof body === 'string' ? body : JSON.stringify(body)
+    };
   };
 
-  // Handle OPTIONS preflight
-  if (event.httpMethod === 'OPTIONS') {
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({ ok: true })
-    };
-  }
-
   try {
+    // Support preflight
+    if (event.httpMethod === 'OPTIONS') {
+      return buildResponse(200, { ok: true });
+    }
+
+    if (event.httpMethod !== 'GET') {
+      return buildResponse(405, { success: false, message: 'Method Not Allowed' });
+    }
+
     const SUPABASE_URL = process.env.SUPABASE_URL || null;
     const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_ANON || null;
 
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-      return {
-        statusCode: 404,
-        headers,
-        body: JSON.stringify({
-          success: false,
-          message: 'Supabase configuration is not present on the server. Please set SUPABASE_URL and SUPABASE_ANON_KEY in Netlify environment variables.'
-        })
-      };
+      return buildResponse(500, { success: false, message: 'Supabase configuration missing on server' });
     }
 
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({
-        success: true,
-        SUPABASE_URL,
-        SUPABASE_ANON_KEY
-      })
-    };
+    // Only expose public (anon) keys. Never return service role.
+    return buildResponse(200, {
+      success: true,
+      SUPABASE_URL,
+      SUPABASE_ANON_KEY
+    });
   } catch (err) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ success: false, message: 'Internal error retrieving Supabase config' })
-    };
+    return buildResponse(500, { success: false, message: 'Unexpected server error' });
   }
 };

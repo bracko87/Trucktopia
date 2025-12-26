@@ -31,6 +31,9 @@
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { Company, GameState, GamePage, ActiveJob } from '../types/game';
+import { financeApply } from '../utils/financeClient';
+import { applyFinance } from '../utils/financeService';
+import getUserAccessToken from '../utils/getUserAccessToken';
 import { getSkillsByCategory } from '../utils/skillsDatabase';
 import { writeSkillProgress, readSkillProgress } from '../utils/skillPersistence';
 import { MANAGER_SKILLS } from '../utils/roleSkills';
@@ -1105,6 +1108,16 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
    * @description Create a new staff member, update local state, and sync to Supabase via Netlify.
    */
   const hireStaff = async (staff: Partial<any>, opts?: { deductCapital?: number }) => {
+    /**
+     * hireStaff
+     * @description Create a new staff member and persist to company state.
+     *              If a hiring cost (deduction) is provided we attempt to apply the
+     *              money change on the server via applyFinance. The server call uses
+     *              an idempotent RPC so retries are safe. On RPC success we reconcile
+     *              company.capital from the canonical server balance. On RPC failure
+     *              we fall back to the pre-existing local persist behavior to avoid
+     *              breaking the UX.
+     */
     if (!gameState.currentUser || !gameState.company) {
       alert('Please login and create a company first');
       return;
@@ -1206,13 +1219,15 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     // Apply capital deduction centrally when requested
     const capitalBefore = typeof gameState.company.capital === 'number' ? gameState.company.capital : 0;
     const deduction = typeof opts?.deductCapital === 'number' ? Math.max(0, Math.round(opts!.deductCapital)) : 0;
+
+    // Build an updated company snapshot that includes the new staff (optimistic local state).
     const updatedCompany: any = {
       ...gameState.company,
       capital: Math.max(0, capitalBefore - deduction),
       staff: [...(gameState.company.staff || []), newStaff]
     };
 
-    // If a capital deduction happened (hiring cost), record a transaction so Transactions page shows it.
+    // If a capital deduction happened (hiring cost), prepare a local transaction record for UX.
     try {
       const finances = updatedCompany.finances && typeof updatedCompany.finances === 'object' ? { ...(updatedCompany.finances) } : { transactions: [], loans: [], leases: [] };
       finances.transactions = Array.isArray(finances.transactions) ? finances.transactions.slice() : [];
@@ -1232,7 +1247,82 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       // ignore finance write failures
     }
 
-    // Use createCompany (GameContext) to persist, preserving existing behavior
+    /**
+     * If there is a deduction required, prefer to apply it on the server via applyFinance.
+     * This ensures a canonical server-side record and prevents local-only balances causing
+     * divergence. We still persist the optimistic local state so UI remains responsive.
+     */
+    if (deduction > 0 && gameState.company?.id) {
+      try {
+        // Call server RPC via applyFinance helper. The helper will generate an idempotency key.
+        const companyId = String(gameState.company.id);
+        const res = await applyFinance({
+          companyId,
+          deltaCents: -Math.round(deduction * 100),
+          type: 'expense',
+          description: `Hire: ${newStaff.name}`,
+          meta: { staffId: newStaff.id, hireUid }
+        });
+
+        if (res && res.success) {
+          // Reconcile canonical server-provided balance (cents -> USD)
+          if (typeof res.newBalanceCents === 'number') {
+            updatedCompany.capital = Number(res.newBalanceCents) / 100;
+          }
+
+          // Merge server transaction into finances.transactions (convert cents -> USD amount)
+          const serverTx = res.transaction ?? null;
+          if (serverTx) {
+            try {
+              const existing = Array.isArray(updatedCompany.finances?.transactions) ? updatedCompany.finances.transactions.slice() : [];
+              // Convert server tx shape: amount is cents (can be negative); our stored tx.amount uses positive USD
+              const txAmountCents = Number(serverTx.amount ?? 0);
+              const txAmountUsd = Math.round(Math.abs(txAmountCents) / 100);
+              const txRow = {
+                id: serverTx.id ?? `tx-hire-${newStaff.id}-${Date.now()}`,
+                date: serverTx.created_at ?? serverTx.date ?? new Date().toISOString(),
+                type: serverTx.type ?? 'expense',
+                amount: txAmountUsd,
+                description: serverTx.description ?? `Hire: ${newStaff.name}`,
+                category: 'Staff Hiring',
+                meta: serverTx.meta ?? { staffId: newStaff.id },
+                reference: serverTx.reference_id ?? null
+              };
+              // Avoid duplicates by id
+              const found = existing.some((t: any) => String(t.id) === String(txRow.id));
+              if (!found) existing.push(txRow);
+              updatedCompany.finances = { ...(updatedCompany.finances || {}), transactions: existing };
+            } catch {
+              // ignore merge failures
+            }
+          }
+
+          // Persist canonical updated company
+          if (typeof createCompany === 'function') {
+            createCompany(updatedCompany);
+          } else {
+            try {
+              const storageKey = 'tm_company_' + (gameState?.currentUser ?? 'local');
+              localStorage.setItem(storageKey, JSON.stringify(updatedCompany));
+              setGameState(prev => ({ ...prev, company: updatedCompany }));
+            } catch {
+              // ignore
+            }
+          }
+          return;
+        }
+
+        // If RPC returned failure, fall through to local persist (fallback)
+        // eslint-disable-next-line no-console
+        console.warn('[hireStaff] applyFinance failed', res?.error ?? res);
+      } catch (err) {
+        // On network/throwing errors, fallback to local persist but keep optimistic UI state.
+        // eslint-disable-next-line no-console
+        console.warn('[hireStaff] applyFinance threw error, falling back to local persist', err);
+      }
+    }
+
+    // Fallback/local persist path (keeps prior behavior)
     if (typeof createCompany === 'function') {
       createCompany(updatedCompany);
     } else {

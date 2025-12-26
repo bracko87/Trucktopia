@@ -32,7 +32,12 @@
  */
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE;
+/**
+ * Backwards-compatible resolution for the Supabase service role key.
+ * Some deploys use SUPABASE_SERVICE_ROLE while others use SUPABASE_SERVICE_ROLE_KEY.
+ * We prefer either in order to avoid env name mismatches causing silent failures.
+ */
+const SUPABASE_SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 /**
  * getUserFromToken
