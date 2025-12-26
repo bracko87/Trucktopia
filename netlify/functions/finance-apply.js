@@ -1,149 +1,25 @@
 /**
- * netlify/functions/finance-apply.js
+ * finance-apply.js
  *
- * Netlify serverless function that:
- * - Authenticates the caller using Supabase access token (sent in Authorization header)
- * - Verifies the caller is allowed to operate on the requested company (owner check)
- * - Calls the Postgres RPC `finance_apply` (created in sql/003_create_finance_apply_function.sql)
- *   using the Supabase service role key to perform an atomic update + transaction insert
- * - Enforces idempotency via client-provided idempotency_key (passed through to RPC)
+ * Netlify function wrapper that calls the atomic Supabase RPC "finance_apply_atomic".
  *
- * Security:
- * - Requires these environment variables to be set in Netlify:
- *   SUPABASE_URL (e.g. https://your-project.supabase.co)
- *   SUPABASE_SERVICE_ROLE (service_role key, kept secret)
+ * Responsibilities:
+ * - Validate incoming payload
+ * - Forward the request to the Supabase RPC endpoint using SERVICE ROLE credentials
+ * - Normalize and return the RPC response
  *
- * Request (POST, JSON):
- * {
- *   "companyId": "<uuid>",
- *   "deltaCents": -3150000,
- *   "type": "expense",
- *   "description": "Purchase Heno XZU720",      // optional
- *   "meta": { "vehicleId": "truck-123" },      // optional
- *   "idempotencyKey": "uuid-..."               // optional but strongly recommended
- * }
- *
- * Headers:
- * - Authorization: Bearer <supabase_user_access_token>
- *
- * Response:
- * - 200 OK { success: true, transaction: {...}, newBalanceCents: <number> }
- * - 401 Unauthorized / 400 Bad Request / 500 Server Error as applicable
+ * Notes:
+ * - The atomic RPC is expected to handle idempotency by idempotency_key.
+ * - This function is a thin, audited wrapper: no local DB operations here.
  */
-
-const SUPABASE_URL = process.env.SUPABASE_URL;
-/**
- * Backwards-compatible resolution for the Supabase service role key.
- * Some deploys use SUPABASE_SERVICE_ROLE while others use SUPABASE_SERVICE_ROLE_KEY.
- * We prefer either in order to avoid env name mismatches causing silent failures.
- */
-const SUPABASE_SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-/**
- * getUserFromToken
- * @description Validate a Supabase access token by calling /auth/v1/user.
- *              Returns user object { id, email, ... } or throws.
- * @param {string} accessToken
- */
-async function getUserFromToken(accessToken) {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE) {
-    throw new Error('Supabase configuration missing on server');
-  }
-  const url = new URL('/auth/v1/user', SUPABASE_URL).toString();
-  const res = await fetch(url, {
-    method: 'GET',
-    headers: {
-      apikey: SUPABASE_SERVICE_ROLE,
-      Authorization: `Bearer ${accessToken}`
-    }
-  });
-  if (res.status === 200) {
-    return await res.json();
-  }
-  const body = await res.text().catch(() => null);
-  const err = new Error('Invalid access token');
-  err.info = { status: res.status, body };
-  throw err;
-}
-
-/**
- * getCompanyOwner
- * @description Fetch company.owner_id using the service role key (server-side).
- * @param {string} companyId
- */
-async function getCompanyOwner(companyId) {
-  const url = new URL(`/rest/v1/companies?id=eq.${encodeURIComponent(companyId)}&select=owner_id`, SUPABASE_URL).toString();
-  const res = await fetch(url, {
-    method: 'GET',
-    headers: {
-      apikey: SUPABASE_SERVICE_ROLE,
-      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE}`,
-      Accept: 'application/json'
-    }
-  });
-  if (!res.ok) {
-    const t = await res.text().catch(() => null);
-    throw new Error(`Failed to fetch company (status=${res.status}): ${String(t)}`);
-  }
-  const json = await res.json();
-  if (!Array.isArray(json) || json.length === 0) {
-    throw new Error('company_not_found');
-  }
-  return json[0].owner_id || null;
-}
-
-/**
- * callFinanceApplyRpc
- * @description Call the finance_apply RPC created in DB to run the atomic update.
- *              Uses service role key and returns the RPC result.
- */
-async function callFinanceApplyRpc(payload) {
-  const url = new URL('/rest/v1/rpc/finance_apply', SUPABASE_URL).toString();
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      apikey: SUPABASE_SERVICE_ROLE,
-      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE}`,
-      Prefer: 'return=representation' // ensure we get the function result back
-    },
-    body: JSON.stringify(payload)
-  });
-  const text = await res.text();
-  let data = null;
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch (e) {
-    throw new Error(`Invalid JSON response from RPC: ${text}`);
-  }
-  if (!res.ok) {
-    const err = new Error('RPC failed');
-    err.info = { status: res.status, body: data };
-    throw err;
-  }
-  // The RPC returns an array (table-returning functions) -> take first element
-  if (Array.isArray(data) && data.length > 0) {
-    return data[0];
-  }
-  return data;
-}
-
-/**
- * validatePayload
- * @description Basic validation of incoming request body.
- */
-function validatePayload(body) {
-  if (!body) throw new Error('missing_body');
-  const { companyId, deltaCents, type } = body;
-  if (!companyId) throw new Error('companyId required');
-  if (typeof deltaCents !== 'number' && typeof deltaCents !== 'bigint') throw new Error('deltaCents must be a number (cents)');
-  const allowed = ['income', 'expense', 'tax', 'loan', 'repayment', 'adjustment', 'fee', 'refund'];
-  if (!type || !allowed.includes(type)) throw new Error('invalid type');
-}
 
 /**
  * handler
- * Netlify function entrypoint
+ * @description Netlify function entry. Accepts POST requests with JSON body:
+ *  { companyId, deltaCents, type, description?, meta?, idempotencyKey?, actorUserId? }
+ *
+ * It maps to the RPC parameters (p_company_id, p_delta, p_type, p_description, p_meta, p_idempotency_key, p_actor_user_id)
+ * and returns the RPC result as JSON.
  */
 exports.handler = async function (event) {
   try {
@@ -151,87 +27,100 @@ exports.handler = async function (event) {
       return { statusCode: 405, body: JSON.stringify({ success: false, message: 'Method Not Allowed' }) };
     }
 
+    const SUPABASE_URL = process.env.SUPABASE_URL || '';
+    const SUPABASE_SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE) {
+      console.error('[finance-apply] missing SUPABASE_URL or SERVICE_ROLE');
       return { statusCode: 500, body: JSON.stringify({ success: false, message: 'Server not configured' }) };
     }
 
-    // Parse JSON body
-    let body = null;
+    // Parse body safely
+    let bodyRaw = event.isBase64Encoded ? Buffer.from(event.body, 'base64').toString('utf8') : event.body;
+    let body;
     try {
-      body = event.body ? JSON.parse(event.body) : null;
+      body = typeof bodyRaw === 'string' ? JSON.parse(bodyRaw) : bodyRaw;
     } catch (err) {
+      console.warn('[finance-apply] invalid JSON body');
       return { statusCode: 400, body: JSON.stringify({ success: false, message: 'Invalid JSON body' }) };
     }
 
-    try {
-      validatePayload(body);
-    } catch (err) {
-      return { statusCode: 400, body: JSON.stringify({ success: false, message: err.message || 'Invalid payload' }) };
-    }
+    // Basic validation
+    const companyId = body && body.companyId ? String(body.companyId) : null;
+    const delta = typeof body.deltaCents === 'number' ? Number(body.deltaCents) : (body.deltaCents ? Number(body.deltaCents) : NaN);
+    if (!companyId) return { statusCode: 400, body: JSON.stringify({ success: false, message: 'companyId required' }) };
+    if (!Number.isFinite(delta)) return { statusCode: 400, body: JSON.stringify({ success: false, message: 'deltaCents must be a number (cents)' }) };
 
-    // Extract user token from Authorization header
-    const authHeader = (event.headers && (event.headers.authorization || event.headers.Authorization)) || '';
-    const tokenMatch = String(authHeader).replace('Bearer ', '').trim();
-    if (!tokenMatch) {
-      return { statusCode: 401, body: JSON.stringify({ success: false, message: 'Missing Authorization header' }) };
-    }
+    const idempotencyKey = body.idempotencyKey ? String(body.idempotencyKey) : null;
+    const txType = body.type ? String(body.type) : null;
+    const description = body.description ?? null;
+    const meta = body.meta ?? null;
+    const actorUserId = body.actorUserId ?? null;
 
-    // Validate token and get user
-    let user = null;
-    try {
-      user = await getUserFromToken(tokenMatch);
-    } catch (err) {
-      return { statusCode: 401, body: JSON.stringify({ success: false, message: 'Invalid access token' }) };
-    }
-
-    // Authorization: ensure user is owner of company (simple policy)
-    let ownerId = null;
-    try {
-      ownerId = await getCompanyOwner(body.companyId);
-    } catch (err) {
-      if (String(err.message) === 'company_not_found') {
-        return { statusCode: 404, body: JSON.stringify({ success: false, message: 'Company not found' }) };
-      }
-      return { statusCode: 500, body: JSON.stringify({ success: false, message: 'Failed to fetch company' }) };
-    }
-
-    // Compare owner id to user id (supabase user id is user.id from /auth/v1/user)
-    // In some setups owner_id may be stored as text/email; adapt as needed.
-    if (!ownerId || String(ownerId) !== String(user.id)) {
-      return { statusCode: 403, body: JSON.stringify({ success: false, message: 'Forbidden: not company owner' }) };
-    }
-
-    // Prepare RPC payload (match function param names)
-    const rpcPayload = {
-      p_company_id: body.companyId,
-      p_delta: Number(body.deltaCents), // ensure number
-      p_type: body.type,
-      p_description: body.description || null,
-      p_meta: body.meta || {},
-      p_idempotency_key: body.idempotencyKey || null,
-      p_actor_user_id: user.id || null
+    // Build RPC payload matching the server-side function signature
+    const rpcBody = {
+      p_company_id: companyId,
+      p_delta: delta,
+      p_type: txType,
+      p_description: description,
+      p_meta: meta,
+      p_idempotency_key: idempotencyKey,
+      p_actor_user_id: actorUserId
     };
 
-    // Call RPC (atomic operation)
-    let txRow = null;
-    try {
-      txRow = await callFinanceApplyRpc(rpcPayload);
-    } catch (err) {
-      // Handle common RPC errors (e.g. insufficient funds if server enforces)
-      const info = err.info || {};
-      return { statusCode: 500, body: JSON.stringify({ success: false, message: 'Finance RPC failed', info }) };
+    // Helper to perform service-role fetch
+    async function svcFetch(url, opts) {
+      opts = opts || {};
+      const headers = Object.assign(
+        {
+          'Content-Type': 'application/json',
+          apikey: SUPABASE_SERVICE_ROLE,
+          Authorization: 'Bearer ' + SUPABASE_SERVICE_ROLE
+        },
+        opts.headers || {}
+      );
+      const res = await fetch(url, Object.assign({}, opts, { headers }));
+      const text = await res.text().catch(() => '');
+      let json;
+      try { json = text ? JSON.parse(text) : null; } catch { json = text; }
+      return { ok: res.ok, status: res.status, json, text };
     }
 
-    // Successful
-    const response = {
-      success: true,
-      transaction: txRow,
-      newBalanceCents: txRow ? Number(txRow.balance_after) : null
-    };
+    const rpcUrl = SUPABASE_URL.replace(/\/+$/, '') + '/rest/v1/rpc/finance_apply_atomic';
 
-    return { statusCode: 200, body: JSON.stringify(response) };
+    // Call RPC
+    const rpcRes = await svcFetch(rpcUrl, {
+      method: 'POST',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify(rpcBody)
+    });
+
+    if (!rpcRes.ok) {
+      console.error('[finance-apply] rpc failed', rpcRes.status, rpcRes.text);
+      const errMsg = (rpcRes.json && (rpcRes.json.error || rpcRes.json.message)) || rpcRes.text || `RPC status ${rpcRes.status}`;
+      return { statusCode: 500, body: JSON.stringify({ success: false, message: `RPC failed: ${String(errMsg)}` }) };
+    }
+
+    // Normalize RPC response. Supabase RPC may return an array or object.
+    let result = rpcRes.json;
+    if (Array.isArray(result) && result.length > 0) result = result[0];
+
+    // Expected keys: transaction (or id/balance_after). Try to normalize to { success, transaction, newBalanceCents }
+    const transaction = result?.transaction ?? result ?? null;
+    const newBalanceCents =
+      result?.new_balance_cents ?? result?.newBalanceCents ?? (transaction && (transaction.balance_after ?? transaction.balance_after)) ?? null;
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        success: true,
+        transaction,
+        newBalanceCents: typeof newBalanceCents === 'number' ? newBalanceCents : null,
+        raw: result
+      })
+    };
   } catch (err) {
-    console.error('[finance-apply] unexpected error', err);
-    return { statusCode: 500, body: JSON.stringify({ success: false, message: 'Unexpected server error' }) };
+    console.error('[finance-apply] unexpected error', err && err.message ? err.message : String(err));
+    return { statusCode: 500, body: JSON.stringify({ success: false, message: 'Unexpected server error', info: String(err && err.message) }) };
   }
 };
