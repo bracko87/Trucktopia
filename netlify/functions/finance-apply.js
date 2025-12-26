@@ -1,16 +1,25 @@
 /**
  * finance-apply.js
  *
- * Netlify function wrapper that calls the atomic Supabase RPC "finance_apply_atomic".
+ * Netlify function wrapper implementing a safe REST-based finance apply flow.
  *
  * Responsibilities:
  * - Validate incoming payload
- * - Forward the request to the Supabase RPC endpoint using SERVICE ROLE credentials
- * - Normalize and return the RPC response
+ * - Provide idempotent behaviour by checking finances_transactions for an existing idempotency_key
+ * - Update company balance and insert finances_transactions using the Supabase REST API
+ *   while running with the SERVICE_ROLE key (server-side)
  *
- * Notes:
- * - The atomic RPC is expected to handle idempotency by idempotency_key.
- * - This function is a thin, audited wrapper: no local DB operations here.
+ * Rationale:
+ * The previously used database RPC produced a "column reference ... ambiguous" error
+ * in some environments. This implementation uses REST table operations with the
+ * service role key to achieve the same result without depending on the RPC.
+ *
+ * Note:
+ * - This implementation is best-effort and tries to keep behaviour compatible with
+ *   the RPC (returns the inserted transaction and newBalanceCents). It does not
+ *   provide full transactional atomicity across the two REST calls (check+update+insert),
+ *   but it enforces idempotency by checking for an existing idempotency_key and will
+ *   return the existing transaction if found.
  */
 
 /**
@@ -18,8 +27,8 @@
  * @description Netlify function entry. Accepts POST requests with JSON body:
  *  { companyId, deltaCents, type, description?, meta?, idempotencyKey?, actorUserId? }
  *
- * It maps to the RPC parameters (p_company_id, p_delta, p_type, p_description, p_meta, p_idempotency_key, p_actor_user_id)
- * and returns the RPC result as JSON.
+ * Returns:
+ *  { success: true, transaction: {...}, newBalanceCents: number, raw: any }
  */
 exports.handler = async function (event) {
   try {
@@ -47,7 +56,7 @@ exports.handler = async function (event) {
 
     // Basic validation
     const companyId = body && body.companyId ? String(body.companyId) : null;
-    const delta = typeof body.deltaCents === 'number' ? Number(body.deltaCents) : (body.deltaCents ? Number(body.deltaCents) : NaN);
+    const delta = typeof body.deltaCents === 'number' ? Math.round(Number(body.deltaCents)) : (body.deltaCents ? Math.round(Number(body.deltaCents)) : NaN);
     if (!companyId) return { statusCode: 400, body: JSON.stringify({ success: false, message: 'companyId required' }) };
     if (!Number.isFinite(delta)) return { statusCode: 400, body: JSON.stringify({ success: false, message: 'deltaCents must be a number (cents)' }) };
 
@@ -57,18 +66,10 @@ exports.handler = async function (event) {
     const meta = body.meta ?? null;
     const actorUserId = body.actorUserId ?? null;
 
-    // Build RPC payload matching the server-side function signature
-    const rpcBody = {
-      p_company_id: companyId,
-      p_delta: delta,
-      p_type: txType,
-      p_description: description,
-      p_meta: meta,
-      p_idempotency_key: idempotencyKey,
-      p_actor_user_id: actorUserId
-    };
-
-    // Helper to perform service-role fetch
+    /**
+     * svcFetch
+     * @description perform fetch calls with Service Role headers and return parsed body
+     */
     async function svcFetch(url, opts) {
       opts = opts || {};
       const headers = Object.assign(
@@ -86,37 +87,102 @@ exports.handler = async function (event) {
       return { ok: res.ok, status: res.status, json, text };
     }
 
-    const rpcUrl = SUPABASE_URL.replace(/\/+$/, '') + '/rest/v1/rpc/finance_apply_atomic';
+    const base = SUPABASE_URL.replace(/\/+$/, '');
 
-    // Call RPC
-    const rpcRes = await svcFetch(rpcUrl, {
-      method: 'POST',
-      headers: { Prefer: 'return=representation' },
-      body: JSON.stringify(rpcBody)
-    });
-
-    if (!rpcRes.ok) {
-      console.error('[finance-apply] rpc failed', rpcRes.status, rpcRes.text);
-      const errMsg = (rpcRes.json && (rpcRes.json.error || rpcRes.json.message)) || rpcRes.text || `RPC status ${rpcRes.status}`;
-      return { statusCode: 500, body: JSON.stringify({ success: false, message: `RPC failed: ${String(errMsg)}` }) };
+    // 1) If idempotencyKey provided, check for existing transaction
+    if (idempotencyKey) {
+      try {
+        const existsUrl = `${base}/rest/v1/finances_transactions?company_id=eq.${companyId}&idempotency_key=eq.${encodeURIComponent(idempotencyKey)}&select=*`;
+        const existsRes = await svcFetch(existsUrl, { method: 'GET' });
+        if (existsRes.ok && Array.isArray(existsRes.json) && existsRes.json.length > 0) {
+          const tx = existsRes.json[0];
+          const newBalanceCents = typeof tx.balance_after === 'number' ? tx.balance_after : (tx.balance_after ? Number(tx.balance_after) : null);
+          return {
+            statusCode: 200,
+            body: JSON.stringify({ success: true, transaction: tx, newBalanceCents, raw: tx })
+          };
+        }
+      } catch (e) {
+        console.warn('[finance-apply] idempotency check failed', e && e.message ? e.message : String(e));
+        // continue to attempt the operation
+      }
     }
 
-    // Normalize RPC response. Supabase RPC may return an array or object.
-    let result = rpcRes.json;
-    if (Array.isArray(result) && result.length > 0) result = result[0];
+    // 2) Read current company balance using an unambiguous select (capital_cents)
+    const companyUrl = `${base}/rest/v1/companies?id=eq.${companyId}&select=capital_cents`;
+    const companyRes = await svcFetch(companyUrl, { method: 'GET' });
+    if (!companyRes.ok) {
+      console.error('[finance-apply] failed to read company', companyRes.status, companyRes.text);
+      return { statusCode: 500, body: JSON.stringify({ success: false, message: 'Failed to read company data', info: companyRes.text }) };
+    }
+    const companyData = Array.isArray(companyRes.json) && companyRes.json.length > 0 ? companyRes.json[0] : null;
+    if (!companyData) {
+      return { statusCode: 404, body: JSON.stringify({ success: false, message: 'Company not found' }) };
+    }
 
-    // Expected keys: transaction (or id/balance_after). Try to normalize to { success, transaction, newBalanceCents }
-    const transaction = result?.transaction ?? result ?? null;
-    const newBalanceCents =
-      result?.new_balance_cents ?? result?.newBalanceCents ?? (transaction && (transaction.balance_after ?? transaction.balance_after)) ?? null;
+    const currentBalance = typeof companyData.capital_cents === 'number' ? companyData.capital_cents : (companyData.capital_cents ? Number(companyData.capital_cents) : 0);
+    const newBalance = currentBalance + Number(delta);
+
+    // 3) Update company balance (PATCH) - use id-based filter 'id=eq.<companyId>'
+    const updateUrl = `${base}/rest/v1/companies?id=eq.${companyId}`;
+    const updateRes = await svcFetch(updateUrl, {
+      method: 'PATCH',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify({ capital_cents: newBalance })
+    });
+    if (!updateRes.ok) {
+      console.error('[finance-apply] failed to update company balance', updateRes.status, updateRes.text);
+      return { statusCode: 500, body: JSON.stringify({ success: false, message: 'Failed to update company balance', info: updateRes.text }) };
+    }
+
+    // 4) Insert transaction row into finances_transactions
+    const insertUrl = `${base}/rest/v1/finances_transactions`;
+    const txBody = {
+      company_id: companyId,
+      type: txType,
+      amount: delta,
+      balance_after: newBalance,
+      description: description,
+      meta: meta,
+      idempotency_key: idempotencyKey,
+      actor_user_id: actorUserId
+    };
+    const insertRes = await svcFetch(insertUrl, {
+      method: 'POST',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify(txBody)
+    });
+
+    if (!insertRes.ok) {
+      // Attempt to detect concurrent insert with same idempotency_key and return it
+      console.error('[finance-apply] insert failed', insertRes.status, insertRes.text);
+      if (idempotencyKey) {
+        try {
+          const fetchAgainUrl = `${base}/rest/v1/finances_transactions?company_id=eq.${companyId}&idempotency_key=eq.${encodeURIComponent(idempotencyKey)}&select=*`;
+          const fetchAgain = await svcFetch(fetchAgainUrl, { method: 'GET' });
+          if (fetchAgain.ok && Array.isArray(fetchAgain.json) && fetchAgain.json.length > 0) {
+            const tx = fetchAgain.json[0];
+            const newBalanceCents = typeof tx.balance_after === 'number' ? tx.balance_after : (tx.balance_after ? Number(tx.balance_after) : null);
+            return { statusCode: 200, body: JSON.stringify({ success: true, transaction: tx, newBalanceCents, raw: tx }) };
+          }
+        } catch (e) {
+          console.warn('[finance-apply] post-insert idempotency fetch failed', e && e.message ? e.message : String(e));
+        }
+      }
+      return { statusCode: 500, body: JSON.stringify({ success: false, message: 'Failed to insert transaction', info: insertRes.text }) };
+    }
+
+    // Normalize inserted transaction (Supabase returns an array when Prefer=return=representation)
+    let inserted = insertRes.json;
+    if (Array.isArray(inserted) && inserted.length > 0) inserted = inserted[0];
 
     return {
       statusCode: 200,
       body: JSON.stringify({
         success: true,
-        transaction,
-        newBalanceCents: typeof newBalanceCents === 'number' ? newBalanceCents : null,
-        raw: result
+        transaction: inserted,
+        newBalanceCents: typeof newBalance === 'number' ? newBalance : null,
+        raw: inserted
       })
     };
   } catch (err) {
