@@ -273,6 +273,7 @@ export const BIG_TRUCKS: Truck[] = [
       maintenanceGroup: 3,
       fuelTankCapacity: 450
     },
+    image: 'https://i.ibb.co/Y90HZK2/Ivaco-Stralis-AD-440-3.png',
     truckCategory: 'Big',
     gcw: 'A'
   },
@@ -342,6 +343,7 @@ export const BIG_TRUCKS: Truck[] = [
       maintenanceGroup: 3,
       fuelTankCapacity: 440
     },
+    image: 'https://i.ibb.co/spXCsKsJ/Ivaco-Stralis-AD-330-3.png',
     truckCategory: 'Big',
     gcw: 'A'
   },
@@ -666,6 +668,7 @@ export const BIG_TRUCKS: Truck[] = [
       maintenanceGroup: 3,
       fuelTankCapacity: 400
     },
+    image: 'https://i.ibb.co/9Hb6HcSh/Valvo-FM-380-3.png',
     truckCategory: 'Big',
     gcw: 'A'
   },
@@ -1399,6 +1402,7 @@ export const BIG_TRUCKS: Truck[] = [
       fuelTankCapacity: 400,
       gcw: 'B'
     },
+    image: 'https://i.ibb.co/Nd5BmRrq/FOW-Jiefang-J7-3.png',
     truckCategory: 'Big',
     gcw: 'B'
   },
@@ -1812,6 +1816,7 @@ export const BIG_TRUCKS: Truck[] = [
       fuelTankCapacity: 400,
       gcw: 'A'
     },
+    image: 'https://i.ibb.co/zh2jQv5D/Faton-BJ4183-3.png',
     truckCategory: 'Big',
     gcw: 'A'
   },
@@ -2246,6 +2251,7 @@ export const BIG_TRUCKS: Truck[] = [
       fuelTankCapacity: 400,
       gcw: 'A'
     },
+    image: 'https://i.ibb.co/DHxGr0H9/Kam-AZ-5490-3.png',
     truckCategory: 'Big',
     gcw: 'A'
   },
@@ -2342,6 +2348,7 @@ export const BIG_TRUCKS: Truck[] = [
       fuelTankCapacity: 400,
       gcw: 'A'
     },
+    image: 'https://i.ibb.co/DPdB5k1V/TETA-Prima-4928-3.png',
     truckCategory: 'Big',
     gcw: 'A'
   },
