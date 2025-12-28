@@ -71,6 +71,12 @@ export interface GameContextType {
    *              Deducts cost from company.capital and persists the change.
    */
   upgradeHub: (hubId: string) => { success: boolean; message: string };
+  /**
+   * reconcileBalance
+   * @description Best-effort reconcile company balance from a cents value returned by server.
+   *              Updates in-memory company.capital_cents and company.capital and persists the change.
+   */
+  reconcileBalance: (newBalanceCents: number) => void;
 }
 
 
@@ -598,8 +604,6 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
    * @description Persist the current game state (company and sidebar) into localStorage.
    * This runs whenever gameState changes. Note: company persistence occurs after any
    * reputation enforcement effect applied below, so storage always stores reputation = 0.
-   *
-   * We also ensure company carries canonical cents fields before saving.
    */
   useEffect(() => {
     if (!gameState.isAuthenticated || !gameState.currentUser) return;
@@ -641,13 +645,16 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       let needsPersist = false;
       const updatedCompany: any = { ...company };
 
-      // If admin user, enforce starting capital
+      // If admin user, only enforce starting capital on initial restore (when capital is missing).
+      // This prevents overwriting legitimate local changes (deductions/payments) performed in the UI.
       if (currentUser === ADMIN_ACCOUNT.email.toLowerCase()) {
-        const currentCapital = typeof company.capital === 'number' ? company.capital : Number(company.capital ?? 0);
-        if (currentCapital !== ADMIN_CAPITAL) {
+        const hasCapital = typeof company.capital === 'number' && !Number.isNaN(company.capital);
+        // Enforce only if no capital is present (initial seed), not on every render
+        if (!hasCapital) {
           updatedCompany.capital = ADMIN_CAPITAL;
-          // Also set canonical cents
-          updatedCompany.capital_cents = toCents(ADMIN_CAPITAL);
+          // Also set canonical cents if utility is available
+          try { updatedCompany.capital_cents = toCents(ADMIN_CAPITAL); } catch {}
+          // Mark persisted change
           needsPersist = true;
         }
       }
@@ -919,7 +926,6 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       userStorage.addUser(newUser);
       sessionStorage.setItem('tm_current_user', normalized);
       userStorage.saveUserGameState(normalized, { isAuthenticated: true, company: null, sidebarCollapsed: false });
-
       setGameState({
         isAuthenticated: true,
         currentPage: 'dashboard',
@@ -1152,7 +1158,40 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
    * hireStaff
    * @description Create a new staff member, update local state, and sync to Supabase via Netlify.
    */
+  
+/**
+   * reconcileBalance
+   * @description Best-effort reconcile company balance from a cents value returned by server.
+   * - Updates in-memory company.capital_cents and company.capital (converted via fromCents)
+   * - Persists to userStorage (admin or user path) and updates gameState so UI reflects immediately
+   */
+  const reconcileBalance = (newBalanceCents: number) => {
+    try {
+      if (!gameState.currentUser || !gameState.company) return;
+      const updatedCompany: any = { ...gameState.company, capital_cents: Number(newBalanceCents) };
+      try {
+        updatedCompany.capital = fromCents(Number(updatedCompany.capital_cents));
+      } catch {
+        // fallback if fromCents is unavailable or throws
+        updatedCompany.capital = Math.round(Number(updatedCompany.capital_cents) / 100);
+      }
+      // Keep reputation enforcement consistent
+      updatedCompany.reputation = 0;
+      try { ensureCompanyCents(updatedCompany); } catch {}
+      if (gameState.currentUser === ADMIN_ACCOUNT.email.toLowerCase()) {
+        userStorage.saveAdminState({ isAuthenticated: true, company: updatedCompany, sidebarCollapsed: gameState.sidebarCollapsed });
+      } else {
+        userStorage.updateUser(gameState.currentUser, { company: updatedCompany });
+        userStorage.saveUserGameState(gameState.currentUser, { isAuthenticated: true, company: updatedCompany, sidebarCollapsed: gameState.sidebarCollapsed });
+      }
+      setGameState(prev => ({ ...prev, company: updatedCompany }));
+    } catch (err) {
+      console.warn('[GameContext] reconcileBalance error', err);
+    }
+  };
+
   const hireStaff = async (staff: Partial<any>, opts?: { deductCapital?: number }) => {
+
     /**
      * hireStaff
      * @description Create a new staff member and persist to company state.
@@ -1648,7 +1687,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         const currentRole = s.role;
         if (!allowedSources.includes(currentRole)) {
           // Not promotable
-          console.warn(`[GameContext] promoteStaff: role "${currentRole}" cannot be promoted`);
+          console.warn(`[GameContext] promoteStaff: role \"${currentRole}\" cannot be promoted`);
           return s;
         }
 
@@ -1708,7 +1747,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
    * - Removes staff from company.staff and cleans job assignments (driver/co-driver/assignedDrivers arrays).
    * - Ensures company.reputation remains 0.
    * - Persists changes via userStorage APIs when possible.
-   * - Writes authoritative per-user localStorage key tm_user_state_<email> as a fallback.
+   * - Writes authoritative per-user tm_user_state_<email> as a fallback.
    * - Attempts to keep tm_users in-sync so legacy restore flows do not rehydrate stale data.
    * - Persists admin path to tm_admin_state as redundancy.
    * - Updates in-memory state via setGameState so UI updates immediately.
@@ -1760,9 +1799,6 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
       // Business rule: always keep reputation at 0 in persisted state
       try { updatedCompany.reputation = 0; } catch { /* ignore */ }
-
-      // Ensure canonical cents presence before persisting
-      try { ensureCompanyCents(updatedCompany); } catch {}
 
       // 3) Remove persisted per-staff keys to avoid rehydration on next load
       try {
@@ -1952,16 +1988,15 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       // Apply to staff
       companyClone.staff[idx] = { ...staff, training: trainingEntry, status: 'training' };
 
-      // Ensure reputation stays 0 and canonical cents present
+      // Persist and ensure reputation stays 0
       companyClone.reputation = 0;
       try { ensureCompanyCents(companyClone); } catch {}
-
       if (gameState.currentUser === ADMIN_ACCOUNT.email.toLowerCase()) userStorage.saveAdminState({ isAuthenticated: true, company: companyClone, sidebarCollapsed: gameState.sidebarCollapsed });
       else { userStorage.updateUser(gameState.currentUser, { company: companyClone }); userStorage.saveUserGameState(gameState.currentUser, { isAuthenticated: true, company: companyClone, sidebarCollapsed: gameState.sidebarCollapsed }); }
       setGameState(prev => ({ ...prev, company: companyClone }));
 
       // Build a safe message without any raw '$' characters to avoid parser issues in some build chains
-      const msg = 'Training started for ' + staff.name + ' on \\\"' + skillName + '\\\" (' + plannedDays + ' days, cost ' + cost.toLocaleString() + ' USD)';
+      const msg = 'Training started for ' + staff.name + ' on \\\\\\\"' + skillName + '\\\\\\\" (' + plannedDays + ' days, cost ' + cost.toLocaleString() + ' USD)';
       return { success: true, message: msg };
     } catch (err) {
       console.error('startTraining error', err);
@@ -1993,7 +2028,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     fireStaff,
     startTraining,
     sendPasswordReset,
-    upgradeHub: (hubId: string) => ({ success: false, message: 'Not implemented' })
+    upgradeHub: (hubId: string) => ({ success: false, message: 'Not implemented' }),
+    reconcileBalance
   };
 
   return (

@@ -1,87 +1,67 @@
 /**
  * netlify/functions/finance-apply.js
  *
- * Netlify function wrapper to call the Supabase RPC "finance_apply" and return a
- * consistent canonical response using cents-first money fields.
+ * Serverless wrapper around the Supabase finance_apply RPC.
  *
- * Response shape (success):
- * {
- *   success: true,
- *   transaction: { id, company_id, created_at, type, amount /* cents */, balance_after /* cents */, description, meta, idempotency_key, actor_user_id },
- *   newBalanceCents: number
- * }
+ * Responsibilities:
+ * - Call the Supabase RPC finance_apply with service role key
+ * - Normalize returned transaction row fields to include USD amount/balance when only cents fields exist
+ * - Ensure companies table contains updated balance + cents columns (best-effort)
+ * - Return canonical JSON: { success, transaction, newBalanceCents }
  *
- * Response shape (error):
- * { success: false, error: 'message' }
+ * Notes:
+ * - Expects JSON body { companyId, deltaCents, type, description, idempotencyKey, meta }
+ * - Requires environment variables SUPABASE_URL and SUPABASE_KEY (service role) set in Netlify.
  */
 
-/** @typedef {import('node-fetch').Response} FetchResponse */
-
+/* eslint-disable no-console */
 const fetch = globalThis.fetch || require('node-fetch');
 
-/**
- * handler
- * @description Netlify function handler that forwards request to Supabase RPC and normalizes the result.
- * Expects POST JSON body with:
- *  - companyId (uuid string)
- *  - deltaCents (integer number)
- *  - type (string)
- *  - description? (string)
- *  - meta? (object)
- *  - idempotencyKey? (string)
- *  - actorUserId? (uuid string)
- */
 exports.handler = async function (event) {
-  try {
-    if (event.httpMethod !== 'POST') {
-      return {
-        statusCode: 405,
-        body: JSON.stringify({ success: false, error: 'Method Not Allowed' })
-      };
-    }
+  if (event.httpMethod !== 'POST') {
+    return { statusCode: 405, body: JSON.stringify({ error: 'Method Not Allowed' }) };
+  }
 
+  try {
     const SUPABASE_URL = process.env.SUPABASE_URL;
     const SUPABASE_KEY = process.env.SUPABASE_KEY;
-
     if (!SUPABASE_URL || !SUPABASE_KEY) {
-      return {
-        statusCode: 500,
-        body: JSON.stringify({ success: false, error: 'Supabase configuration missing on server' })
-      };
+      return { statusCode: 500, body: JSON.stringify({ error: 'Missing Supabase config on server' }) };
     }
 
-    let payload = null;
+    let payload;
     try {
-      payload = event.body ? JSON.parse(event.body) : {};
+      payload = JSON.parse(event.body || '{}');
     } catch (err) {
-      return { statusCode: 400, body: JSON.stringify({ success: false, error: 'Invalid JSON body' }) };
+      return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
     }
 
-    const companyId = String(payload.companyId || payload.p_company_id || '').trim();
-    const deltaCents = Number.isFinite(payload.deltaCents) ? Math.round(payload.deltaCents) : (Number.isFinite(payload.p_delta) ? Math.round(payload.p_delta) : null);
-    const type = String(payload.type || payload.p_type || 'adjustment');
-    const description = payload.description ?? payload.p_description ?? null;
-    const meta = payload.meta ?? payload.p_meta ?? {};
-    const idempotencyKey = payload.idempotencyKey ?? payload.p_idempotency_key ?? null;
-    const actorUserId = payload.actorUserId ?? payload.p_actor_user_id ?? null;
+    const {
+      companyId,
+      deltaCents,
+      type = 'adjustment',
+      description = null,
+      idempotencyKey = null,
+      meta = {}
+    } = payload;
 
-    if (!companyId || deltaCents === null || Number.isNaN(deltaCents)) {
-      return { statusCode: 400, body: JSON.stringify({ success: false, error: 'companyId and numeric deltaCents are required' }) };
+    if (!companyId || typeof deltaCents !== 'number') {
+      return { statusCode: 400, body: JSON.stringify({ error: 'companyId and deltaCents (number) are required' }) };
     }
 
-    const rpcUrl = `${SUPABASE_URL.replace(/\\/+$/, '')}/rest/v1/rpc/finance_apply`;
-
+    // Call Supabase RPC finance_apply via REST
+    const rpcUrl = SUPABASE_URL.replace(/\/+$/, '') + '/rest/v1/rpc/finance_apply';
     const rpcBody = {
       p_company_id: companyId,
-      p_delta: deltaCents,
+      p_delta: Math.round(deltaCents),
       p_type: type,
       p_description: description,
-      p_meta: meta,
+      p_meta: meta || {},
       p_idempotency_key: idempotencyKey,
-      p_actor_user_id: actorUserId
+      p_actor_user_id: null
     };
 
-    const resp = await fetch(rpcUrl, {
+    const rpcRes = await fetch(rpcUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -92,49 +72,91 @@ exports.handler = async function (event) {
       body: JSON.stringify(rpcBody)
     });
 
-    const text = await resp.text().catch(() => null);
-    let json = null;
-    try { json = text ? JSON.parse(text) : null; } catch { json = text; }
-
-    if (!resp.ok) {
-      const errMsg = (json && (json.error || json.message)) || (typeof json === 'string' ? json : `RPC returned status ${resp.status}`);
-      return { statusCode: resp.status, body: JSON.stringify({ success: false, error: String(errMsg) }) };
+    const rpcText = await rpcRes.text().catch(() => null);
+    let rpcJson = null;
+    try {
+      rpcJson = rpcText ? JSON.parse(rpcText) : null;
+    } catch {
+      rpcJson = null;
     }
 
-    // Supabase RPC typically returns an array of rows for table-returning functions.
-    // Normalize to first row if array.
-    let row = null;
-    if (Array.isArray(json)) row = json[0] ?? null;
-    else row = json ?? null;
+    if (!rpcRes.ok) {
+      // Propagate errors for easier debugging
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: 'finance_apply RPC failed', status: rpcRes.status, body: rpcJson ?? rpcText })
+      };
+    }
 
-    // Expected RPC returning columns: id, company_id, created_at, type, amount (bigint cents), balance_after (bigint cents), description, meta, idempotency_key, actor_user_id
-    const transaction = row ? {
-      id: row.id ?? null,
-      company_id: row.company_id ?? row.companyId ?? null,
-      created_at: row.created_at ?? row.createdAt ?? null,
-      type: row.type ?? null,
-      amount: typeof row.amount === 'number' ? Math.round(row.amount) : (row.amount ? Number(row.amount) : null), // cents
-      balance_after: typeof row.balance_after === 'number' ? Math.round(row.balance_after) : (row.balance_after ? Number(row.balance_after) : null), // cents
-      description: row.description ?? null,
-      meta: row.meta ?? row.p_meta ?? null,
-      idempotency_key: row.idempotency_key ?? null,
-      actor_user_id: row.actor_user_id ?? null
-    } : null;
+    // The RPC may return an array with one row or a single object depending on configuration
+    const row = Array.isArray(rpcJson) ? rpcJson[0] : rpcJson;
+    if (!row) {
+      return { statusCode: 500, body: JSON.stringify({ error: 'Invalid RPC response' }) };
+    }
 
-    const newBalanceCents = transaction && (typeof transaction.balance_after === 'number') ? transaction.balance_after : (row && (typeof row.balance_after === 'number') ? row.balance_after : null);
+    // Normalize transaction fields: prefer amount (USD) and balance_after (USD), fallback to cents
+    const tx = { ...row };
 
-    return {
-      statusCode: 200,
-      body: JSON.stringify({
-        success: true,
-        transaction,
-        newBalanceCents
-      })
+    try {
+      // handle various naming conventions (amount, amount_cents, balance_after_cents, balance_after)
+      if ((tx.amount === null || tx.amount === undefined) && (tx.amount_cents !== null && tx.amount_cents !== undefined)) {
+        tx.amount = Number(tx.amount_cents) / 100;
+      }
+      if ((tx.balance_after === null || tx.balance_after === undefined) && (tx.balance_after_cents !== null && tx.balance_after_cents !== undefined)) {
+        tx.balance_after = Number(tx.balance_after_cents) / 100;
+      }
+      // Expose canonical numeric cents as well
+      if (tx.amount_cents === null || tx.amount_cents === undefined) {
+        if (typeof tx.amount === 'number') tx.amount_cents = Math.round(tx.amount * 100);
+      }
+      if (tx.balance_after_cents === null || tx.balance_after_cents === undefined) {
+        if (typeof tx.balance_after === 'number') tx.balance_after_cents = Math.round(tx.balance_after * 100);
+      }
+    } catch (e) {
+      // ignore normalization failures
+      console.warn('normalization failure', e);
+    }
+
+    // Persist canonical company balances (best-effort).
+    // Some deployments / DB setups may not have the RPC update companies; ensure companies table consistent.
+    try {
+      if (tx.balance_after_cents !== null && tx.balance_after_cents !== undefined) {
+        const patchUrl = SUPABASE_URL.replace(/\/+$/, '') + `/rest/v1/companies?id=eq.${encodeURIComponent(companyId)}`;
+        const patchBody = {
+          capital_cents: Number(tx.balance_after_cents),
+          balance_cents: Number(tx.balance_after_cents),
+          // legacy fields keep parity for UIs still reading them
+          capital: Number(tx.balance_after_cents) / 100,
+          balance: Number(tx.balance_after_cents) / 100
+        };
+        // PATCH the companies row (best-effort)
+        await fetch(patchUrl, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: SUPABASE_KEY,
+            Authorization: `Bearer ${SUPABASE_KEY}`,
+            Prefer: 'return=representation'
+          },
+          body: JSON.stringify(patchBody)
+        }).catch((err) => {
+          console.warn('companies PATCH failed', err);
+        });
+      }
+    } catch (err) {
+      console.warn('companies persist attempt failed', err);
+    }
+
+    // Build canonical response
+    const canonical = {
+      success: true,
+      transaction: tx,
+      newBalanceCents: tx.balance_after_cents ?? null
     };
+
+    return { statusCode: 200, body: JSON.stringify(canonical) };
   } catch (err) {
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ success: false, error: String(err && err.message ? err.message : err) })
-    };
+    console.error('finance-apply error', err);
+    return { statusCode: 500, body: JSON.stringify({ error: String(err) }) };
   }
 };
