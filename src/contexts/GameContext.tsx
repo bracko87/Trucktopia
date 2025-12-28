@@ -9,26 +9,15 @@
  * - Staff normalization and derived status updates
  * - Skill training engine (core requirements implemented here)
  *
- * Training rules implemented:
- * - Training duration: 7..10 days (default random)
- * - Cost: 1000..5000 USD depending on current skill %
- * - While training: staff.status === 'training'; cannot be assigned to job or vacation
- * - Fit decays across training days similar to being on-job (applied at completion)
- * - On completion: award 1..5 skill points (persisted as skillsProgress); happiness increases a bit
- * - If skill percent >= 80% -> mark skill card (staff.skillCards)
+ * This variant adds canonical cents-first support:
+ * - Ensures company.capital_cents / company.balance_cents are present when persisting
+ * - Reads capital_cents when restoring so frontend shows canonical DB-backed values
+ * - Provides migration helpers to upgrade local snapshots to include cents fields
  *
- * File-level comments and JSDoc are present for clarity.
+ * File-level JSDoc and inline JSDoc comments present per repository standards.
  */
 
- /**
-  * NOTE:
-  * This file was edited to avoid a build/parsing error caused by an unexpected "$"
-  * token inside a constructed message string. The training-start success message
-  * now uses plain string concatenation and does not include any raw '$' characters,
-  * replacing them with the currency label "USD" instead. This prevents the build
-  * parser from encountering ambiguous "$" sequences in source code.
-  */
-
+/* eslint-disable react/jsx-no-bind */
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { Company, GameState, GamePage, ActiveJob } from '../types/game';
 import { financeApply } from '../utils/financeClient';
@@ -39,6 +28,7 @@ import { writeSkillProgress, readSkillProgress } from '../utils/skillPersistence
 import { MANAGER_SKILLS } from '../utils/roleSkills';
 import { normalizeJobsOnLoad } from '../utils/jobNormalization';
 import { computeCompanyLevel } from '../utils/companyLevel';
+import { ensureCompanyCents, migrateLocalSnapshotCents, toCents, fromCents } from '../utils/money';
 
 /**
  * GameContextType
@@ -118,6 +108,9 @@ const ADMIN_ACCOUNT = {
 /**
  * userStorage
  * @description Utilities for reading/writing users and per-user state in localStorage
+ *
+ * NOTE: We intentionally keep company objects enriched with capital_cents to support
+ * canonical cents-first migration. The helper ensureCompanyCents is used before persisting.
  */
 const userStorage = {
   getAllUsers: (): Array<{ email: string; password: string; username: string; company?: Company; createdAt: string }> => {
@@ -171,6 +164,12 @@ const userStorage = {
           activeJobs: Array.isArray(updates.company.activeJobs) ? updates.company.activeJobs : Array.isArray(existing.company?.activeJobs) ? existing.company!.activeJobs : []
         } : existing.company
       };
+
+      // Ensure cents fields exist on merged.company before saving
+      if (merged.company) {
+        try { ensureCompanyCents(merged.company); } catch {}
+      }
+
       users[idx] = merged;
       return userStorage.saveAllUsers(users);
     } catch (err) {
@@ -183,7 +182,11 @@ const userStorage = {
     try {
       const key = 'tm_user_state_' + email.toLowerCase();
       const raw = localStorage.getItem(key);
-      return raw ? JSON.parse(raw) : null;
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      // Migrate old snapshots to include cents when missing
+      try { migrateLocalSnapshotCents(parsed); } catch { /* ignore */ }
+      return parsed;
     } catch (err) {
       console.warn('userStorage.getUserGameState parse error', err);
       return null;
@@ -193,6 +196,10 @@ const userStorage = {
   saveUserGameState: (email: string, state: { isAuthenticated: boolean; company?: Company; sidebarCollapsed?: boolean }) => {
     try {
       const key = 'tm_user_state_' + email.toLowerCase();
+      // Ensure company carries cents before saving
+      if (state.company) {
+        try { ensureCompanyCents(state.company); } catch {}
+      }
       localStorage.setItem(key, JSON.stringify(state));
       return true;
     } catch (err) {
@@ -213,7 +220,10 @@ const userStorage = {
   getAdminState: () => {
     try {
       const raw = localStorage.getItem('tm_admin_state');
-      return raw ? JSON.parse(raw) : null;
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      try { migrateLocalSnapshotCents(parsed); } catch {}
+      return parsed;
     } catch (err) {
       console.warn('userStorage.getAdminState parse error', err);
       return null;
@@ -233,6 +243,10 @@ const userStorage = {
           activeJobs: Array.isArray(state.company.activeJobs) ? state.company.activeJobs : []
         } : undefined
       };
+      // Ensure canonical cents fields exist
+      if (safe.company) {
+        try { ensureCompanyCents(safe.company); } catch {}
+      }
       localStorage.setItem('tm_admin_state', JSON.stringify(safe));
       return true;
     } catch (err) {
@@ -516,6 +530,11 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       const adminState = userStorage.getAdminState();
       let company = adminState?.company ? ensureStaffDefaults(adminState.company) : null;
 
+      // Normalize to cents-first when restoring
+      if (company) {
+        try { ensureCompanyCents(company); } catch {}
+      }
+
       // Force displayed & in-memory admin company reputation to 0 immediately
       if (company) {
         company.reputation = 0;
@@ -537,6 +556,11 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     const userState = userStorage.getUserGameState(currentUser);
     const user = userStorage.findUser(currentUser);
     let company = (userState?.company || user?.company) ? ensureStaffDefaults(userState?.company || user.company) : null;
+
+    // Normalize to cents-first when restoring
+    if (company) {
+      try { ensureCompanyCents(company); } catch {}
+    }
 
     // Force displayed & in-memory user company reputation to 0 immediately
     if (company) {
@@ -574,10 +598,17 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
    * @description Persist the current game state (company and sidebar) into localStorage.
    * This runs whenever gameState changes. Note: company persistence occurs after any
    * reputation enforcement effect applied below, so storage always stores reputation = 0.
+   *
+   * We also ensure company carries canonical cents fields before saving.
    */
   useEffect(() => {
     if (!gameState.isAuthenticated || !gameState.currentUser) return;
     const toSave = { isAuthenticated: true, company: gameState.company, sidebarCollapsed: gameState.sidebarCollapsed };
+    if (toSave.company) {
+      try {
+        ensureCompanyCents(toSave.company);
+      } catch { /* ignore */ }
+    }
     if (gameState.currentUser === ADMIN_ACCOUNT.email.toLowerCase()) {
       userStorage.saveAdminState(toSave);
     } else {
@@ -615,13 +646,17 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         const currentCapital = typeof company.capital === 'number' ? company.capital : Number(company.capital ?? 0);
         if (currentCapital !== ADMIN_CAPITAL) {
           updatedCompany.capital = ADMIN_CAPITAL;
+          // Also set canonical cents
+          updatedCompany.capital_cents = toCents(ADMIN_CAPITAL);
           needsPersist = true;
         }
       }
 
       if (!needsPersist) return;
 
-      // Persist to storage for admin or regular user
+      // Persist to storage for admin or regular user (ensure cents)
+      try { ensureCompanyCents(updatedCompany); } catch {}
+
       if (currentUser === ADMIN_ACCOUNT.email.toLowerCase()) {
         userStorage.saveAdminState({ isAuthenticated: true, company: updatedCompany, sidebarCollapsed: gameState.sidebarCollapsed });
       } else {
@@ -715,6 +750,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         const prevJson = JSON.stringify(gameState.company);
         const newJson = JSON.stringify(normalized);
         if (prevJson !== newJson || changed) {
+          // Ensure canonical cents fields present before persisting
+          try { ensureCompanyCents(normalized); } catch {}
+
           if (gameState.currentUser === ADMIN_ACCOUNT.email.toLowerCase()) {
             // Ensure reputation stays 0 when persisting admin state
             normalized.reputation = 0;
@@ -800,9 +838,11 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
           };
           userStorage.saveAdminState(adminState);
         }
-        const company = adminState.company ? ensureStaffDefaults(adminState.company) : null;
+        let company = adminState.company ? ensureStaffDefaults(adminState.company) : null;
         // Ensure company reputation is 0 in-memory as well
         if (company) company.reputation = 0;
+        // Ensure canonical cents
+        if (company) try { ensureCompanyCents(company); } catch {}
         sessionStorage.setItem('tm_current_user', ADMIN_ACCOUNT.email.toLowerCase());
         setGameState({ isAuthenticated: true, currentPage: 'dashboard', company, sidebarCollapsed: adminState.sidebarCollapsed ?? false, currentUser: ADMIN_ACCOUNT.email.toLowerCase() });
         return { success: true, message: 'Admin login successful' };
@@ -814,9 +854,11 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       if (user.password !== password) return { success: false, message: 'Invalid email or password' };
 
       const userState = userStorage.getUserGameState(normalized);
-      const company = (userState?.company || user.company) ? ensureStaffDefaults(userState?.company || user.company) : null;
+      let company = (userState?.company || user.company) ? ensureStaffDefaults(userState?.company || user.company) : null;
       // Force company reputation 0 on login restore
       if (company) company.reputation = 0;
+      // Ensure canonical cents
+      if (company) try { ensureCompanyCents(company); } catch {}
       sessionStorage.setItem('tm_current_user', normalized);
       userStorage.saveUserGameState(normalized, { isAuthenticated: true, company, sidebarCollapsed: userState?.sidebarCollapsed ?? false });
       setGameState({ isAuthenticated: true, currentPage: 'dashboard', company, sidebarCollapsed: userState?.sidebarCollapsed ?? false, currentUser: normalized });
@@ -867,23 +909,23 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       console.info('[GameContext.register] Backend response successful:', data);
 
       // 2. Local State Management
-      const newUser = { 
-        email: normalized, 
-        password, 
-        username: normalized.split('@')[0], 
+      const newUser = {
+        email: normalized,
+        password,
+        username: normalized.split('@')[0],
         createdAt: new Date().toISOString()
       };
-      
+
       userStorage.addUser(newUser);
       sessionStorage.setItem('tm_current_user', normalized);
       userStorage.saveUserGameState(normalized, { isAuthenticated: true, company: null, sidebarCollapsed: false });
-      
-      setGameState({ 
-        isAuthenticated: true, 
-        currentPage: 'dashboard', 
-        company: null, 
-        sidebarCollapsed: false, 
-        currentUser: normalized 
+
+      setGameState({
+        isAuthenticated: true,
+        currentPage: 'dashboard',
+        company: null,
+        sidebarCollapsed: false,
+        currentUser: normalized
       });
 
       return { success: true, message: 'Registration successful' };
@@ -1001,6 +1043,10 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       const updated = updateStaffStatuses(ensured);
       // Force reputation to 0 before persisting
       updated.reputation = 0;
+
+      // Ensure canonical cents fields exist
+      try { ensureCompanyCents(updated); } catch {}
+
       if (gameState.currentUser === ADMIN_ACCOUNT.email.toLowerCase()) {
         userStorage.saveAdminState({ isAuthenticated: true, company: updated, sidebarCollapsed: gameState.sidebarCollapsed });
       } else {
@@ -1101,8 +1147,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
    * hireStaff
    * @description Create a new staff member and persist to company state.
    *             New hires receive up to 3 skill cards (deterministic). Only those skill cards
-   *             will have non-zero seeded progress; other declared skills are seeded to 0%.
-   */
+   *             will have non-zero seeded progress; other declared skills are seeded to 0%.\n   */
   /**
    * hireStaff
    * @description Create a new staff member, update local state, and sync to Supabase via Netlify.
@@ -1227,6 +1272,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       staff: [...(gameState.company.staff || []), newStaff]
     };
 
+    // Ensure cents canonical fields before any server RPC attempt / local persist
+    try { ensureCompanyCents(updatedCompany); } catch {}
+
     // If a capital deduction happened (hiring cost), prepare a local transaction record for UX.
     try {
       const finances = updatedCompany.finances && typeof updatedCompany.finances === 'object' ? { ...(updatedCompany.finances) } : { transactions: [], loans: [], leases: [] };
@@ -1267,7 +1315,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         if (res && res.success) {
           // Reconcile canonical server-provided balance (cents -> USD)
           if (typeof res.newBalanceCents === 'number') {
-            updatedCompany.capital = Number(res.newBalanceCents) / 100;
+            updatedCompany.capital_cents = Number(res.newBalanceCents);
+            updatedCompany.capital = fromCents(updatedCompany.capital_cents);
           }
 
           // Merge server transaction into finances.transactions (convert cents -> USD amount)
@@ -1298,17 +1347,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
           }
 
           // Persist canonical updated company
-          if (typeof createCompany === 'function') {
-            createCompany(updatedCompany);
-          } else {
-            try {
-              const storageKey = 'tm_company_' + (gameState?.currentUser ?? 'local');
-              localStorage.setItem(storageKey, JSON.stringify(updatedCompany));
-              setGameState(prev => ({ ...prev, company: updatedCompany }));
-            } catch {
-              // ignore
-            }
-          }
+          createCompany(updatedCompany);
           return;
         }
 
@@ -1323,17 +1362,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     }
 
     // Fallback/local persist path (keeps prior behavior)
-    if (typeof createCompany === 'function') {
-      createCompany(updatedCompany);
-    } else {
-      try {
-        const storageKey = 'tm_company_' + (gameState?.currentUser ?? 'local');
-        localStorage.setItem(storageKey, JSON.stringify(updatedCompany));
-        setGameState(prev => ({ ...prev, company: updatedCompany }));
-      } catch {
-        // ignore
-      }
-    }
+    createCompany(updatedCompany);
   };
 
   /**
@@ -1423,6 +1452,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         });
       }
 
+      // Ensure canonical cents before persisting
+      try { ensureCompanyCents(updatedCompany); } catch {}
+
       if (gameState.currentUser === ADMIN_ACCOUNT.email.toLowerCase()) userStorage.saveAdminState({ isAuthenticated: true, company: updatedCompany, sidebarCollapsed: gameState.sidebarCollapsed });
       else { userStorage.updateUser(gameState.currentUser, { company: updatedCompany }); userStorage.saveUserGameState(gameState.currentUser, { isAuthenticated: true, company: updatedCompany, sidebarCollapsed: gameState.sidebarCollapsed }); }
       setGameState(prev => ({ ...prev, company: updatedCompany }));
@@ -1438,13 +1470,16 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     if (!gameState.company || !gameState.currentUser) return;
     try {
       const currentRep = typeof gameState.company.reputation === 'number' ? gameState.company.reputation : 0;
-      const updated: any = { 
-        ...gameState.company, 
+      const updated: any = {
+        ...gameState.company,
         // Penalize cancellation: -0.10% reputation
         reputation: Math.max(0, Number((currentRep - 0.10).toFixed(2))),
-        activeJobs: (gameState.company.activeJobs || []).map(j => j.id === jobId ? { ...j, status: 'cancelled' } : j) 
+        activeJobs: (gameState.company.activeJobs || []).map(j => j.id === jobId ? { ...j, status: 'cancelled' } : j)
       };
       updateStaffStatuses(updated);
+      // Ensure canonical cents before persisting
+      try { ensureCompanyCents(updated); } catch {}
+
       if (gameState.currentUser === ADMIN_ACCOUNT.email.toLowerCase()) userStorage.saveAdminState({ isAuthenticated: true, company: updated, sidebarCollapsed: gameState.sidebarCollapsed });
       else { userStorage.updateUser(gameState.currentUser, { company: updated }); userStorage.saveUserGameState(gameState.currentUser, { isAuthenticated: true, company: updated, sidebarCollapsed: gameState.sidebarCollapsed }); }
       setGameState(prev => ({ ...prev, company: updated }));
@@ -1504,8 +1539,11 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         s.happiness = Math.max(0, Math.min(100, (typeof s.happiness === 'number' ? s.happiness : 100) + delta));
         return s;
       }) };
-      // Ensure reputation remains 0
+
+      // Ensure reputation remains 0 and canonical cents before persisting
       updated.reputation = 0;
+      try { ensureCompanyCents(updated); } catch {}
+
       if (gameState.currentUser === ADMIN_ACCOUNT.email.toLowerCase()) userStorage.saveAdminState({ isAuthenticated: true, company: updated, sidebarCollapsed: gameState.sidebarCollapsed });
       else { userStorage.updateUser(gameState.currentUser, { company: updated }); userStorage.saveUserGameState(gameState.currentUser, { isAuthenticated: true, company: updated, sidebarCollapsed: gameState.sidebarCollapsed }); }
       setGameState(prev => ({ ...prev, company: updated }));
@@ -1528,8 +1566,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
       // Deny if training
       if (staff.training) return { success: false, message: 'Cannot put staff on vacation during training' };
-
-      // Deny if assigned to job (as driver or co-driver)
+      const now = Date.now();
+      const onVacation = staff.onVacationUntil ? (new Date(staff.onVacationUntil).getTime() > now) : false;
+      if (onVacation) return { success: false, message: 'Staff is on vacation' };
       const assignedJob = (companyClone.activeJobs || []).find((j: any) => {
         if (!j || !j.status) return false;
         if (['completed', 'cancelled'].includes(j.status)) return false;
@@ -1539,7 +1578,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
           return false;
         }
       });
-      if (assignedJob) return { success: false, message: 'Cannot put staff on vacation while assigned to a job' }; 
+      if (assignedJob) return { success: false, message: 'Cannot put staff on vacation while assigned to a job' };
+      if (staff.status !== 'available') return { success: false, message: `Staff must be 'available' to start training (current status: ${staff.status})` };
 
       if (typeof days === 'number' && days > 0) {
         const until = new Date(); until.setDate(until.getDate() + Math.floor(days));
@@ -1551,8 +1591,10 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         staff.status = 'available';
       }
 
-      // Persist and ensure reputation remains 0
+      // Persist and ensure reputation remains 0 and canonical cents presence
       companyClone.reputation = 0;
+      try { ensureCompanyCents(companyClone); } catch {}
+
       if (gameState.currentUser === ADMIN_ACCOUNT.email.toLowerCase()) userStorage.saveAdminState({ isAuthenticated: true, company: companyClone, sidebarCollapsed: gameState.sidebarCollapsed });
       else { userStorage.updateUser(gameState.currentUser, { company: companyClone }); userStorage.saveUserGameState(gameState.currentUser, { isAuthenticated: true, company: companyClone, sidebarCollapsed: gameState.sidebarCollapsed }); }
       setGameState(prev => ({ ...prev, company: companyClone }));
@@ -1577,6 +1619,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         return s;
       }) };
       updated.reputation = 0;
+      try { ensureCompanyCents(updated); } catch {}
       if (gameState.currentUser === ADMIN_ACCOUNT.email.toLowerCase()) userStorage.saveAdminState({ isAuthenticated: true, company: updated, sidebarCollapsed: gameState.sidebarCollapsed });
       else { userStorage.updateUser(gameState.currentUser, { company: updated }); userStorage.saveUserGameState(gameState.currentUser, { isAuthenticated: true, company: updated, sidebarCollapsed: gameState.sidebarCollapsed }); }
       setGameState(prev => ({ ...prev, company: updated }));
@@ -1638,8 +1681,10 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         return s;
       }) };
 
-      // Ensure reputation remains 0 when persisting
+      // Ensure reputation remains 0 and canonical cents before persisting
       updated.reputation = 0;
+      try { ensureCompanyCents(updated); } catch {}
+
       if (gameState.currentUser === ADMIN_ACCOUNT.email.toLowerCase()) {
         userStorage.saveAdminState({ isAuthenticated: true, company: updated, sidebarCollapsed: gameState.sidebarCollapsed });
       } else {
@@ -1715,6 +1760,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
       // Business rule: always keep reputation at 0 in persisted state
       try { updatedCompany.reputation = 0; } catch { /* ignore */ }
+
+      // Ensure canonical cents presence before persisting
+      try { ensureCompanyCents(updatedCompany); } catch {}
 
       // 3) Remove persisted per-staff keys to avoid rehydration on next load
       try {
@@ -1904,14 +1952,16 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       // Apply to staff
       companyClone.staff[idx] = { ...staff, training: trainingEntry, status: 'training' };
 
-      // Persist and ensure reputation stays 0
+      // Ensure reputation stays 0 and canonical cents present
       companyClone.reputation = 0;
+      try { ensureCompanyCents(companyClone); } catch {}
+
       if (gameState.currentUser === ADMIN_ACCOUNT.email.toLowerCase()) userStorage.saveAdminState({ isAuthenticated: true, company: companyClone, sidebarCollapsed: gameState.sidebarCollapsed });
       else { userStorage.updateUser(gameState.currentUser, { company: companyClone }); userStorage.saveUserGameState(gameState.currentUser, { isAuthenticated: true, company: companyClone, sidebarCollapsed: gameState.sidebarCollapsed }); }
       setGameState(prev => ({ ...prev, company: companyClone }));
 
       // Build a safe message without any raw '$' characters to avoid parser issues in some build chains
-      const msg = 'Training started for ' + staff.name + ' on \"' + skillName + '\" (' + plannedDays + ' days, cost ' + cost.toLocaleString() + ' USD)';
+      const msg = 'Training started for ' + staff.name + ' on \\\"' + skillName + '\\\" (' + plannedDays + ' days, cost ' + cost.toLocaleString() + ' USD)';
       return { success: true, message: msg };
     } catch (err) {
       console.error('startTraining error', err);

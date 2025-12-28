@@ -1,27 +1,20 @@
-/**
- * 003_create_finance_apply_function.sql
+/*
+ * scripts/fix_finance_apply.sql
  *
- * Create a PostgreSQL stored procedure (finance_apply) that performs an atomic
- * money update for a company and inserts a corresponding finances_transactions
- * row. The function enforces idempotency when an idempotency key is provided.
+ * Drop & recreate finance_apply RPC with fully-qualified column references to
+ * avoid ambiguous column errors (e.g. "company_id is ambiguous").
  *
- * Usage (from server code via Supabase RPC endpoint):
- *  POST /rest/v1/rpc/finance_apply
- *  Body JSON:
- *  {
- *    "p_company_id": "<uuid>",
- *    "p_delta": -3150000,
- *    "p_type": "expense",
- *    "p_description": "Purchase Heno XZU720",
- *    "p_meta": { "vehicleId": "truck-123" },
- *    "p_idempotency_key": "uuid-...",
- *    "p_actor_user_id": "user-uuid"
- *  }
- *
- * The function returns the inserted finances_transactions row (or the existing
- * row when an idempotency key matched).
+ * Usage:
+ * - Run this in your Supabase SQL editor (service role) or via psql as a DB admin.
+ * - After running, invoke the Netlify function again.
  */
--- Create or replace finance_apply function that runs atomically and returns the transaction row.
+
+/*
+ * Ensure old function is removed first (signature must match the existing one).
+ */
+drop function if exists public.finance_apply(uuid,bigint,text,text,jsonb,text,uuid);
+
+-- Create finance_apply RPC with explicit table qualification to prevent ambiguity
 create or replace function public.finance_apply(
   p_company_id uuid,
   p_delta bigint,
@@ -43,21 +36,22 @@ returns table(
   idempotency_key text,
   actor_user_id uuid
 ) language plpgsql security definer as $$
-
 declare
   v_existing finances_transactions%rowtype;
   v_current_balance bigint;
   v_new_balance bigint;
 begin
-  -- If idempotency key provided, try returning existing row
+  /*
+   * If idempotency key provided, try returning existing row.
+   * Use explicit table aliases when selecting to avoid ambiguous column names.
+   */
   if p_idempotency_key is not null then
-    select * into v_existing
-    from finances_transactions
-    where company_id = p_company_id and idempotency_key = p_idempotency_key
+    select ft.* into v_existing
+    from finances_transactions ft
+    where ft.company_id = p_company_id and ft.idempotency_key = p_idempotency_key
     limit 1;
+
     if found then
-      -- Return the previously created row (idempotent).
-      -- Qualify table columns with an alias to avoid ambiguity with OUT column names.
       return query
       select
         ft.id,
@@ -76,10 +70,13 @@ begin
     end if;
   end if;
 
-  -- Lock company row for update to avoid race conditions
-  select capital_cents into v_current_balance
-  from companies
-  where id = p_company_id
+  /*
+   * Lock the company row for update and read current capital.
+   * Fully-qualify the companies table columns to prevent ambiguity.
+   */
+  select c.capital_cents into v_current_balance
+  from companies c
+  where c.id = p_company_id
   for update;
 
   if not found then
@@ -88,15 +85,12 @@ begin
 
   v_new_balance := v_current_balance + p_delta;
 
-  -- Optionally enforce business rules (uncomment to disallow negative balances)
-  -- if v_new_balance < 0 then
-  --   raise exception 'insufficient_funds';
-  -- end if;
-
-  -- Persist new company balance
+  /*
+   * Persist new balance and insert transaction row.
+   * Use explicit qualifiers in all queries/returns.
+   */
   update companies set capital_cents = v_new_balance where id = p_company_id;
 
-  -- Insert transaction row
   insert into finances_transactions(
     company_id,
     type,
